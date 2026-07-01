@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contacto comercial · Estudio CREA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/tokens.css">
+<link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body class="theme-estudio">
+
+<header class="container">
+  <div class="es-header">
+    <a href="index.html" class="es-brand"><span class="name">CREA</span><span class="badge">ESTUDIO</span></a>
+    <nav class="es-nav desktop-only">
+      <a href="servicios.html">Servicios</a>
+      <a href="tercer-tiempo.html">Tercer Tiempo</a>
+      <a href="media-kit.html">Media kit</a>
+      <a href="contacto.html" class="active">Contacto</a>
+      <a href="../index.html" class="back">Portal editorial</a>
+    </nav>
+    <button class="menu-toggle mobile-only" data-menu-toggle aria-label="Abrir menú"><span></span><span></span><span></span></button>
+  </div>
+</header>
+
+<div class="mobile-menu">
+  <div class="head"><span class="title">Menú</span><button class="close" data-menu-close aria-label="Cerrar menú">&times;</button></div>
+  <a href="servicios.html">Servicios</a>
+  <a href="tercer-tiempo.html">Tercer Tiempo</a>
+  <a href="media-kit.html">Media kit</a>
+  <a href="contacto.html" style="color:var(--accent);">Contacto</a>
+  <a href="../index.html" style="color:var(--brand);">Portal editorial</a>
+</div>
+
+<main class="container" style="padding:30px 0 30px;">
+  <div class="eyebrow" style="margin-bottom:10px;">CONTACTO COMERCIAL</div>
+  <h1 style="font-size:30px;margin:0 0 8px;">Hablemos de tu marca</h1>
+  <p class="card-dek" style="font-size:13px;margin:0 0 28px;max-width:480px;">Cuéntanos qué necesitas y un miembro del equipo comercial te responde en menos de 48 horas.</p>
+
+  <div class="grid grid-2" style="gap:36px;">
+    <form data-demo-form style="display:flex;flex-direction:column;gap:2px;">
+      <div class="field"><label for="c-nombre">Nombre</label><input id="c-nombre" name="nombre" type="text" required></div>
+      <div class="field"><label for="c-negocio">Negocio o marca</label><input id="c-negocio" name="negocio" type="text" required></div>
+      <div class="field">
+        <label>Tipo de interés</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button type="button" class="chip" data-interest data-value="Patrocinio de sección">Patrocinio de sección</button>
+          <button type="button" class="chip" data-interest data-value="Branded content">Branded content</button>
+          <button type="button" class="chip" data-interest data-value="Tercer Tiempo">Tercer Tiempo</button>
+          <button type="button" class="chip" data-interest data-value="Publicidad display">Publicidad display</button>
+          <button type="button" class="chip" data-interest data-value="Otro">Otro</button>
+        </div>
+      </div>
+      <div class="field"><label for="c-mensaje">Mensaje</label><textarea id="c-mensaje" name="mensaje" style="min-height:110px;" required></textarea></div>
+      <button type="submit" class="btn btn-accent" style="align-self:flex-start;margin-top:6px;">Enviar mensaje</button>
+      <p data-form-note style="font-size:12px;color:var(--brand);margin-top:12px;"></p>
+    </form>
+    <div>
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">CONTACTO DIRECTO</div>
+        <p style="font-size:13px;margin:0 0 8px;">estudio@crearcontenidos.com</p>
+        <p style="font-size:13px;margin:0 0 8px;">WhatsApp 228 000 0000</p>
+        <p style="font-size:12px;color:var(--text-mute);margin:0;">Perote, Veracruz &middot; respuesta en menos de 48 horas</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <a href="media-kit.html" style="font-size:12px;color:var(--brand);text-decoration:underline;">Ver media kit</a>
+        <a href="servicios.html" style="font-size:12px;color:var(--brand);text-decoration:underline;">Ver catálogo de servicios</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="container">
+  <footer class="site-footer">
+    <span>Estudio CREA &middot; crearcontenidos.com/estudio</span>
+    <a href="../index.html">Volver al portal editorial</a>
+  </footer>
+</div>
+
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

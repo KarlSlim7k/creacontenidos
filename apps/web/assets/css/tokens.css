@@ -1,0 +1,35 @@
+/* CREA Contenidos — design tokens (brief: uploads/CREA_Brief_Diseno_ClaudeDesign.md) */
+
+:root {
+  --font-display: 'Roboto Slab', serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+/* Portal editorial — modo claro, tipo papel */
+body.theme-editorial {
+  --bg: #ECEAE2;       /* Paper */
+  --bg-2: #E2DFD3;     /* Paper 2 */
+  --bg-3: #DCE6D6;     /* Pine light */
+  --text: #1F2A22;     /* Ink */
+  --text-mute: #6B6A60;/* Stone */
+  --line: #C9C6B8;     /* Stone line */
+  --brand: #2F5233;    /* Pine */
+  --accent: #C77D2E;   /* Ochre */
+  --accent-text: #7A4A18; /* Ochre dark */
+  --sponsor: #8C9D6B;  /* Sage */
+  --card-2: #D7D3C4;
+}
+
+/* Estudio — modo oscuro, tipo agencia */
+body.theme-estudio {
+  --bg: #121A15;       /* Ink (fondo) */
+  --bg-2: #1B2620;     /* Surface */
+  --bg-3: #22302A;     /* Surface 2 */
+  --text: #F2EFE6;     /* Cream */
+  --text-mute: #A9B3AA;/* Mute */
+  --line: #33433A;     /* Line */
+  --accent: #E89A3C;   /* Ochre */
+  --accent-text: #3A2811; /* Ochre dark (texto sobre ochre) */
+  --brand: #7CB084;    /* Pine (acento secundario) */
+  --brand-bg: #1C2E20; /* Pine dark */
+}

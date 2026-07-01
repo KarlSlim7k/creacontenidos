@@ -1,0 +1,167 @@
+/* CREA Panel Admin — internal newsroom tool (ported from Claude Design "CREA Panel Admin.dc.html") */
+
+.padmin, .padmin * { box-sizing: border-box; }
+.padmin {
+  font-family: var(--font-body);
+  background: #F7F7F5;
+  color: #1F2A22;
+  min-height: 100vh;
+}
+.padmin a { color: inherit; text-decoration: none; }
+.padmin p { margin: 0; }
+.padmin button { font: inherit; cursor: pointer; }
+
+/* ---------- login ---------- */
+.padmin-login-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: #F7F7F5; padding: 24px;
+}
+.padmin-login-card { width: 100%; max-width: 360px; background: #fff; border: 0.5px solid #E3E2DD; border-radius: 10px; padding: 32px; }
+.padmin-login-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.padmin-login-brand .name { font-family: var(--font-display); font-weight: 700; font-size: 20px; color: #1F2A22; }
+.padmin-login-brand .badge { font-size: 11px; color: #6B6A60; border-left: 1px solid #E3E2DD; padding-left: 8px; }
+.padmin-login-sub { font-size: 12px; color: #6B6A60; margin: 0 0 24px; }
+.padmin-demo-note { border-top: 1px dashed #E3E2DD; padding-top: 16px; margin-top: 6px; }
+.padmin-demo-note .label { font-size: 10px; color: #9A9A93; letter-spacing: 0.04em; margin: 0 0 10px; }
+.padmin-demo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.padmin-role-chip { font-size: 11px; padding: 6px 10px; border-radius: 20px; border: 0.5px solid #E3E2DD; color: #1F2A22; cursor: pointer; }
+
+/* ---------- shell: sidebar + content ---------- */
+.padmin-shell { display: flex; min-height: 100vh; }
+.padmin-sidebar { width: 220px; flex-shrink: 0; background: #fff; border-right: 0.5px solid #E3E2DD; display: flex; flex-direction: column; padding: 20px 0; }
+.padmin-sidebar-brand { padding: 0 20px 20px; display: flex; align-items: center; gap: 8px; }
+.padmin-sidebar-brand .name { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: #1F2A22; }
+.padmin-sidebar-brand .badge { font-size: 10px; color: #6B6A60; border-left: 1px solid #E3E2DD; padding-left: 8px; }
+.padmin-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; flex: 1; }
+.padmin-nav-item { padding: 9px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; background: transparent; border: none; color: #3F3F3A; text-align: left; }
+.padmin-nav-item.active { background: #E1E8DD; color: #2F5233; }
+.padmin-account { padding: 14px 20px 0; border-top: 0.5px solid #E3E2DD; margin-top: 12px; position: relative; }
+.padmin-account-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.padmin-account-name { font-size: 12px; font-weight: 500; color: #1F2A22; margin: 0 0 2px; }
+.padmin-account-role { font-size: 11px; color: #6B6A60; margin: 0; }
+.padmin-bell-wrap { position: relative; flex-shrink: 0; }
+.padmin-bell { position: relative; width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: #F7F7F5; }
+.padmin-bell-badge { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; border-radius: 8px; background: #C77D2E; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+.padmin-notif-panel { position: absolute; bottom: 36px; left: 0; width: 260px; background: #fff; border: 0.5px solid #E3E2DD; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.12); z-index: 50; overflow: hidden; }
+.padmin-notif-title { font-size: 11px; font-weight: 600; color: #1F2A22; margin: 0; padding: 10px 14px; border-bottom: 0.5px solid #E3E2DD; }
+.padmin-notif-item { padding: 10px 14px; border-bottom: 0.5px solid #E3E2DD; }
+.padmin-notif-item p:first-child { font-size: 12px; color: #1F2A22; margin: 0 0 4px; line-height: 1.35; }
+.padmin-notif-item p:last-child { font-size: 10px; color: #9A9A93; margin: 0; }
+.padmin-logout { font-size: 11px; color: #7A4A18; cursor: pointer; display: inline-block; padding: 10px 0; background: none; border: none; }
+
+.padmin-content { flex: 1; overflow: auto; background: #F7F7F5; padding: 28px 32px; }
+.padmin-h1 { font-weight: 600; font-size: 22px; color: #1F2A22; margin: 0 0 6px; }
+.padmin-lede { font-size: 13px; color: #6B6A60; margin: 0 0 22px; }
+
+/* ---------- shared primitives ---------- */
+.padmin-card { background: #fff; border: 0.5px solid #E3E2DD; border-radius: 8px; }
+.padmin-stat-card { background: #fff; border: 0.5px solid #E3E2DD; border-radius: 8px; padding: 18px; }
+.padmin-stat-label { font-size: 11px; color: #6B6A60; margin: 0 0 8px; }
+.padmin-stat-value { font-weight: 700; font-size: 26px; color: #1F2A22; margin: 0; }
+.padmin-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 0.5px solid #E3E2DD; }
+.padmin-row:last-child { border-bottom: none; }
+.padmin-row.clickable { cursor: pointer; }
+.padmin-row-title { font-size: 13px; font-weight: 500; color: #1F2A22; margin: 0 0 2px; }
+.padmin-row-meta { font-size: 11px; color: #6B6A60; margin: 0; }
+.padmin-badge { font-size: 10px; font-weight: 600; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+.padmin-chip { font-size: 11px; font-weight: 500; padding: 6px 12px; border-radius: 20px; cursor: pointer; border: 1px solid #E3E2DD; background: #fff; color: #1F2A22; }
+.padmin-btn { font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 6px; cursor: pointer; background: #C77D2E; color: #fff; border: none; display: inline-block; }
+.padmin-btn-outline { font-size: 13px; font-weight: 500; padding: 10px 20px; border-radius: 6px; cursor: pointer; border: 0.5px solid #E3E2DD; color: #1F2A22; background: #fff; display: inline-block; }
+.padmin-btn-brand { background: #2F5233; color: #fff; }
+.padmin-btn-danger-outline { border: 0.5px solid #E3E2DD; color: #A6432E; background: #fff; }
+.padmin-btn-sm { font-size: 11px; font-weight: 600; padding: 7px 10px; border-radius: 6px; cursor: pointer; border: none; }
+.padmin-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.padmin-field label { font-size: 11px; color: #6B6A60; }
+.padmin-field input, .padmin-field textarea, .padmin-field select {
+  border: 0.5px solid #E3E2DD; border-radius: 6px; background: #F7F7F5; color: #1F2A22;
+  font: inherit; font-size: 13px; padding: 10px 12px; width: 100%;
+}
+.padmin-field textarea { resize: vertical; min-height: 90px; }
+.padmin-demo-hint { font-size: 11px; color: #7A4A18; margin: 10px 0 0; }
+
+/* ---------- kanban ---------- */
+.padmin-kanban { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
+.padmin-kanban-col-title { font-size: 11px; font-weight: 600; color: #6B6A60; letter-spacing: 0.06em; margin: 0 0 10px; }
+.padmin-kanban-cards { display: flex; flex-direction: column; gap: 10px; }
+.padmin-idea-card { background: #fff; border: 0.5px solid #E3E2DD; border-radius: 8px; padding: 14px; }
+.padmin-idea-card.discarded { opacity: 0.7; }
+.padmin-idea-cat { font-size: 9px; font-weight: 600; color: #2F5233; background: #E1E8DD; display: inline-block; padding: 3px 7px; border-radius: 4px; letter-spacing: 0.04em; margin: 0 0 8px; }
+.padmin-idea-title { font-size: 13px; font-weight: 500; color: #1F2A22; margin: 0 0 10px; line-height: 1.35; }
+.padmin-idea-foot { display: flex; justify-content: space-between; align-items: center; }
+.padmin-idea-score { font-size: 11px; color: #6B6A60; }
+.padmin-idea-avatar { width: 20px; height: 20px; border-radius: 50%; background: #E3E2DD; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: #1F2A22; }
+
+@media (max-width: 900px) {
+  .padmin-kanban { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+
+/* ---------- table-ish grids ---------- */
+.padmin-table-head { display: grid; gap: 8px; padding: 9px 16px; border-bottom: 0.5px solid #E3E2DD; }
+.padmin-table-head span { font-size: 10px; font-weight: 600; color: #9A9A93; letter-spacing: 0.06em; }
+.padmin-table-row { display: grid; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 0.5px solid #E3E2DD; }
+.padmin-table-row:last-child { border-bottom: none; }
+.padmin-table-row.clickable { cursor: pointer; }
+
+/* ---------- editor ---------- */
+.padmin-editor-wrap { max-width: 760px; }
+.padmin-editor-card { background: #fff; border: 0.5px solid #E3E2DD; border-radius: 8px; padding: 24px; margin-bottom: 20px; }
+.padmin-title-input { font-family: var(--font-display); font-size: 22px; color: #1F2A22; border: 0.5px solid #E3E2DD; border-radius: 6px; padding: 12px 14px; margin-bottom: 18px; background: #F7F7F5; width: 100%; }
+.padmin-body-textarea { min-height: 140px; border: 0.5px solid #E3E2DD; border-radius: 6px; background: #F7F7F5; margin-bottom: 18px; padding: 12px 14px; font-size: 13px; color: #1F2A22; line-height: 1.5; width: 100%; font-family: inherit; resize: vertical; }
+.padmin-editor-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; margin-bottom: 18px; }
+
+@media (max-width: 640px) {
+  .padmin-shell { flex-direction: column; }
+  .padmin-sidebar { width: 100%; flex-direction: row; align-items: center; padding: 10px 12px; overflow-x: auto; }
+  .padmin-sidebar-brand { padding: 0 12px 0 0; }
+  .padmin-nav { flex-direction: row; padding: 0; }
+  .padmin-account { border-top: none; border-left: 0.5px solid #E3E2DD; margin-top: 0; padding: 0 0 0 12px; }
+  .padmin-editor-grid2 { grid-template-columns: 1fr; }
+}
+
+/* ---------- proposals ---------- */
+.padmin-propuesta-card { position: relative; background: #fff; border: 0.5px solid #E3E2DD; border-radius: 8px; padding: 16px; }
+.padmin-sens-dot { position: absolute; top: 14px; right: 14px; width: 10px; height: 10px; border-radius: 50%; }
+.padmin-propuestas-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+@media (max-width: 900px) { .padmin-propuestas-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 640px) { .padmin-propuestas-grid { grid-template-columns: 1fr; } }
+
+/* ---------- modal / drawer ---------- */
+.padmin-overlay { position: fixed; inset: 0; z-index: 200; }
+.padmin-overlay-bg { position: absolute; inset: 0; background: rgba(31,42,34,0.35); }
+.padmin-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 420px; max-width: calc(100vw - 32px); background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+.padmin-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100vw; background: #fff; box-shadow: -8px 0 24px rgba(0,0,0,0.14); padding: 28px 28px 32px; overflow: auto; }
+.padmin-drawer-eyebrow { font-size: 10px; font-weight: 600; color: #9A9A93; letter-spacing: 0.06em; margin: 0; }
+.padmin-drawer-close { cursor: pointer; font-size: 13px; color: #6B6A60; }
+.padmin-drawer-section-title { font-size: 11px; font-weight: 600; color: #1F2A22; letter-spacing: 0.04em; margin: 0 0 8px; }
+.padmin-drawer-section-body { font-size: 13px; color: #3F3F3A; line-height: 1.5; margin: 0 0 20px; }
+
+/* ---------- hermes ---------- */
+.padmin-hermes-log { background: #15201A; border-radius: 8px; padding: 4px 0; margin-bottom: 28px; }
+.padmin-hermes-row { display: flex; align-items: center; gap: 14px; padding: 9px 18px; font-family: Menlo, Consolas, monospace; font-size: 12px; border-bottom: 0.5px solid #23301F; }
+.padmin-hermes-row:last-child { border-bottom: none; }
+.padmin-hermes-time { color: #7CB084; flex-shrink: 0; width: 44px; }
+.padmin-hermes-task { color: #F2EFE6; flex: 1; }
+
+/* ---------- pipeline ---------- */
+.padmin-pipeline-step { display: flex; gap: 16px; }
+.padmin-pipeline-rail { display: flex; flex-direction: column; align-items: center; }
+.padmin-pipeline-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; box-sizing: border-box; border-width: 2px; border-style: solid; }
+.padmin-pipeline-line { width: 2px; flex: 1; background: #E3E2DD; }
+.padmin-pipeline-body { padding-bottom: 26px; flex: 1; }
+.padmin-pipeline-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+
+/* ---------- denied ---------- */
+.padmin-denied-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 28px 32px; }
+.padmin-denied-icon { width: 52px; height: 52px; border-radius: 50%; background: #F0DEDA; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; }
+
+/* ---------- config ---------- */
+.padmin-tabs { display: flex; gap: 6px; margin-bottom: 20px; }
+.padmin-tab { font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 20px; cursor: pointer; border: 1px solid #E3E2DD; background: #fff; color: #1F2A22; }
+.padmin-tab.active { background: #2F5233; color: #fff; }
+.padmin-integraciones-grid { display: grid; grid-template-columns: repeat(2, minmax(0,320px)); gap: 14px; }
+.padmin-integracion-card { background: #fff; border: 0.5px solid #E3E2DD; border-radius: 8px; padding: 16px; display: flex; align-items: center; justify-content: space-between; }
+.padmin-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ---------- chart ---------- */
+.padmin-chart-labels { display: flex; justify-content: space-between; margin-top: 6px; }
+.padmin-chart-labels span { font-size: 10px; color: #9A9A93; }

@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crea
+      POSTGRES_PASSWORD: crea_dev
+      POSTGRES_DB: crea_command_center
+    ports:
+      - "5432:5432"
+    volumes:
+      - crea_db_data:/var/lib/postgresql/data
+
+volumes:
+  crea_db_data:
