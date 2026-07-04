@@ -17,13 +17,32 @@ services:
   api:
     build: .
     restart: unless-stopped
-    # Keys (NOUS/RESEND/ELEVENLABS/JWT_SECRET…) desde apps/api/.env — copiar de .env.example.
-    env_file: apps/api/.env
+    # Local dev: copiar apps/api/.env.example a apps/api/.env. En prod (Dokploy) ese
+    # archivo no existe (gitignored) — required:false evita que tumbe el deploy, y
+    # los secrets reales se inyectan abajo desde el .env de Dokploy (mismo patrón que POSTGRES_*).
+    env_file:
+      - path: apps/api/.env
+        required: false
     environment:
       # Sobrescribe DATABASE_URL para apuntar al servicio db (no localhost).
       DATABASE_URL: postgres://${POSTGRES_USER:-crea}:${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD (definila en .env)}@db:5432/${POSTGRES_DB:-crea_command_center}
       PORT: 3000
       NODE_ENV: production
+      PERPLEXITY_API_KEY: ${PERPLEXITY_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-21m00Tcm4TlvDq8ikWAM}
+      APIFY_API_TOKEN: ${APIFY_API_TOKEN:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_AUDIENCE_ID: ${RESEND_AUDIENCE_ID:-}
+      RESEND_FROM: ${RESEND_FROM:-Buenos días, Perote <hola@crea-contenidos.com>}
+      NOUS_PORTAL_API_KEY: ${NOUS_PORTAL_API_KEY:-}
+      AI_MODEL_DEFAULT: ${AI_MODEL_DEFAULT:-deepseek/deepseek-v4-flash}
+      AI_MODEL_COMPLEX: ${AI_MODEL_COMPLEX:-minimax/minimax-m3}
+      AI_MODEL_QA: ${AI_MODEL_QA:-openai/gpt-5-nano}
+      JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET (definila en .env)}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
     ports:
       - "3000:3000"
     depends_on:
