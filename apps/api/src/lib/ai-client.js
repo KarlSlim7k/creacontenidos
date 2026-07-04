@@ -1,6 +1,7 @@
 const config = require('../config');
 
 const NOUS_BASE = 'https://inference-api.nousresearch.com/v1';
+const PERPLEXITY_BASE = 'https://api.perplexity.ai';
 
 const MODELS = {
   default: config.aiModelDefault,
@@ -41,10 +42,40 @@ function parseJson(text) {
   return JSON.parse(match ? match[0] : text);
 }
 
+// Búsqueda real de tendencias vía Perplexity Sonar Pro (tiene acceso a web
+// en vivo). Nous Portal/Hermes NO buscaba nada — solo alucinaba desde su
+// corte de entrenamiento, por eso salían notas fechadas en 2024.
+async function perplexitySearch(systemPrompt, userMessage) {
+  const res = await fetch(`${PERPLEXITY_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.apiKeys.perplexity}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'sonar-pro',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: 0.2,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Perplexity respondió ${res.status}: ${text.slice(0, 300)}`);
+  }
+  const json = await res.json();
+  const content = json.choices[0].message.content;
+  if (!content) throw new Error('Perplexity no devolvió contenido');
+  return content;
+}
+
 async function detectTopics(query) {
-  const system = 'Eres un analista de tendencias para un medio editorial en Perote, Puebla, México. Detectas temas relevantes para audiencia local y regional.';
-  const user = `Analiza las siguientes tendencias y extrae los topics más relevantes para un medio de contenido en Perote, Puebla: "${query}". Para cada topic, devuelve un JSON array con objetos que tengan: title, source (Web Search), mentions (número estimado), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
-  const content = await chatComplete(system, user, 'default');
+  const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  const system = `Eres un analista de tendencias para un medio editorial en Perote, Puebla, México. Detectas temas relevantes para audiencia local y regional. Hoy es ${fecha}. Busca en la web noticias y tendencias recientes (últimos días) — nunca reportes eventos de años anteriores como si fueran de hoy.`;
+  const user = `Busca tendencias y noticias actuales relevantes para un medio de contenido en Perote, Puebla sobre: "${query}". Para cada topic, devuelve un JSON array con objetos que tengan: title, source (Web Search), mentions (número estimado), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
+  const content = await perplexitySearch(system, user);
   return parseJson(content);
 }
 
