@@ -109,10 +109,7 @@
     });
   }
 
-  var apiBase = (function () {
-    var m = document.querySelector('meta[name="crea-api-base"]');
-    return (m && m.content) || 'http://localhost:3000';
-  })();
+  var apiBase = window.CREA_API_BASE;
 
   fetch(apiBase + '/api/public/social?network=tiktok&limit=24')
     .then(function (res) { if (!res.ok) throw new Error('API ' + res.status); return res.json(); })

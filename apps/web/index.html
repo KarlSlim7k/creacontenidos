@@ -178,8 +178,7 @@
 (function () {
   var preview = document.getElementById('prod-preview');
   if (!preview) return;
-  var apiBase = (document.querySelector('meta[name="crea-api-base"]') || {}).content || 'http://localhost:3000';
-  fetch(apiBase + '/api/public/social?network=tiktok&limit=3')
+  fetch(window.CREA_API_BASE + '/api/public/social?network=tiktok&limit=3')
     .then(function (r) { return r.json(); })
     .then(function (posts) {
       if (!posts.length) { preview.style.display = 'none'; return; }

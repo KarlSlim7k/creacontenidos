@@ -2,8 +2,10 @@
 // Solo se carga en estudio/contacto.html. Los chips [data-interest] y el menú
 // móvil los maneja main.js; aquí solo va el submit.
 
-// Misma mecánica simple que el portal: constante con fallback a la API local.
-var CREA_API_BASE = window.CREA_API_BASE || 'http://localhost:3000';
+// main.js se carga antes en contacto.html y ya resuelve CREA_API_BASE (incluye
+// el caso same-origin en prod, donde vale '' — un `||` aquí lo rompería porque
+// '' es falsy).
+var CREA_API_BASE = window.CREA_API_BASE;
 
 document.addEventListener('DOMContentLoaded', function () {
   var form = document.querySelector('form[data-lead-form]');
