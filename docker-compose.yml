@@ -44,7 +44,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET (definila en .env)}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
     ports:
-      - "3000:3000"
+      # Host 3001: el 3000 lo ocupa el dashboard de Dokploy en el VPS.
+      - "${API_HOST_PORT:-3001}:3000"
     depends_on:
       db:
         condition: service_healthy
