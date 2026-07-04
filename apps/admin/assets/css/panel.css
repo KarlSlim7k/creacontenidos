@@ -39,14 +39,40 @@
 .padmin-account-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .padmin-account-name { font-size: 12px; font-weight: 500; color: #1F2A22; margin: 0 0 2px; }
 .padmin-account-role { font-size: 11px; color: #6B6A60; margin: 0; }
+.padmin-account-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.padmin-sound-toggle { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.8; transition: background .15s ease, opacity .15s ease; }
+.padmin-sound-toggle:hover { background: #F0EFEA; opacity: 1; }
+.padmin-sound-toggle.muted { opacity: 0.45; }
 .padmin-bell-wrap { position: relative; flex-shrink: 0; }
-.padmin-bell { position: relative; width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: #F7F7F5; }
-.padmin-bell-badge { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; border-radius: 8px; background: #C77D2E; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
-.padmin-notif-panel { position: absolute; bottom: 36px; left: 0; width: 260px; background: #fff; border: 0.5px solid #E3E2DD; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.12); z-index: 50; overflow: hidden; }
-.padmin-notif-title { font-size: 11px; font-weight: 600; color: #1F2A22; margin: 0; padding: 10px 14px; border-bottom: 0.5px solid #E3E2DD; }
-.padmin-notif-item { padding: 10px 14px; border-bottom: 0.5px solid #E3E2DD; }
+.padmin-bell { position: relative; width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: #F7F7F5; transition: background .15s ease, transform .1s ease; }
+.padmin-bell:hover { background: #EEEDE8; }
+.padmin-bell:active { transform: scale(0.94); }
+.padmin-bell.has-unread { background: #F3E4D4; }
+.padmin-bell-badge { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; border-radius: 8px; background: #C77D2E; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 3px; box-shadow: 0 0 0 2px #fff; animation: padmin-badge-pop .2s ease-out; }
+.padmin-notif-panel { position: absolute; bottom: 36px; left: 0; width: 280px; background: #fff; border: 0.5px solid #E3E2DD; border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.14); z-index: 50; overflow: hidden; }
+.padmin-notif-title-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 0.5px solid #E3E2DD; }
+.padmin-notif-title { font-size: 11px; font-weight: 600; color: #1F2A22; margin: 0; }
+.padmin-notif-count { font-size: 10px; font-weight: 700; color: #C77D2E; }
+.padmin-notif-list { max-height: 300px; overflow-y: auto; }
+.padmin-notif-item { padding: 10px 14px; border-bottom: 0.5px solid #E3E2DD; transition: background .1s ease; }
+.padmin-notif-item:last-child { border-bottom: none; }
+.padmin-notif-item:hover { background: #FAFAF8; }
+.padmin-notif-item.unread { background: #FBF6EC; }
 .padmin-notif-item p:first-child { font-size: 12px; color: #1F2A22; margin: 0 0 4px; line-height: 1.35; }
-.padmin-notif-item p:last-child { font-size: 10px; color: #9A9A93; margin: 0; }
+.padmin-notif-time { font-size: 10px; color: #9A9A93; margin: 0; }
+.padmin-notif-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #C77D2E; margin-right: 6px; vertical-align: middle; }
+@keyframes padmin-badge-pop { from { transform: scale(0); } to { transform: scale(1); } }
+
+/* ---------- toasts (feedback global: errores de validación, confirmaciones) ---------- */
+.padmin-toast-stack { position: fixed; right: 20px; bottom: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
+.padmin-toast { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); font-size: 13px; line-height: 1.4; animation: padmin-toast-in .2s ease-out; }
+.padmin-toast-error { background: #FCEEEA; color: #7A2E1D; border: 0.5px solid #E8B9A8; }
+.padmin-toast-success { background: #E9F1E6; color: #234A28; border: 0.5px solid #B7D2AE; }
+.padmin-toast-icon { font-size: 14px; line-height: 1.4; flex-shrink: 0; }
+.padmin-toast-msg { flex: 1; }
+.padmin-toast-close { background: none; border: none; font-size: 16px; line-height: 1; cursor: pointer; color: inherit; opacity: 0.6; padding: 0 0 0 4px; flex-shrink: 0; }
+.padmin-toast-close:hover { opacity: 1; }
+@keyframes padmin-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .padmin-logout { font-size: 11px; color: #7A4A18; cursor: pointer; display: inline-block; padding: 10px 0; background: none; border: none; }
 
 .padmin-content { flex: 1; overflow: auto; background: #F7F7F5; padding: 28px 32px; }

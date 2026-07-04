@@ -120,13 +120,62 @@
     newsletterContent: null, newsletterBusy: false, newsletterSending: false,
     newsletterPreview: null, newsletterSubscriberCount: null,
     newsletterAudioBusy: false, newsletterAudioUrl: null,
-    demoNote: null, errorMsg: null
+    demoNote: null, errorMsg: null, successMsg: null, soundMuted: false
   };
+  state.soundMuted = isSoundMuted();
 
   function setState(patch) {
     var k;
     for (k in patch) { if (Object.prototype.hasOwnProperty.call(patch, k)) state[k] = patch[k]; }
+    if (Object.prototype.hasOwnProperty.call(patch, 'errorMsg')) {
+      if (errorToastTimer) { clearTimeout(errorToastTimer); errorToastTimer = null; }
+      if (patch.errorMsg) {
+        playToastSound('error');
+        errorToastTimer = setTimeout(function () { state.errorMsg = null; render(); }, 6000);
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'successMsg')) {
+      if (successToastTimer) { clearTimeout(successToastTimer); successToastTimer = null; }
+      if (patch.successMsg) {
+        playToastSound('success');
+        successToastTimer = setTimeout(function () { state.successMsg = null; render(); }, 4000);
+      }
+    }
     render();
+  }
+
+  // ---------- toasts: sonido + auto-dismiss ----------
+  // Un solo timer por tipo (error/success) — nueva notificación del mismo tipo reinicia el conteo.
+  var errorToastTimer = null;
+  var successToastTimer = null;
+  var audioCtx = null;
+
+  function isSoundMuted() {
+    try { return localStorage.getItem('crea-admin-sound-muted') === '1'; } catch (e) { return false; }
+  }
+
+  function playToastSound(kind) {
+    if (isSoundMuted()) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = audioCtx || new Ctx();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      var freqs = kind === 'error' ? [392] : [523.25, 659.25]; // G4 vs. C5→E5
+      freqs.forEach(function (freq, i) {
+        var t0 = audioCtx.currentTime + i * 0.09;
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.12, t0 + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.16);
+      });
+    } catch (e) { /* autoplay bloqueado o Web Audio no soportado */ }
   }
 
   // ---------- small helpers ----------
@@ -361,21 +410,33 @@
   function renderBellAndNotifs() {
     var notifs = state.data.notifications;
     var count = unseenNotifCount();
-    var badgeHtml = count > 0 ? '<span class="padmin-bell-badge">' + count + '</span>' : '';
+    var badgeHtml = count > 0 ? '<span class="padmin-bell-badge">' + (count > 9 ? '9+' : count) + '</span>' : '';
     var panel = '';
     if (state.showNotifications) {
+      var lastSeen = getLastNotifSeen();
       var itemsHtml;
       if (!notifs) itemsHtml = '<div class="padmin-notif-item"><p>Cargando…</p></div>';
       else if (!notifs.length) itemsHtml = '<div class="padmin-notif-item"><p>Sin actividad reciente.</p></div>';
       else itemsHtml = notifs.map(function (n) {
-        return '<div class="padmin-notif-item"><p>' + esc(n.detail || n.action) + '</p><p style="font-size:10px;color:#9A9A93;margin:2px 0 0;">' + esc(relativeTime(n.created_at)) + '</p></div>';
+        var isNew = !lastSeen || n.created_at > lastSeen;
+        return '<div class="padmin-notif-item' + (isNew ? ' unread' : '') + '"><p>' + (isNew ? '<span class="padmin-notif-dot"></span>' : '') + esc(n.detail || n.action) + '</p><p class="padmin-notif-time">' + esc(relativeTime(n.created_at)) + '</p></div>';
       }).join('');
-      panel = '<div class="padmin-notif-panel"><p class="padmin-notif-title">Notificaciones</p>' + itemsHtml + '</div>';
+      panel = '<div class="padmin-notif-panel"><div class="padmin-notif-title-row"><p class="padmin-notif-title">Notificaciones</p>' +
+        (count > 0 ? '<span class="padmin-notif-count">' + count + ' nueva' + (count === 1 ? '' : 's') + '</span>' : '') +
+        '</div><div class="padmin-notif-list">' + itemsHtml + '</div></div>';
     }
-    return '<span class="padmin-bell-wrap"><span class="padmin-bell" data-action="toggle-notifications">' +
+    return '<span class="padmin-bell-wrap"><span class="padmin-bell' + (count > 0 ? ' has-unread' : '') + '" data-action="toggle-notifications" title="Notificaciones">' +
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 3h16l-2-3Z" stroke="#3F3F3A" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 21a2.5 2.5 0 0 0 5 0" stroke="#3F3F3A" stroke-width="1.8" stroke-linecap="round"/></svg>' +
       badgeHtml +
       '</span>' + panel + '</span>';
+  }
+
+  function renderSoundToggle() {
+    var muted = !!state.soundMuted;
+    var icon = muted
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="#9A9A93"/><path d="M18 9l4 6M22 9l-4 6" stroke="#9A9A93" stroke-width="1.8" stroke-linecap="round"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="#3F3F3A"/><path d="M17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12" stroke="#3F3F3A" stroke-width="1.6" stroke-linecap="round"/></svg>';
+    return '<span class="padmin-sound-toggle' + (muted ? ' muted' : '') + '" data-action="toggle-sound" title="' + (muted ? 'Activar sonido de avisos' : 'Silenciar sonido de avisos') + '">' + icon + '</span>';
   }
 
   function renderSidebar() {
@@ -385,15 +446,30 @@
       '<div class="padmin-account">' +
         '<div class="padmin-account-row">' +
           '<div><p class="padmin-account-name">' + esc(state.user.name) + '</p><p class="padmin-account-role">' + esc(roleLabels[state.user.role] || state.user.role) + '</p></div>' +
-          renderBellAndNotifs() +
+          '<span class="padmin-account-actions">' + renderSoundToggle() + renderBellAndNotifs() + '</span>' +
         '</div>' +
         '<button type="button" class="padmin-logout" data-action="logout">Cerrar sesión</button>' +
       '</div>' +
     '</div>';
   }
 
+  function renderToasts() {
+    var html = '';
+    if (state.errorMsg) {
+      html += '<div class="padmin-toast padmin-toast-error" role="alert">' +
+        '<span class="padmin-toast-icon">⚠</span><span class="padmin-toast-msg">' + esc(state.errorMsg) + '</span>' +
+        '<button type="button" class="padmin-toast-close" data-action="dismiss-toast" data-kind="error" aria-label="Cerrar aviso">×</button></div>';
+    }
+    if (state.successMsg) {
+      html += '<div class="padmin-toast padmin-toast-success" role="status">' +
+        '<span class="padmin-toast-icon">✓</span><span class="padmin-toast-msg">' + esc(state.successMsg) + '</span>' +
+        '<button type="button" class="padmin-toast-close" data-action="dismiss-toast" data-kind="success" aria-label="Cerrar aviso">×</button></div>';
+    }
+    return html ? '<div class="padmin-toast-stack">' + html + '</div>' : '';
+  }
+
   function renderShell(contentHtml) {
-    return '<div class="padmin-shell">' + renderSidebar() + '<div class="padmin-content">' + contentHtml + '</div></div>';
+    return '<div class="padmin-shell">' + renderSidebar() + '<div class="padmin-content">' + contentHtml + '</div>' + renderToasts() + '</div>';
   }
 
   // ---------- login screen ----------
@@ -1270,6 +1346,15 @@
           try { localStorage.setItem('crea-admin-last-notif-seen', new Date().toISOString()); } catch (e) { /* modo privado */ }
         }
         break;
+      case 'toggle-sound':
+        var muted = !isSoundMuted();
+        try { localStorage.setItem('crea-admin-sound-muted', muted ? '1' : '0'); } catch (e) { /* modo privado */ }
+        setState({ soundMuted: muted });
+        break;
+      case 'dismiss-toast':
+        if (el.getAttribute('data-kind') === 'error') setState({ errorMsg: null });
+        else setState({ successMsg: null });
+        break;
       case 'set-radar-source': setState({ radarSource: el.getAttribute('data-value') }); break;
       case 'set-radar-status': setState({ radarStatus: el.getAttribute('data-value') }); break;
       case 'open-radar': setState({ selectedRadarId: Number(el.getAttribute('data-id')) }); break;
@@ -1422,11 +1507,11 @@
   function submitRejectProposal(id) {
     var textarea = document.getElementById('reject-reason-' + id);
     var reason = textarea ? textarea.value.trim() : '';
-    if (!reason) { textarea && textarea.focus(); return; }
+    if (!reason) { textarea && textarea.focus(); setState({ errorMsg: 'Escribe un motivo antes de rechazar la propuesta.' }); return; }
     adminApi('/api/editorial/proposals/' + id + '/reject', { method: 'PATCH', body: { reason: reason } })
       .then(function () {
         var list = state.data.proposalsByKey.propuesta.filter(function (p) { return p.id !== id; });
-        setState({ propuestaRejecting: null });
+        setState({ propuestaRejecting: null, successMsg: 'Propuesta rechazada.' });
         setProposalsKey('propuesta', list);
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });
@@ -1444,7 +1529,7 @@
       .then(function (updated) {
         if (!thenSubmitReview) {
           // Se queda en el editor — solo refresca el borrador guardado.
-          setState({ editorDraft: { title: updated.title || '', body: updated.body || '', section: updated.section || '', dek: updated.dek || '', slug: updated.slug || '' } });
+          setState({ editorDraft: { title: updated.title || '', body: updated.body || '', section: updated.section || '', dek: updated.dek || '', slug: updated.slug || '' }, successMsg: 'Borrador guardado.' });
           return;
         }
         return adminApi('/api/editorial/proposals/' + id + '/submit-review', { method: 'PATCH' }).then(function () {
@@ -1452,6 +1537,7 @@
           state.editorDraft = null;
           state.data.proposalsByKey = {};
           goTo('dashboard');
+          setState({ successMsg: 'Nota enviada a revisión.' });
         });
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });
@@ -1459,22 +1545,23 @@
 
   function submitPublish(id) {
     var origin = state.transparency[id];
-    if (!origin) return;
+    if (!origin) { setState({ errorMsg: 'Selecciona el origen del contenido (transparencia) antes de aprobar.' }); return; }
     adminApi('/api/editorial/proposals/' + id + '/publish', { method: 'PATCH', body: { origin: origin } })
       .then(function () {
         var list = state.data.proposalsByKey.en_revision.filter(function (p) { return p.id !== id; });
         setProposalsKey('en_revision', list);
+        setState({ successMsg: 'Nota publicada correctamente.' });
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });
   }
 
   function submitReturn(id) {
     var comment = (document.getElementById('comentario-text') || {}).value || '';
-    if (!comment.trim()) return;
+    if (!comment.trim()) { setState({ errorMsg: 'Escribe un comentario antes de regresar la nota.' }); return; }
     adminApi('/api/editorial/proposals/' + id + '/return', { method: 'PATCH', body: { comment: comment } })
       .then(function () {
         var list = state.data.proposalsByKey.en_revision.filter(function (p) { return p.id !== id; });
-        setState({ comentarioPieceId: null, comentarioText: '' });
+        setState({ comentarioPieceId: null, comentarioText: '', successMsg: 'Nota regresada a borrador.' });
         setProposalsKey('en_revision', list);
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });

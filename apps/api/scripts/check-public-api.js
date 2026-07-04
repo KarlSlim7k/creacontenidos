@@ -46,7 +46,7 @@ async function main() {
   const { rows: [{ count: publishedCount }] } = await pool.query(
     "SELECT count(*)::int AS count FROM content_proposals WHERE status = 'published'"
   );
-  assert.strictEqual(publishedCount, 24, `seed idempotente: esperaba 24 publicados, hay ${publishedCount}`);
+  assert.strictEqual(publishedCount, 30, `seed idempotente: esperaba 30 publicados (24 + 6 patrocinados), hay ${publishedCount}`);
   await pool.end();
 
   const server = spawn('node', ['src/server.js'], {
@@ -57,10 +57,10 @@ async function main() {
   try {
     await waitForHealth();
 
-    // 1. Listado general: 24 publicados, orden published_at DESC, sin pendientes.
+    // 1. Listado general: 30 publicados (24 + 6 patrocinados), orden published_at DESC, sin pendientes.
     let { status, body: list } = await getJson(`${BASE}/api/public/articles?limit=50`);
     assert.strictEqual(status, 200);
-    assert.strictEqual(list.length, 24, `esperaba 24 artículos, obtuve ${list.length}`);
+    assert.strictEqual(list.length, 30, `esperaba 30 artículos, obtuve ${list.length}`);
     for (let i = 1; i < list.length; i++) {
       assert.ok(new Date(list[i - 1].published_at) >= new Date(list[i].published_at), 'orden published_at DESC roto');
     }
