@@ -81,6 +81,7 @@ router.delete('/ideas/:id', requireAuth, requireRole('director'), async (req, re
 // Pipeline: 'propuesta' → 'borrador' → 'en_revision' → 'published' (gate) | 'rechazada'.
 
 const PROPOSAL_FIELDS = `id, topic_id, format, title, body, dek, section, slug, cover_image_url,
+  author_name, is_sponsored, sponsor_name,
   angulo, sensibilidad, origin, status, author_id, review_comment, published_at, created_at, updated_at`;
 
 // GET /api/editorial/proposals?status=a,b&author_id=
@@ -136,9 +137,9 @@ router.patch('/proposals/:id/approve', requireAuth, requireRole('director', 'pro
   try {
     if (!(await requireStatus(req.params.id, 'propuesta', res))) return;
     const { rows } = await pool.query(
-      `UPDATE content_proposals SET status = 'borrador', author_id = COALESCE(author_id, $1), updated_at = now()
-       WHERE id = $2 RETURNING ${PROPOSAL_FIELDS}`,
-      [req.user.id, req.params.id]
+      `UPDATE content_proposals SET status = 'borrador', author_id = COALESCE(author_id, $1), author_name = COALESCE(author_name, $2), updated_at = now()
+       WHERE id = $3 RETURNING ${PROPOSAL_FIELDS}`,
+      [req.user.id, req.user.name, req.params.id]
     );
     res.json(rows[0]);
   } catch (err) {
@@ -165,8 +166,8 @@ router.patch('/proposals/:id/reject', requireAuth, requireRole('director', 'prod
   }
 });
 
-// Editor: guardar borrador (título, cuerpo, sección, SEO...). Solo mientras está en 'borrador'.
-const DRAFT_FIELDS = { title: 400, dek: 300, section: 40, slug: 200, cover_image_url: 500 };
+// Editor: guardar borrador (título, cuerpo, sección, SEO, imagen, autor, patrocinio...). Solo mientras está en 'borrador'.
+const DRAFT_FIELDS = { title: 400, dek: 300, section: 40, slug: 200, cover_image_url: 500, author_name: 200, sponsor_name: 200 };
 router.patch('/proposals/:id/draft', requireAuth, async (req, res, next) => {
   try {
     if (!(await requireStatus(req.params.id, 'borrador', res))) return;
@@ -182,6 +183,10 @@ router.patch('/proposals/:id/draft', requireAuth, async (req, res, next) => {
     if (req.body.body !== undefined) {
       params.push(String(req.body.body));
       sets.push(`body = $${params.length}`);
+    }
+    if (req.body.is_sponsored !== undefined) {
+      params.push(Boolean(req.body.is_sponsored));
+      sets.push(`is_sponsored = $${params.length}`);
     }
     if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
     params.push(req.params.id);

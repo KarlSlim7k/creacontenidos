@@ -109,7 +109,7 @@
     radarSource: 'Todas', radarStatus: 'Todos', radarBusy: false,
     propuestaRejecting: null,
     editorProposalId: null, editorDraft: null,
-    generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false,
+    generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false, notaPreviewHtml: null,
     transparency: {}, comentarioPieceId: null, comentarioText: '',
     selectedRadarId: null,
     mobileAprobacion: false, configTab: 'usuarios', showNotifications: false,
@@ -348,8 +348,10 @@
       loadProposals('borrador', 'status=borrador');
       if (id) {
         adminApi('/api/editorial/proposals/' + id).then(function (p) {
-          setState({ editorProposalId: id, editorDraft: {
-            title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || ''
+          setState({ editorProposalId: id, notaPreviewHtml: null, editorDraft: {
+            title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || '',
+            cover_image_url: p.cover_image_url || '', author_name: p.author_name || state.user.name,
+            is_sponsored: Boolean(p.is_sponsored), sponsor_name: p.sponsor_name || ''
           } });
         });
       }
@@ -657,16 +659,90 @@
           '<div class="padmin-field" style="margin:0;"><label>Sección editorial</label><select id="editor-section">' + ['Local', 'Cultura', 'Economía', 'Entretenimiento', 'Deportes', 'Opinión'].map(function (s) { return '<option' + (d.section === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>' +
           '<div class="padmin-field" style="margin:0;"><label>Dek / bajada</label><input id="editor-dek" type="text" value="' + esc(d.dek) + '"></div>' +
         '</div>' +
-        '<div class="padmin-field"><label>Slug</label><input id="editor-slug" type="text" value="' + esc(d.slug) + '" placeholder="mi-nota-slug"></div>' +
+        '<div class="padmin-editor-grid2">' +
+          '<div class="padmin-field" style="margin:0;"><label>Slug</label><input id="editor-slug" type="text" value="' + esc(d.slug) + '" placeholder="mi-nota-slug"></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Autor / firma</label><input id="editor-author" type="text" value="' + esc(d.author_name) + '"></div>' +
+        '</div>' +
+        '<div class="padmin-field"><label>Imagen de portada (URL)</label><input id="editor-cover" type="text" value="' + esc(d.cover_image_url) + '" placeholder="https://..." onchange="document.getElementById(\'editor-cover-thumb\').src=this.value;document.getElementById(\'editor-cover-thumb\').style.display=this.value?\'block\':\'none\';"></div>' +
+        (d.cover_image_url ? '<img id="editor-cover-thumb" src="' + esc(d.cover_image_url) + '" alt="" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 18px;" onerror="this.style.display=\'none\';">' : '<img id="editor-cover-thumb" style="display:none;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 18px;" onerror="this.style.display=\'none\';">') +
+        '<div class="padmin-editor-grid2">' +
+          '<div class="padmin-field-inline padmin-field" style="margin:0;"><input id="editor-sponsored" type="checkbox" ' + (d.is_sponsored ? 'checked' : '') + ' onchange="document.getElementById(\'editor-sponsor-name-field\').style.display=this.checked?\'\':\'none\';"><label for="editor-sponsored" style="font-size:13px;color:#1F2A22;">Nota patrocinada (publicidad)</label></div>' +
+          '<div class="padmin-field" id="editor-sponsor-name-field" style="margin:0;display:' + (d.is_sponsored ? '' : 'none') + ';"><label>Patrocinado por</label><input id="editor-sponsor-name" type="text" value="' + esc(d.sponsor_name) + '" placeholder="Nombre del negocio"></div>' +
+        '</div>' +
       '</div>' +
-      '<div style="display:flex;gap:10px;">' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
         '<button type="button" class="padmin-btn padmin-btn-brand" data-action="submit-review" data-id="' + state.editorProposalId + '">Enviar a revisión</button>' +
         '<button type="button" class="padmin-btn-outline" data-action="save-draft" data-id="' + state.editorProposalId + '">Guardar borrador</button>' +
         (d.body ? '<button type="button" class="padmin-btn-outline" data-action="run-qa" ' + (state.qaBusy ? 'disabled' : '') + '>' + (state.qaBusy ? 'Verificando…' : 'Verificar texto') + '</button>' : '') +
+        '<button type="button" class="padmin-btn-outline" data-action="preview-nota">Vista previa</button>' +
         '<button type="button" class="padmin-btn-outline" data-action="close-editor">Volver</button>' +
       '</div>' +
       renderQaResult() +
+      renderNotaPreview() +
     '</div>';
+  }
+
+  function renderNotaPreview() {
+    if (!state.notaPreviewHtml) return '';
+    return '<div class="padmin-editor-card" style="margin-top:10px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+        '<p style="font-size:11px;font-weight:600;color:#6B6A60;letter-spacing:0.06em;margin:0;">VISTA PREVIA — así se vería publicada</p>' +
+        '<span class="padmin-drawer-close" data-action="close-nota-preview">Cerrar &times;</span>' +
+      '</div>' +
+      '<iframe srcdoc="' + esc(state.notaPreviewHtml) + '" style="width:100%;height:640px;border:0.5px solid #E3E2DD;border-radius:6px;background:#fff;"></iframe>' +
+    '</div>';
+  }
+
+  // Snapshot del <form> del editor tal cual está en el DOM (incluye ediciones sin
+  // guardar) — mismo dato que consume submitDraft() y la vista previa.
+  function readEditorForm() {
+    return {
+      title: document.getElementById('editor-title').value,
+      body: document.getElementById('editor-body').value,
+      section: document.getElementById('editor-section').value,
+      dek: document.getElementById('editor-dek').value,
+      slug: document.getElementById('editor-slug').value,
+      cover_image_url: document.getElementById('editor-cover').value,
+      author_name: document.getElementById('editor-author').value,
+      is_sponsored: document.getElementById('editor-sponsored').checked,
+      sponsor_name: document.getElementById('editor-sponsor-name').value,
+    };
+  }
+
+  // Construye un documento HTML autocontenido que imita renderNotaPage() (apps/web/assets/js/main.js)
+  // con los tokens del tema editorial (crea-design-system) para que el editor vea el resultado
+  // final sin depender de que la nota ya esté publicada (la API pública solo sirve status='published').
+  function buildNotaPreviewDoc(d) {
+    var body = String(d.body || '');
+    var minutes = Math.max(1, Math.round(body.split(/\s+/).filter(Boolean).length / 200));
+    var fecha = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+    var paras = body.split(/\n\s*\n/).filter(Boolean).map(function (p) {
+      return '<p style="font-size:16px;line-height:1.75;margin:0 0 18px;">' + esc(p) + '</p>';
+    }).join('');
+    var cover = d.cover_image_url
+      ? '<img src="' + esc(d.cover_image_url) + '" alt="" style="width:100%;max-height:420px;object-fit:cover;border-radius:8px;margin-bottom:24px;display:block;" onerror="this.style.display=\'none\';">'
+      : '<div style="width:100%;height:260px;background:#DCE6D6;border-radius:8px;margin-bottom:24px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#2F5233;">Sin imagen de portada</div>';
+    var authorName = d.author_name || 'CREA Contenidos';
+    var sponsorBlock = d.is_sponsored
+      ? '<div style="background:#E2DFD3;border-radius:8px;padding:14px 18px;font-size:12px;color:#6B6A60;margin-top:18px;">Contenido patrocinado por <strong style="color:#1F2A22;">' + esc(d.sponsor_name || 'un aliado de CREA') + '</strong>.</div>'
+      : '';
+    return '<!DOCTYPE html><html lang="es-MX"><head><meta charset="utf-8">' +
+      '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+      '<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">' +
+      '<style>body{margin:0;padding:28px 24px;background:#ECEAE2;color:#1F2A22;font-family:\'Inter\',sans-serif;} .eyebrow{font-size:11px;font-weight:600;letter-spacing:0.06em;color:#2F5233;}</style>' +
+      '</head><body>' +
+      '<div style="max-width:640px;margin:0 auto;">' +
+        '<p class="eyebrow">' + esc((d.section || 'LOCAL').toUpperCase()) + (d.is_sponsored ? ' &middot; CONTENIDO PATROCINADO' : '') + '</p>' +
+        '<h1 style="font-family:\'Roboto Slab\',serif;font-size:32px;line-height:1.2;margin:10px 0 16px;">' + esc(d.title || 'Sin título') + '</h1>' +
+        (d.dek ? '<p style="font-size:16px;color:#6B6A60;line-height:1.5;margin:0 0 20px;">' + esc(d.dek) + '</p>' : '') +
+        '<div style="display:flex;align-items:center;gap:12px;padding-bottom:20px;border-bottom:0.5px solid #C9C6B8;margin-bottom:24px;">' +
+          '<div style="width:36px;height:36px;border-radius:50%;background:#E3E2DD;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;">' + esc(initialsOf(authorName)) + '</div>' +
+          '<div style="font-size:12px;color:#6B6A60;"><strong style="color:#1F2A22;">' + esc(authorName) + '</strong> &middot; ' + esc(fecha) + ' &middot; ' + minutes + ' min de lectura</div>' +
+        '</div>' +
+        cover +
+        (paras || '<p style="font-size:13px;color:#9A9A93;">Sin contenido todavía.</p>') +
+        sponsorBlock +
+      '</div></body></html>';
   }
 
   function renderQaResult() {
@@ -1412,6 +1488,13 @@
           .catch(function (err) { setState({ qaBusy: false, errorMsg: err.message }); });
         break;
       case 'close-qa': setState({ qaResult: null }); break;
+      case 'preview-nota':
+        if (!state.editorDraft) break;
+        var previewFields = readEditorForm();
+        state.editorDraft = Object.assign({}, state.editorDraft, previewFields);
+        setState({ notaPreviewHtml: buildNotaPreviewDoc(previewFields) });
+        break;
+      case 'close-nota-preview': setState({ notaPreviewHtml: null }); break;
       case 'generate-newsletter':
       case 'regenerate-newsletter':
         setState({ newsletterBusy: true, errorMsg: null });
@@ -1529,18 +1612,16 @@
   }
 
   function submitDraft(id, thenSubmitReview) {
-    var body = {
-      title: document.getElementById('editor-title').value,
-      body: document.getElementById('editor-body').value,
-      section: document.getElementById('editor-section').value,
-      dek: document.getElementById('editor-dek').value,
-      slug: document.getElementById('editor-slug').value,
-    };
+    var body = readEditorForm();
     adminApi('/api/editorial/proposals/' + id + '/draft', { method: 'PATCH', body: body })
       .then(function (updated) {
         if (!thenSubmitReview) {
           // Se queda en el editor — solo refresca el borrador guardado.
-          setState({ editorDraft: { title: updated.title || '', body: updated.body || '', section: updated.section || '', dek: updated.dek || '', slug: updated.slug || '' }, successMsg: 'Borrador guardado.' });
+          setState({ editorDraft: {
+            title: updated.title || '', body: updated.body || '', section: updated.section || '', dek: updated.dek || '', slug: updated.slug || '',
+            cover_image_url: updated.cover_image_url || '', author_name: updated.author_name || '',
+            is_sponsored: Boolean(updated.is_sponsored), sponsor_name: updated.sponsor_name || ''
+          }, successMsg: 'Borrador guardado.' });
           return;
         }
         return adminApi('/api/editorial/proposals/' + id + '/submit-review', { method: 'PATCH' }).then(function () {
