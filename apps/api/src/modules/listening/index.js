@@ -58,4 +58,31 @@ router.get('/topics', requireAuth, async (req, res, next) => {
   }
 });
 
+// PATCH /api/listening/topics/:id/approve — marca el topic como revisado.
+router.patch('/topics/:id/approve', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE topics SET status = 'Revisado' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Topic no encontrado' });
+    await logActivity(pool, 'radar_approve', `Topic aprobado: ${rows[0].title}`, req.user.id, 'exito', { topic_id: rows[0].id });
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/listening/topics/:id — descarta un topic detectado por RADAR.
+router.delete('/topics/:id', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('DELETE FROM topics WHERE id = $1 RETURNING id, title', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Topic no encontrado' });
+    await logActivity(pool, 'radar_delete', `Topic eliminado: ${rows[0].title}`, req.user.id, 'exito', { topic_id: rows[0].id });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

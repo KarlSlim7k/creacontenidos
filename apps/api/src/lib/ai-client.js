@@ -74,7 +74,7 @@ async function perplexitySearch(systemPrompt, userMessage) {
 async function detectTopics(query) {
   const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
   const system = `Eres un analista de tendencias para un medio editorial en Perote, Puebla, México. Detectas temas relevantes para audiencia local y regional. Hoy es ${fecha}. Busca en la web noticias y tendencias recientes (últimos días) — nunca reportes eventos de años anteriores como si fueran de hoy.`;
-  const user = `Busca tendencias y noticias actuales relevantes para un medio de contenido en Perote, Puebla sobre: "${query}". Para cada topic, devuelve un JSON array con objetos que tengan: title, source (Web Search), mentions (número estimado), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
+  const user = `Busca tendencias y noticias actuales relevantes para un medio de contenido en Perote, Puebla sobre: "${query}". Para cada topic, devuelve un JSON array con objetos que tengan: title, source (Web Search), mentions (número estimado), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). En "antecedentes" siempre precisa cuándo ocurrió el hecho (fecha exacta o al menos día/semana aproximada según la fuente) — si la fuente no da fecha, dilo explícitamente ("fecha exacta no reportada por la fuente") en vez de omitirlo. Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
   const content = await perplexitySearch(system, user);
   return parseJson(content);
 }

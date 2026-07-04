@@ -884,11 +884,13 @@
         '<p class="padmin-drawer-section-title">ÁNGULOS DE COBERTURA SUGERIDOS</p><p class="padmin-drawer-section-body">' + esc(topic.angulos || 'Sin datos.') + '</p>' +
         '<p class="padmin-drawer-section-title">POTENCIAL DE AUDIENCIA</p><p class="padmin-drawer-section-body" style="margin-bottom:0;">' + esc(topic.audiencia || 'Sin datos.') + '</p>' +
         (state.user.role === 'director' || state.user.role === 'produccion' ?
-          '<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid #E3E2DD;display:flex;gap:8px;align-items:center;">' +
+          '<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid #E3E2DD;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
             '<select id="proposal-format-' + topic.id + '" style="font-size:12px;border:0.5px solid #E3E2DD;border-radius:6px;padding:6px 8px;background:#fff;">' +
               ['nota', 'post', 'guion_audio', 'guion_video'].map(function (f) { return '<option value="' + f + '">' + f + '</option>'; }).join('') +
             '</select>' +
             '<button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-proposal-from-topic" data-id="' + topic.id + '" ' + (state.generatingProposal ? 'disabled' : '') + '>' + (state.generatingProposal ? 'Generando…' : 'Generar propuesta IA') + '</button>' +
+            (topic.status !== 'Revisado' ? '<button type="button" class="padmin-btn-sm" style="background:#E1E8DD;color:#2F5233;" data-action="approve-topic" data-id="' + topic.id + '">✓ Aprobar</button>' : '') +
+            '<button type="button" class="padmin-btn-sm" style="background:#A6432E;color:#fff;margin-left:auto;" data-action="delete-topic" data-id="' + topic.id + '">🗑 Eliminar</button>' +
           '</div>' : '') +
       '</div>' +
     '</div>';
@@ -919,16 +921,22 @@
           '<button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ' + (state.radarBusy ? 'disabled' : '') + ' style="margin-left:auto;">' + (state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias') + '</button>' : '') +
       '</div>' +
       '<div class="padmin-card">' +
-        '<div class="padmin-table-head" style="grid-template-columns:1fr 100px 90px 90px 90px;"><span>TEMA</span><span>FUENTE</span><span>MENCIONES</span><span>SENTIMIENTO</span><span>ESTADO</span></div>' +
+        '<div class="padmin-table-head" style="grid-template-columns:1fr 100px 90px 90px 90px 110px;"><span>TEMA</span><span>FUENTE</span><span>MENCIONES</span><span>SENTIMIENTO</span><span>ESTADO</span><span>ACCIONES</span></div>' +
         filtered.map(function (r) {
           var sent = sentimentStyle(r.sentiment);
           var stStyle = r.status === 'Nuevo' ? { bg: '#F3E4D4', color: '#7A4A18' } : { bg: '#E1E8DD', color: '#2F5233' };
-          return '<div class="padmin-table-row clickable" data-action="open-radar" data-id="' + r.id + '" style="grid-template-columns:1fr 100px 90px 90px 90px;">' +
+          var canManage = state.user.role === 'director' || state.user.role === 'produccion';
+          return '<div class="padmin-table-row clickable" data-action="open-radar" data-id="' + r.id + '" style="grid-template-columns:1fr 100px 90px 90px 90px 110px;">' +
             '<span style="font-size:13px;color:#1F2A22;">' + esc(r.title) + '</span>' +
             '<span style="font-size:12px;color:#6B6A60;">' + esc(r.source) + '</span>' +
             '<span style="font-size:12px;color:#1F2A22;font-weight:600;">' + r.mentions + '</span>' +
             '<span style="font-size:11px;font-weight:600;color:' + sent.color + ';">' + sent.text + '</span>' +
             '<span class="padmin-badge" style="background:' + stStyle.bg + ';color:' + stStyle.color + ';width:fit-content;">' + esc(r.status) + '</span>' +
+            '<span style="display:flex;gap:4px;">' +
+              '<button type="button" title="Ver" data-action="open-radar" data-id="' + r.id + '" style="border:none;background:none;cursor:pointer;font-size:14px;padding:2px 4px;">👁</button>' +
+              (canManage ? '<button type="button" title="Aprobar" data-action="approve-topic" data-id="' + r.id + '" style="border:none;background:none;cursor:pointer;font-size:14px;padding:2px 4px;" ' + (r.status === 'Revisado' ? 'disabled' : '') + '>✓</button>' : '') +
+              (canManage ? '<button type="button" title="Eliminar" data-action="delete-topic" data-id="' + r.id + '" style="border:none;background:none;cursor:pointer;font-size:14px;padding:2px 4px;">🗑</button>' : '') +
+            '</span>' +
           '</div>';
         }).join('') +
       '</div>' +
@@ -1360,6 +1368,8 @@
       case 'set-radar-status': setState({ radarStatus: el.getAttribute('data-value') }); break;
       case 'open-radar': setState({ selectedRadarId: Number(el.getAttribute('data-id')) }); break;
       case 'close-radar': setState({ selectedRadarId: null }); break;
+      case 'approve-topic': submitApproveTopic(Number(el.getAttribute('data-id'))); break;
+      case 'delete-topic': submitDeleteTopic(Number(el.getAttribute('data-id'))); break;
       case 'open-comentario': setState({ comentarioPieceId: Number(el.getAttribute('data-id')), comentarioText: '' }); break;
       case 'close-comentario': setState({ comentarioPieceId: null, comentarioText: '' }); break;
       case 'confirm-comentario': submitReturn(Number(el.getAttribute('data-id'))); break;
@@ -1626,6 +1636,26 @@
     adminApi('/api/commercial/clients/' + id, { method: 'DELETE' })
       .then(function () {
         setData({ clients: (state.data.clients || []).filter(function (c) { return c.id !== id; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitApproveTopic(id) {
+    adminApi('/api/listening/topics/' + id + '/approve', { method: 'PATCH' })
+      .then(function () {
+        var topics = (state.data.topics || []).map(function (t) { return t.id === id ? Object.assign({}, t, { status: 'Revisado' }) : t; });
+        setData({ topics: topics });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeleteTopic(id) {
+    if (!confirm('¿Eliminar este tema detectado? No se puede deshacer.')) return;
+    adminApi('/api/listening/topics/' + id, { method: 'DELETE' })
+      .then(function () {
+        var topics = (state.data.topics || []).filter(function (t) { return t.id !== id; });
+        setData({ topics: topics });
+        if (state.selectedRadarId === id) setState({ selectedRadarId: null });
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });
   }
