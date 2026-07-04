@@ -270,6 +270,7 @@
     try { localStorage.removeItem('crea-admin-token'); } catch (e) { /* noop */ }
     setState({
       user: null, allowedModules: [], screen: 'login', loginError: null,
+      errorMsg: null, successMsg: null,
       data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null }
     });
   }
@@ -1545,7 +1546,6 @@
 
   function submitPublish(id) {
     var origin = state.transparency[id];
-    if (!origin) { setState({ errorMsg: 'Selecciona el origen del contenido (transparencia) antes de aprobar.' }); return; }
     adminApi('/api/editorial/proposals/' + id + '/publish', { method: 'PATCH', body: { origin: origin } })
       .then(function () {
         var list = state.data.proposalsByKey.en_revision.filter(function (p) { return p.id !== id; });
