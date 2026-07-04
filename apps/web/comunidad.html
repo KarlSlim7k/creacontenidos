@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Comunidad · CREA Contenidos</title>
+<meta name="description" content="Cuéntanos lo que pasa en tu colonia, tu pueblo o tu negocio. La comunidad también hace CREA Contenidos.">
+<meta name="crea-api-base" content="http://localhost:3000">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/tokens.css">
@@ -29,7 +31,7 @@
   </div>
 </header>
 
-<div class="mobile-menu">
+<div class="mobile-menu" role="navigation" aria-label="Menú">
   <div class="head"><span class="title">Menú</span><button class="close" data-menu-close aria-label="Cerrar menú">&times;</button></div>
   <a href="seccion.html?s=Local">Local</a>
   <a href="seccion.html?s=Cultura">Cultura</a>
@@ -41,51 +43,60 @@
   <a href="estudio/index.html" style="color:var(--brand);">Visitar Estudio &rarr;</a>
 </div>
 
-<main class="container" style="padding:32px 0 8px;">
+<main class="container" style="padding-top:32px;padding-bottom:8px;">
   <div class="eyebrow" style="margin-bottom:8px;">COMUNIDAD</div>
   <h1 style="font-size:32px;margin:0 0 10px;max-width:560px;">Cuéntanos lo que pasa en tu colonia, tu pueblo o tu negocio</h1>
   <p class="card-dek" style="font-size:14px;line-height:1.6;margin:0 0 28px;max-width:560px;">CREA se sostiene de su comunidad. Si vives en Perote o el corredor Perote&ndash;Xalapa&ndash;Puebla y tienes una idea, un tema o un evento que merece cobertura, escríbenos.</p>
 </main>
 
-<div class="container" style="padding:0 0 28px;">
+<div class="container" style="padding-bottom:28px;">
   <div class="grid grid-2" style="gap:36px;">
     <div>
       <div class="eyebrow" style="margin-bottom:14px;">ENVÍA TU IDEA</div>
-      <form data-demo-form>
-        <div class="field"><label for="nombre">Nombre</label><input id="nombre" name="nombre" type="text" required></div>
-        <div class="field"><label for="correo">Correo</label><input id="correo" name="correo" type="email" required></div>
+      <form data-idea-form>
+        <div class="field"><label for="nombre">Nombre</label><input id="nombre" name="nombre" type="text" required maxlength="200"></div>
+        <div class="field"><label for="correo">Correo</label><input id="correo" name="correo" type="email" required maxlength="320" autocomplete="email"></div>
+        <!-- Honeypot: los humanos no lo ven ni lo tabulan; si trae valor, el backend lo descarta. -->
+        <div class="field visually-hidden" aria-hidden="true">
+          <label for="idea-website">Sitio web (no llenar)</label>
+          <input id="idea-website" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
         <div class="field">
           <label>Sección de interés</label>
           <div style="display:flex;flex-wrap:wrap;gap:8px;">
-            <span class="chip">Local</span><span class="chip">Cultura</span><span class="chip">Economía</span>
-            <span class="chip">Entretenimiento</span><span class="chip">Deportes</span><span class="chip">Opinión</span>
+            <button type="button" class="chip" data-interest data-value="Local">Local</button>
+            <button type="button" class="chip" data-interest data-value="Cultura">Cultura</button>
+            <button type="button" class="chip" data-interest data-value="Economía">Economía</button>
+            <button type="button" class="chip" data-interest data-value="Entretenimiento">Entretenimiento</button>
+            <button type="button" class="chip" data-interest data-value="Deportes">Deportes</button>
+            <button type="button" class="chip" data-interest data-value="Opinión">Opinión</button>
           </div>
         </div>
-        <div class="field"><label for="idea">Idea o tema</label><textarea id="idea" name="idea" required></textarea></div>
+        <div class="field"><label for="idea">Idea o tema</label><textarea id="idea" name="idea" required maxlength="5000"></textarea></div>
         <div class="checkbox-row"><input type="checkbox" id="soy-comunidad" required><label for="soy-comunidad">Soy parte de la comunidad de Perote o el corredor</label></div>
         <button type="submit" class="btn btn-brand">Enviar idea</button>
-        <p data-form-note style="font-size:12px;color:var(--brand);margin-top:12px;"></p>
+        <p data-form-note role="status" aria-live="polite" tabindex="-1" style="font-size:12px;color:var(--brand);margin-top:12px;outline:none;"></p>
       </form>
     </div>
     <div>
       <div class="eyebrow" style="margin-bottom:14px;">COLABORADORES ACTIVOS</div>
-      <a href="perfil.html?id=carlos-mendoza" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:0.5px solid var(--line);">
+      <a href="perfil.html?autor=Carlos%20Mendoza" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:0.5px solid var(--line);">
         <div class="avatar" style="width:38px;height:38px;"><span style="font-size:12px;">CM</span></div>
         <div><p style="font-size:13px;font-weight:500;margin:0 0 2px;">Carlos Mendoza</p><p style="font-size:11px;color:var(--text-mute);margin:0;">Reportero · Local y Economía</p></div>
       </a>
-      <a href="perfil.html?id=ana-torres" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:0.5px solid var(--line);">
+      <a href="perfil.html?autor=Ana%20Torres" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:0.5px solid var(--line);">
         <div class="avatar" style="width:38px;height:38px;"><span style="font-size:12px;">AT</span></div>
         <div><p style="font-size:13px;font-weight:500;margin:0 0 2px;">Ana Torres</p><p style="font-size:11px;color:var(--text-mute);margin:0;">Reportera · Cultura y Deportes</p></div>
       </a>
-      <a href="perfil.html?id=luisa-perez" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:0.5px solid var(--line);">
+      <a href="perfil.html?autor=Luisa%20P%C3%A9rez" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:0.5px solid var(--line);">
         <div class="avatar" style="width:38px;height:38px;"><span style="font-size:12px;">LP</span></div>
         <div><p style="font-size:13px;font-weight:500;margin:0 0 2px;">Luisa Pérez</p><p style="font-size:11px;color:var(--text-mute);margin:0;">Editora de Opinión</p></div>
       </a>
-      <a href="perfil.html?id=tomas-ibarra" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:0.5px solid var(--line);">
+      <a href="perfil.html?autor=Tom%C3%A1s%20Ibarra" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:0.5px solid var(--line);">
         <div class="avatar" style="width:38px;height:38px;"><span style="font-size:12px;">TI</span></div>
         <div><p style="font-size:13px;font-weight:500;margin:0 0 2px;">Tomás Ibarra</p><p style="font-size:11px;color:var(--text-mute);margin:0;">Colaborador comunitario · Economía</p></div>
       </a>
-      <a href="perfil.html?id=marisol-hidalgo" style="display:flex;gap:12px;align-items:center;padding:12px 0;">
+      <a href="perfil.html?autor=Marisol%20Hidalgo" style="display:flex;gap:12px;align-items:center;padding:12px 0;">
         <div class="avatar" style="width:38px;height:38px;"><span style="font-size:12px;">MH</span></div>
         <div><p style="font-size:13px;font-weight:500;margin:0 0 2px;">Marisol Hidalgo</p><p style="font-size:11px;color:var(--text-mute);margin:0;">Colaboradora comunitaria · Opinión</p></div>
       </a>
@@ -109,6 +120,7 @@
     <span>CREA Contenidos &middot; Perote, Veracruz</span>
     <span class="links">
       <a href="index.html">Home</a>
+      <a href="producciones.html">Producciones CREA</a>
       <a href="estudio/media-kit.html">Media kit</a>
       <a href="estudio/contacto.html">Contacto</a>
     </span>

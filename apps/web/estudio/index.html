@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Estudio CREA · Producción, campañas y medios propios</title>
+<meta name="description" content="Patrocinios, branded content y producción audiovisual para negocios del corredor Perote–Xalapa–Puebla, con el respaldo editorial de CREA.">
+<meta name="crea-api-base" content="http://localhost:3000">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/tokens.css">
@@ -25,7 +27,7 @@
   </div>
 </header>
 
-<div class="mobile-menu">
+<div class="mobile-menu" role="navigation" aria-label="Menú">
   <div class="head"><span class="title">Menú</span><button class="close" data-menu-close aria-label="Cerrar menú">&times;</button></div>
   <a href="servicios.html">Servicios</a>
   <a href="tercer-tiempo.html">Tercer Tiempo</a>
@@ -34,7 +36,7 @@
   <a href="../index.html" style="color:var(--brand);">Portal editorial</a>
 </div>
 
-<main class="container" style="padding:30px 0 28px;">
+<main class="container" style="padding-top:30px;padding-bottom:28px;">
   <div class="eyebrow" style="margin-bottom:12px;">PRODUCCIÓN, CAMPAÑAS Y MEDIOS PROPIOS</div>
   <h1 style="font-size:32px;line-height:1.15;margin:0 0 16px;max-width:540px;">Tu marca, contada con el alcance editorial de CREA</h1>
   <p style="font-size:15px;color:var(--text-mute);line-height:1.6;margin:0 0 22px;max-width:480px;">Patrocinios, branded content y producción audiovisual para negocios del corredor Perote &middot; Xalapa &middot; Puebla, respaldados por una audiencia que ya confía en nuestra cobertura.</p>
@@ -48,36 +50,14 @@
   <div class="grid grid-4" style="margin-bottom:26px;">
     <div class="stat-card"><div class="value">42K</div><div class="label">alcance mensual</div></div>
     <div class="stat-card"><div class="value">3</div><div class="label">municipios cubiertos</div></div>
-    <div class="stat-card"><div class="value">18</div><div class="label">marcas activas</div></div>
+    <div class="stat-card"><div class="value" data-active-brands>&hellip;</div><div class="label">marcas activas</div></div>
     <div class="stat-card"><div class="value">+1K</div><div class="label">oyentes Tercer Tiempo</div></div>
   </div>
 
   <div style="margin-bottom:28px;">
     <div class="eyebrow" style="color:var(--text-mute);margin-bottom:16px;">MARCAS QUE YA CONFÍAN EN CREA</div>
-    <div class="grid grid-4" style="margin-bottom:16px;">
-      <div class="panel" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 10px;">
-        <div style="width:26px;height:26px;border-radius:6px;background:var(--bg-3);"></div>
-        <span style="font-size:10px;color:var(--text-mute);text-align:center;">Ferretería Reyes</span></div>
-      <div class="panel" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 10px;">
-        <div style="width:26px;height:26px;border-radius:6px;background:var(--bg-3);"></div>
-        <span style="font-size:10px;color:var(--text-mute);text-align:center;">Auto Refacciones Cofre</span></div>
-      <div class="panel" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 10px;">
-        <div style="width:26px;height:26px;border-radius:6px;background:var(--bg-3);"></div>
-        <span style="font-size:10px;color:var(--text-mute);text-align:center;">Panadería La Espiga</span></div>
-      <div class="panel" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 10px;">
-        <div style="width:26px;height:26px;border-radius:6px;background:var(--bg-3);"></div>
-        <span style="font-size:10px;color:var(--text-mute);text-align:center;">Hotel San Carlos</span></div>
-    </div>
-    <div class="grid grid-2">
-      <div class="testimonial-card">
-        <p class="quote">&ldquo;Desde que patrocinamos la sección de Economía, más clientes nos reconocen en el centro.&rdquo;</p>
-        <p class="who">Ferretería Reyes &middot; Patrocinador de sección · Economía local</p>
-      </div>
-      <div class="testimonial-card">
-        <p class="quote">&ldquo;El branded content nos ayudó a anunciar la apertura de la sucursal nueva.&rdquo;</p>
-        <p class="who">Hotel San Carlos &middot; Branded content premium</p>
-      </div>
-    </div>
+    <div class="grid grid-4" style="margin-bottom:16px;" data-sponsor-logos></div>
+    <div class="grid grid-2" data-sponsor-highlights></div>
   </div>
 
   <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">LO QUE OFRECEMOS</div>

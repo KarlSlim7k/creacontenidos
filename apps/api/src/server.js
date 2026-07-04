@@ -1,6 +1,7 @@
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const path = require('path');
 
 const config = require('./config');
 const { errorHandler } = require('./middleware/error-handler');
@@ -9,11 +10,23 @@ const listeningRouter = require('./modules/listening');
 const contentEngineRouter = require('./modules/content-engine');
 const editorialRouter = require('./modules/editorial');
 const distributionRouter = require('./modules/distribution');
+const publicRouter = require('./modules/public');
+const authRouter = require('./modules/auth');
+const commercialRouter = require('./modules/commercial');
+const socialRouter = require('./modules/social');
+const newsletterRouter = require('./modules/newsletter');
+const { startNewsletterCron } = require('./lib/newsletter-cron');
 
 const app = express();
 
+// Servir archivos estáticos del frontend (apps/web/) y del panel admin (apps/admin/)
+app.use(express.static(path.join(__dirname, '../../web')));
+app.use('/admin', express.static(path.join(__dirname, '../../admin')));
+
 app.use(helmet());
-app.use(cors());
+// Abierto en dev (portal en :4000, API en :3000). En producción, restringir
+// con CORS_ORIGIN (lista separada por comas) en .env.
+app.use(cors(config.corsOrigin ? { origin: config.corsOrigin.split(',') } : undefined));
 app.use(express.json());
 
 app.get('/health', (req, res) => {
@@ -24,9 +37,18 @@ app.use('/api/listening', listeningRouter);
 app.use('/api/content', contentEngineRouter);
 app.use('/api/editorial', editorialRouter);
 app.use('/api/distribution', distributionRouter);
+app.use('/api/public', publicRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/admin', authRouter.adminRouter);
+app.use('/api/commercial', commercialRouter);
+app.use('/api/newsletter', newsletterRouter);
+// socialRouter define tanto rutas públicas (/public/social*) como admin (/admin/social*).
+app.use('/api', socialRouter);
 
 app.use(errorHandler);
 
 app.listen(config.port, () => {
   console.log(`CREA Command Center API listening on port ${config.port}`);
 });
+
+startNewsletterCron();

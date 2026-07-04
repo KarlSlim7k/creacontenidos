@@ -16,4 +16,14 @@ function requireAuth(req, res, next) {
   }
 }
 
-module.exports = { requireAuth };
+// Se monta después de requireAuth. Ejemplo: router.get('/x', requireAuth, requireRole('director'), ...)
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'No tienes permiso para esta acción' });
+    }
+    next();
+  };
+}
+
+module.exports = { requireAuth, requireRole };

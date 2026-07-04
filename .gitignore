@@ -6,3 +6,6 @@ dist/
 .DS_Store
 .commandcode/
 .kimchi/
+.claude/
+.opencode/
+skills/

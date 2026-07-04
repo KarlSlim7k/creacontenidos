@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tercer Tiempo · Estudio CREA</title>
+<meta name="description" content="Tercer Tiempo, el programa de deportes y comunidad de CREA, en vivo cada semana. Espacios de patrocinio disponibles.">
+<meta name="crea-api-base" content="http://localhost:3000">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/tokens.css">
@@ -25,7 +27,7 @@
   </div>
 </header>
 
-<div class="mobile-menu">
+<div class="mobile-menu" role="navigation" aria-label="Menú">
   <div class="head"><span class="title">Menú</span><button class="close" data-menu-close aria-label="Cerrar menú">&times;</button></div>
   <a href="servicios.html">Servicios</a>
   <a href="tercer-tiempo.html">Tercer Tiempo</a>
@@ -34,7 +36,7 @@
   <a href="../index.html" style="color:var(--brand);">Portal editorial</a>
 </div>
 
-<main class="container" style="padding:30px 0 0;">
+<main class="container" style="padding-top:30px;">
   <div class="grid grid-2" style="align-items:center;margin-bottom:26px;">
     <div>
       <div class="eyebrow" style="color:var(--brand);margin-bottom:12px;">PROGRAMA PROPIO CREA</div>
@@ -51,7 +53,7 @@
   <div class="grid grid-4" style="margin-bottom:26px;">
     <div class="stat-card"><div class="value">42K</div><div class="label">alcance mensual</div></div>
     <div class="stat-card"><div class="value">3</div><div class="label">municipios cubiertos</div></div>
-    <div class="stat-card"><div class="value">18</div><div class="label">marcas activas</div></div>
+    <div class="stat-card"><div class="value" data-active-brands>&hellip;</div><div class="label">marcas activas</div></div>
     <div class="stat-card"><div class="value">+1K</div><div class="label">oyentes Tercer Tiempo</div></div>
   </div>
 
@@ -80,14 +82,23 @@
     <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">HORARIOS DE TRANSMISIÓN</div>
     <div class="panel" style="padding:0;overflow:hidden;">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:0.5px solid var(--line);">
-        <span style="font-size:13px;font-weight:500;">Martes &middot; 8:00 pm</span>
-        <span style="font-size:12px;color:var(--text-mute);">En vivo · Facebook y YouTube</span>
+        <span style="font-size:13px;font-weight:500;">Lunes &middot; 8:00 pm (hora CDMX)</span>
+        <span style="font-size:12px;color:var(--text-mute);">En vivo · Facebook</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;">
-        <span style="font-size:13px;font-weight:500;">Sábado &middot; 11:00 am</span>
-        <span style="font-size:12px;color:var(--text-mute);">Repetición · YouTube</span>
+        <span style="font-size:13px;font-weight:500;">Viernes &middot; 8:00 pm (hora CDMX)</span>
+        <span style="font-size:12px;color:var(--text-mute);">En vivo · Facebook</span>
       </div>
     </div>
+  </div>
+
+  <div style="margin-bottom:26px;">
+    <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">ÚLTIMOS PROGRAMAS</div>
+    <div data-tt-episodes class="grid grid-3"></div>
+  </div>
+
+  <div style="margin-bottom:26px;">
+    <a href="https://www.facebook.com/profile.php?id=100079776720617" target="_blank" rel="noopener noreferrer" class="btn btn-outline">Seguir en Facebook &rarr;</a>
   </div>
 </main>
 

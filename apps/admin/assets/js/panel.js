@@ -1,21 +1,66 @@
-// CREA Panel Admin — internal newsroom tool.
-// Ported from the Claude Design prototype "CREA Panel Admin.dc.html": same roles, screens,
-// data and interaction logic. No backend exists yet (static site) — role login is a demo
-// switcher and any "submit" just shows a prototype note, same convention as main.js.
+// CREA Panel Admin — internal newsroom tool. Conectado a /api/auth, /api/editorial,
+// /api/listening, /api/commercial, /api/newsletter. Hermes (activity_log) y el pipeline
+// "Buenos días, Perote" (newsletter_editions) son datos reales, no mock — dependen de
+// que NOUS_PORTAL_API_KEY/RESEND_API_KEY/ELEVENLABS_API_KEY tengan valores válidos en
+// .env. Solo Integraciones sigue con la lista de servicios fija en el backend.
 
 (function () {
   'use strict';
 
-  // ---------- static copy / data (ported verbatim from the design prototype) ----------
+  // ---------- API helper ----------
+
+  var CREA_API_BASE = (function () {
+    var meta = document.querySelector('meta[name="crea-api-base"]');
+    var base = (meta && meta.content) || 'http://localhost:3000';
+    // Meta en localhost (default dev) pero servido desde otro host: mismo origen.
+    if (base.indexOf('localhost') !== -1 && location.hostname !== 'localhost') return '';
+    return base;
+  })();
+
+  function adminApi(path, opts) {
+    opts = opts || {};
+    var headers = { 'Content-Type': 'application/json' };
+    if (state.token) headers.Authorization = 'Bearer ' + state.token;
+    return fetch(CREA_API_BASE + path, {
+      method: opts.method || 'GET',
+      headers: headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    }).then(function (res) {
+      if (res.status === 204) return null;
+      return res.json().catch(function () { return null; }).then(function (json) {
+        if (!res.ok) {
+          var err = new Error((json && json.error) || 'API respondió ' + res.status);
+          err.status = res.status;
+          err.fields = json && json.fields;
+          throw err;
+        }
+        return json;
+      });
+    });
+  }
+
+  // Binario (audio/mpeg): adminApi() asume JSON, así que esta es aparte.
+  function adminApiBlob(path, opts) {
+    opts = opts || {};
+    var headers = { 'Content-Type': 'application/json' };
+    if (state.token) headers.Authorization = 'Bearer ' + state.token;
+    return fetch(CREA_API_BASE + path, {
+      method: opts.method || 'GET',
+      headers: headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.json().catch(function () { return null; }).then(function (json) {
+          throw new Error((json && json.error) || 'API respondió ' + res.status);
+        });
+      }
+      return res.blob();
+    });
+  }
+
+  // ---------- static copy (sin backend por decisión de alcance) ----------
 
   var roleLabels = { director: 'Director Editorial', produccion: 'Producción / Reportero', comercial: 'Comercial / Ventas', colaborador: 'Colaborador externo' };
-  var roleNames = { director: 'Mariana Cobos', produccion: 'Carlos Mendoza', comercial: 'Equipo comercial', colaborador: 'Tomás Ibarra' };
-  var roleModules = {
-    director: ['dashboard', 'ideas', 'editor', 'aprobacion', 'comercial', 'metricas', 'radar', 'propuestas', 'hermes', 'pipeline', 'configuracion'],
-    produccion: ['dashboard', 'ideas', 'editor', 'radar', 'propuestas', 'metricas'],
-    comercial: ['comercial'],
-    colaborador: ['ideas']
-  };
   var navItemsAll = [
     { id: 'dashboard', label: 'Inicio' },
     { id: 'radar', label: 'RADAR' },
@@ -23,6 +68,7 @@
     { id: 'ideas', label: 'Bandeja de ideas' },
     { id: 'editor', label: 'Editor de nota' },
     { id: 'aprobacion', label: 'Aprobación' },
+    { id: 'producciones', label: 'Producciones' },
     { id: 'comercial', label: 'Pipeline comercial' },
     { id: 'metricas', label: 'Métricas' },
     { id: 'hermes', label: 'Estado del agente' },
@@ -30,46 +76,8 @@
     { id: 'configuracion', label: 'Configuración' }
   ];
 
-  var ideasData = [
-    { id: 1, title: 'Vecinos proponen mercado nocturno de invierno', category: 'Local', score: 8.2, collaborator: 'Tomás Ibarra', column: 'Nueva' },
-    { id: 2, title: 'Historia oral de los fundadores del Fuerte de San Carlos', category: 'Cultura', score: 7.5, collaborator: 'Ana Torres', column: 'Nueva' },
-    { id: 3, title: 'Tres ideas de negocio que nacieron en el mercado municipal', category: 'Economía', score: 6.8, collaborator: 'Marisol Hidalgo', column: 'Nueva' },
-    { id: 4, title: 'Reportaje sobre el precio de la papa en la región', category: 'Economía', score: 9.1, collaborator: 'Carlos Mendoza', column: 'En análisis' },
-    { id: 5, title: 'Perfil de la nueva generación de productores agrícolas', category: 'Economía', score: 8.6, collaborator: 'Marisol Hidalgo', column: 'En análisis' },
-    { id: 6, title: 'Cobertura de la final regional de basquetbol', category: 'Deportes', score: 8.9, collaborator: 'Ana Torres', column: 'Aprobada' },
-    { id: 7, title: 'Especial de aniversario del Fuerte de San Carlos', category: 'Cultura', score: 7.8, collaborator: 'Luisa Pérez', column: 'Aprobada' },
-    { id: 8, title: 'Cobertura de feria comercial fuera de la zona de cobertura', category: 'Economía', score: 4.2, collaborator: 'Tomás Ibarra', column: 'Descartada' }
-  ];
-
-  var piecesData = [
-    { id: 1, title: 'El mercado de Perote se prepara para la temporada alta de la papa', section: 'Local', author: 'Carlos Mendoza', status: 'Publicada' },
-    { id: 2, title: 'Fuerte de San Carlos abre nueva ruta nocturna para visitantes', section: 'Cultura', author: 'Ana Torres', status: 'En revisión' },
-    { id: 3, title: 'Cinco años de Ferretería Reyes en el corazón de Perote', section: 'Economía', author: 'Carlos Mendoza', status: 'Aprobada' },
-    { id: 4, title: 'Equipo local de basquetbol clasifica a la final regional', section: 'Deportes', author: 'Ana Torres', status: 'Borrador' },
-    { id: 5, title: 'Hotel San Carlos abre nueva ala con vista al Cofre de Perote', section: 'Economía', author: 'Luisa Pérez', status: 'En revisión' },
-    { id: 6, title: 'Vecinos del centro piden más alumbrado en la calle Hidalgo', section: 'Local', author: 'Carlos Mendoza', status: 'Borrador' }
-  ];
-
-  var commercialData = [
-    { id: 1, business: 'Auto Refacciones Cofre', interest: 'Publicidad display mensual', value: '$1,200 MXN/mes', column: 'Identificado', lastContact: '24 jun 2026' },
-    { id: 2, business: 'Panadería La Espiga', interest: 'Branded content básico', value: '$2,000 MXN', column: 'Identificado', lastContact: '20 jun 2026' },
-    { id: 3, business: 'Restaurante Mirador', interest: 'Cobertura de evento', value: '$4,500 MXN', column: 'Contactado', lastContact: '27 jun 2026' },
-    { id: 4, business: 'Gasolinera Perote', interest: 'Patrocinio de sección mensual', value: '$2,800 MXN/mes', column: 'Contactado', lastContact: '18 jun 2026' },
-    { id: 5, business: 'Constructora Altotonga', interest: 'Patrocinio de sección mensual', value: '$3,500 MXN/mes', column: 'Propuesta enviada', lastContact: '29 jun 2026' },
-    { id: 6, business: 'Farmacia del Centro', interest: 'Publicidad display mensual', value: '$1,000 MXN/mes', column: 'Propuesta enviada', lastContact: '15 jun 2026' },
-    { id: 7, business: 'Ferretería Reyes', interest: 'Patrocinio de sección mensual', value: '$3,000 MXN/mes', column: 'Cerrado', lastContact: '10 jun 2026' }
-  ];
-
-  var usersData = [
-    { name: 'Mariana Cobos', role: 'Director Editorial', active: true },
-    { name: 'Carlos Mendoza', role: 'Producción / Reportero', active: true },
-    { name: 'Ana Torres', role: 'Producción / Reportero', active: true },
-    { name: 'Luisa Pérez', role: 'Producción / Reportero', active: false },
-    { name: 'Equipo comercial', role: 'Comercial / Ventas', active: true },
-    { name: 'Marisol Hidalgo', role: 'Colaborador externo', active: true },
-    { name: 'Tomás Ibarra', role: 'Colaborador externo', active: true }
-  ];
-
+  // Reflejo de apps/api/src/modules/auth/role-modules.js — solo para pintar la tabla de
+  // referencia en Configuración → Permisos. El servidor es quien de verdad la aplica.
   var permisosMatrix = [
     { modulo: 'Inicio', director: true, produccion: true, comercial: true, colaborador: false },
     { modulo: 'RADAR', director: true, produccion: true, comercial: false, colaborador: false },
@@ -77,54 +85,12 @@
     { modulo: 'Bandeja / Mis ideas', director: true, produccion: true, comercial: false, colaborador: true },
     { modulo: 'Editor de nota', director: true, produccion: true, comercial: false, colaborador: false },
     { modulo: 'Aprobación', director: true, produccion: false, comercial: false, colaborador: false },
+    { modulo: 'Producciones', director: true, produccion: true, comercial: false, colaborador: false },
     { modulo: 'Pipeline comercial', director: true, produccion: false, comercial: true, colaborador: false },
     { modulo: 'Métricas', director: true, produccion: true, comercial: false, colaborador: false },
     { modulo: 'Estado del agente', director: true, produccion: false, comercial: false, colaborador: false },
     { modulo: 'Buenos días, Perote', director: true, produccion: false, comercial: false, colaborador: false },
     { modulo: 'Configuración', director: true, produccion: false, comercial: false, colaborador: false }
-  ];
-
-  var integracionesData = [
-    { name: 'Notion', desc: 'Base de datos editorial', connected: true },
-    { name: 'Hermes Agent', desc: 'Automatización de social listening', connected: true },
-    { name: 'WordPress', desc: 'Publicación del sitio', connected: true },
-    { name: 'Buffer', desc: 'Programación en redes sociales', connected: false }
-  ];
-
-  var notificationsData = {
-    director: [
-      { text: 'Brief matutino de Hermes listo para revisar', time: '07:15' },
-      { text: 'Constructora Altotonga sin seguimiento hace 6 días', time: 'ayer' },
-      { text: '2 piezas esperan aprobación', time: 'hoy' }
-    ],
-    produccion: [
-      { text: 'Brief matutino de Hermes listo para revisar', time: '07:15' },
-      { text: 'Tu nota fue devuelta con comentarios', time: 'ayer' }
-    ],
-    comercial: [
-      { text: 'Constructora Altotonga sin seguimiento hace 6 días', time: 'ayer' },
-      { text: 'Farmacia del Centro sin seguimiento hace 5 días', time: 'hace 2 días' }
-    ],
-    colaborador: [
-      { text: 'Tu idea "Historia oral de los fundadores" fue aprobada', time: 'ayer' }
-    ]
-  };
-
-  var weeklyPiecesData = [
-    { week: 'Sem 1', count: 7 },
-    { week: 'Sem 2', count: 8 },
-    { week: 'Sem 3', count: 6 },
-    { week: 'Sem 4', count: 9 },
-    { week: 'Sem 5', count: 8 },
-    { week: 'Sem 6', count: 9 }
-  ];
-  var reachVsLastWeekPct = 12;
-
-  var socialChannelsData = [
-    { name: 'Facebook', growth: '+12%' },
-    { name: 'Instagram', growth: '+5%' },
-    { name: 'YouTube', growth: '+8%' },
-    { name: 'WhatsApp Newsletter', growth: '+2%' }
   ];
 
   var checklistData = [
@@ -134,105 +100,27 @@
     { label: 'Revisión editorial', done: false }
   ];
 
-  var radarData = [
-    { id: 1, title: 'Aumento de robos a comercios en el centro', source: 'Facebook', mentions: 34, sentiment: 'negativo', status: 'Nuevo',
-      antecedentes: 'Tercer reporte de robos a locales del centro en dos semanas. La página de la policía municipal no ha emitido comunicado oficial.',
-      actores: 'Policía municipal, Cámara de Comercio de Perote, comerciantes afectados',
-      angulos: 'Cronología de los tres casos; entrevista a comerciantes; postura de la policía municipal',
-      audiencia: 'Alto — tema de seguridad genera alta interacción local' },
-    { id: 2, title: 'Nueva ciclovía en la avenida Reforma', source: 'Perplexity', mentions: 12, sentiment: 'positivo', status: 'Nuevo',
-      antecedentes: 'El ayuntamiento publicó el trazo preliminar de una ciclovía piloto de 2km sobre avenida Reforma.',
-      actores: 'Ayuntamiento de Perote, colectivo ciclista local, comerciantes de la avenida',
-      angulos: 'Mapa del trazo; reacciones de comerciantes; comparación con otras ciudades de la región',
-      audiencia: 'Medio — interés de nicho pero buen potencial de compartidos' },
-    { id: 3, title: 'Quejas por corte de agua en la colonia Centro', source: 'TikTok', mentions: 58, sentiment: 'negativo', status: 'Revisado',
-      antecedentes: 'Corte de agua de 4 días sin aviso previo. Videos de vecinos acumulan miles de vistas.',
-      actores: 'Comisión municipal de agua, vecinos de la colonia Centro',
-      angulos: 'Cronología del corte; postura oficial; impacto en negocios locales',
-      audiencia: 'Alto — queja ciudadana con alto engagement en redes' },
-    { id: 4, title: 'Feria del café atrae turismo regional', source: 'Facebook', mentions: 21, sentiment: 'positivo', status: 'Nuevo',
-      antecedentes: 'La feria anual reportó mayor afluencia que el año pasado según organizadores.',
-      actores: 'Organizadores de la feria, productores locales, secretaría de turismo',
-      angulos: 'Datos de afluencia; derrama económica; perfiles de productores',
-      audiencia: 'Medio-alto — contenido positivo con buen alcance orgánico' },
-    { id: 5, title: 'Debate por el nuevo horario del mercado municipal', source: 'Perplexity', mentions: 9, sentiment: 'neutral', status: 'Revisado',
-      antecedentes: 'Locatarios divididos sobre la propuesta de cambiar el horario de apertura del mercado.',
-      actores: 'Locatarios, administración del mercado municipal',
-      angulos: 'Encuesta a locatarios; postura de la administración',
-      audiencia: 'Bajo — tema de nicho para locatarios' },
-    { id: 6, title: 'Video viral sobre bache en la carretera a Xalapa', source: 'TikTok', mentions: 76, sentiment: 'negativo', status: 'Nuevo',
-      antecedentes: 'Video de un vehículo dañado por un bache acumula más de 70 menciones en 24 horas.',
-      actores: 'Obras públicas municipales, automovilistas afectados',
-      angulos: 'Verificación en sitio; respuesta de obras públicas; reincidencia del problema',
-      audiencia: 'Alto — formato viral con alto potencial de alcance' },
-    { id: 7, title: 'Vecinos organizan torneo comunitario de fútbol', source: 'Facebook', mentions: 15, sentiment: 'positivo', status: 'Revisado',
-      antecedentes: 'Torneo vecinal en su tercera edición, organizado sin apoyo municipal.',
-      actores: 'Comité vecinal organizador, equipos participantes',
-      angulos: 'Historia del torneo; perfiles de equipos; cobertura de la final',
-      audiencia: 'Medio — buen alcance en comunidad local' },
-    { id: 8, title: 'Aumento en el precio del gas en la región', source: 'Perplexity', mentions: 27, sentiment: 'neutral', status: 'Nuevo',
-      antecedentes: 'Precio del gas LP subió 8% en las últimas tres semanas en la región.',
-      actores: 'Distribuidoras de gas, CRE, consumidores',
-      angulos: 'Comparativo de precios semanal; explicación del alza; impacto en hogares',
-      audiencia: 'Medio — tema económico de interés amplio' }
-  ];
-
-  var propuestasData = [
-    { id: 1, tema: 'Aumento de robos a comercios en el centro', formato: 'Nota', angulo: 'Reconstrucción de los últimos tres casos con cifras de la policía municipal', sensibilidad: 'rojo' },
-    { id: 2, tema: 'Nueva ciclovía en la avenida Reforma', formato: 'Post', angulo: 'Anuncio con mapa del trazo y reacciones de comerciantes', sensibilidad: 'verde' },
-    { id: 3, tema: 'Feria del café atrae turismo regional', formato: 'Infografía', angulo: 'Datos de afluencia y derrama económica del fin de semana', sensibilidad: 'verde' },
-    { id: 4, tema: 'Video viral sobre bache en la carretera a Xalapa', formato: 'Guion video', angulo: 'Verificación en sitio y respuesta de obras públicas', sensibilidad: 'amarillo' },
-    { id: 5, tema: 'Quejas por corte de agua en la colonia Centro', formato: 'Nota', angulo: 'Cronología del corte y postura oficial de la comisión de agua', sensibilidad: 'amarillo' },
-    { id: 6, tema: 'Aumento en el precio del gas en la región', formato: 'Meme', angulo: 'Formato ligero comparando precios de la semana', sensibilidad: 'rojo' }
-  ];
-
-  var hermesLogData = [
-    { task: 'Revisión de menciones en Facebook y TikTok', time: '07:02', result: 'exito' },
-    { task: 'Generación de borrador: Feria del café atrae turismo regional', time: '07:14', result: 'exito' },
-    { task: 'Consulta de clima para Perote', time: '07:20', result: 'exito' },
-    { task: 'Envío de audio a WhatsApp Newsletter', time: '07:31', result: 'fallo' },
-    { task: 'Reintento de envío de audio a WhatsApp Newsletter', time: '07:33', result: 'exito' },
-    { task: 'Clasificación de sensibilidad: corte de agua colonia Centro', time: '08:05', result: 'exito' },
-    { task: 'Generación de meme: precio del gas', time: '08:40', result: 'exito' }
-  ];
-
-  var hermesSkillsData = [
-    { name: 'Resumen de clima matutino', count: 46 },
-    { name: 'Clasificación de sensibilidad de propuestas', count: 31 },
-    { name: 'Redacción de meme desde tendencia', count: 18 },
-    { name: 'Verificación de bache / infraestructura viral', count: 7 }
-  ];
-
-  var pipelineStepsData = [
-    { label: 'Social listening', status: 'completado', time: '06:45' },
-    { label: 'Borrador generado', status: 'completado', time: '07:14' },
-    { label: 'Clima agregado', status: 'completado', time: '07:20' },
-    { label: 'Aprobación manual (Emmanuel)', status: 'esperando', time: '—' },
-    { label: 'Audio generado', status: 'pendiente', time: '—' },
-    { label: 'Envío', status: 'pendiente', time: '—' }
-  ];
-
-  var piecesPublished = 9;
-  var weeklyGoal = 10;
-  var totalReach = '42K';
-
-  var draftLocal = 'Autoridades locales atienden reporte ciudadano sobre bache en la carretera a Xalapa. El reporte se viralizó en redes sociales esta semana...';
-  var draftSonnet = 'El Ayuntamiento de Perote confirmó esta mañana el inicio de trabajos de bacheo en la carretera federal a Xalapa, tras la difusión de un video que acumuló más de 70 menciones en redes sociales durante las últimas 24 horas. Vecinos reportan el daño desde hace tres semanas...';
-
-  var PROTO_NOTE = 'Esto es un prototipo — el envío todavía no está conectado a un backend.';
-
   // ---------- state ----------
 
   var state = {
-    role: 'director', screen: 'login',
-    radarSource: 'Todas', radarStatus: 'Todos',
-    propuestaDecisions: {}, propuestaRejecting: null,
-    draftModel: 'local', noteBody: '',
-    transparency: {}, deniedTarget: null,
+    token: null, user: null, allowedModules: [],
+    screen: 'login', loginError: null,
+    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null },
+    radarSource: 'Todas', radarStatus: 'Todos', radarBusy: false,
+    propuestaRejecting: null,
+    editorProposalId: null, editorDraft: null,
+    generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false,
+    transparency: {}, comentarioPieceId: null, comentarioText: '',
     selectedRadarId: null,
-    comentarioPieceId: null, comentarioText: '',
     mobileAprobacion: false, configTab: 'usuarios', showNotifications: false,
-    demoNote: null
+    newUserOpen: false, newUserError: null,
+    serviceFormOpen: false, serviceFormError: null, editingServiceId: null,
+    socialFormOpen: false, socialFormError: null, socialBusy: false,
+    clientFormOpen: false, clientFormError: null,
+    newsletterContent: null, newsletterBusy: false, newsletterSending: false,
+    newsletterPreview: null, newsletterSubscriberCount: null,
+    newsletterAudioBusy: false, newsletterAudioUrl: null,
+    demoNote: null, errorMsg: null
   };
 
   function setState(patch) {
@@ -248,74 +136,246 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function relativeTime(iso) {
+    if (!iso) return '';
+    var diffMs = Date.now() - new Date(iso).getTime();
+    var mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'ahora';
+    if (mins < 60) return 'hace ' + mins + 'm';
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return 'hace ' + hours + 'h';
+    return 'hace ' + Math.floor(hours / 24) + 'd';
+  }
+
   function initialsOf(name) {
-    return name.split(' ').map(function (w) { return w[0]; }).slice(0, 2).join('').toUpperCase();
+    return String(name || '?').split(' ').map(function (w) { return w[0]; }).slice(0, 2).join('').toUpperCase();
   }
 
   function statusStyle(label) {
-    if (label === 'Borrador' || label === 'Nueva' || label === 'Identificado') return { bg: '#EEEDE8', color: '#6B6A60' };
-    if (label === 'En revisión' || label === 'En análisis' || label === 'Contactado') return { bg: '#F3E4D4', color: '#7A4A18' };
-    if (label === 'Aprobada' || label === 'Propuesta enviada') return { bg: '#E1E8DD', color: '#2F5233' };
-    if (label === 'Publicada' || label === 'Cerrado') return { bg: '#2F5233', color: '#fff' };
-    if (label === 'Descartada') return { bg: '#EFEFEA', color: '#8C8C82' };
+    if (label === 'borrador' || label === 'nueva' || label === 'identificado') return { bg: '#EEEDE8', color: '#6B6A60' };
+    if (label === 'en_revision' || label === 'en_analisis' || label === 'contactado') return { bg: '#F3E4D4', color: '#7A4A18' };
+    if (label === 'aprobada' || label === 'propuesta_enviada') return { bg: '#E1E8DD', color: '#2F5233' };
+    if (label === 'published' || label === 'cerrado') return { bg: '#2F5233', color: '#fff' };
+    if (label === 'descartada' || label === 'rechazada') return { bg: '#EFEFEA', color: '#8C8C82' };
     return { bg: '#EEEDE8', color: '#6B6A60' };
   }
 
-  function badge(label) {
-    var st = statusStyle(label);
+  var STATUS_LABEL = {
+    borrador: 'Borrador', en_revision: 'En revisión', published: 'Publicada', rechazada: 'Rechazada', propuesta: 'Propuesta',
+    nueva: 'Nueva', en_analisis: 'En análisis', aprobada: 'Aprobada', descartada: 'Descartada',
+    identificado: 'Identificado', contactado: 'Contactado', propuesta_enviada: 'Propuesta enviada', cerrado: 'Cerrado'
+  };
+
+  function badge(statusKey) {
+    var st = statusStyle(statusKey);
+    var label = STATUS_LABEL[statusKey] || statusKey;
     return '<span class="padmin-badge" style="background:' + st.bg + ';color:' + st.color + ';">' + esc(label) + '</span>';
+  }
+
+  function loadingCard(label) {
+    return '<div class="padmin-card" style="padding:20px;"><p class="padmin-lede" style="margin:0;">' + esc(label || 'Cargando…') + '</p></div>';
+  }
+
+  function errorCard(err) {
+    return '<div class="padmin-card" style="padding:20px;"><p class="padmin-lede" style="margin:0;">No pudimos cargar los datos (' + esc(err && err.message) + ').</p></div>';
   }
 
   function landingFor(role) {
     return role === 'comercial' ? 'comercial' : (role === 'colaborador' ? 'ideas' : 'dashboard');
   }
 
-  function login(role) {
-    setState({ role: role, screen: landingFor(role), deniedTarget: null });
+  // ---------- auth ----------
+
+  function login(email, password) {
+    setState({ loginError: null });
+    adminApi('/api/auth/login', { method: 'POST', body: { email: email, password: password } })
+      .then(function (res) {
+        state.token = res.token;
+        try { localStorage.setItem('crea-admin-token', res.token); } catch (e) { /* modo privado */ }
+        return adminApi('/api/auth/session');
+      })
+      .then(function (session) {
+        var landing = landingFor(session.role);
+        setState({
+          user: { id: session.id, name: session.name, role: session.role },
+          allowedModules: session.allowedModules,
+          screen: landing, loginError: null
+        });
+        loadScreenData(landing);
+        loadNotifBadge();
+      })
+      .catch(function (err) {
+        state.token = null;
+        try { localStorage.removeItem('crea-admin-token'); } catch (e) { /* noop */ }
+        setState({ loginError: err.status === 401 ? 'Correo o contraseña incorrectos.' : 'No pudimos conectar con el servidor.' });
+      });
+  }
+
+  function loadNotifBadge() {
+    if (state.user.role !== 'director') return;
+    adminApi('/api/admin/activity?limit=5').then(function (r) { setData({ notifications: r }); }).catch(function () { /* badge best-effort */ });
   }
 
   function logout() {
-    setState({ screen: 'login', deniedTarget: null, showNotifications: false });
+    state.token = null;
+    try { localStorage.removeItem('crea-admin-token'); } catch (e) { /* noop */ }
+    setState({
+      user: null, allowedModules: [], screen: 'login', loginError: null,
+      data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null }
+    });
   }
 
-  function goTo(id) {
-    var allowed = roleModules[state.role] || [];
-    if (allowed.indexOf(id) !== -1) setState({ screen: id, deniedTarget: null, showNotifications: false });
-    else setState({ screen: 'denegado', deniedTarget: id, showNotifications: false });
+  function tryResumeSession() {
+    var saved;
+    try { saved = localStorage.getItem('crea-admin-token'); } catch (e) { saved = null; }
+    if (!saved) return render();
+    state.token = saved;
+    adminApi('/api/auth/session')
+      .then(function (session) {
+        var landing = landingFor(session.role);
+        setState({
+          user: { id: session.id, name: session.name, role: session.role },
+          allowedModules: session.allowedModules,
+          screen: landing
+        });
+        loadScreenData(landing);
+        loadNotifBadge();
+      })
+      .catch(function () {
+        state.token = null;
+        try { localStorage.removeItem('crea-admin-token'); } catch (e) { /* noop */ }
+        render();
+      });
+  }
+
+  function goTo(id, extra) {
+    var allowed = state.allowedModules || [];
+    if (allowed.indexOf(id) === -1) {
+      setState({ screen: 'denegado', deniedTarget: id, showNotifications: false });
+      return;
+    }
+    var patch = { screen: id, deniedTarget: null, showNotifications: false };
+    if (id === 'editor') patch.editorProposalId = (extra != null ? extra : null);
+    setState(patch);
+    loadScreenData(id, extra);
   }
 
   function goHome() {
-    setState({ screen: landingFor(state.role), deniedTarget: null });
+    setState({ screen: landingFor(state.user.role), deniedTarget: null });
+  }
+
+  // ---------- data loading (fetch-on-enter, cache in state.data) ----------
+
+  function setData(patch) {
+    state.data = Object.assign({}, state.data, patch);
+    render();
+  }
+
+  function loadProposals(key, query) {
+    if (state.data.proposalsByKey[key]) return;
+    adminApi('/api/editorial/proposals?' + query)
+      .then(function (rows) {
+        var byKey = Object.assign({}, state.data.proposalsByKey);
+        byKey[key] = rows;
+        setData({ proposalsByKey: byKey });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function invalidateProposals() {
+    state.data.proposalsByKey = {};
+  }
+
+  function loadScreenData(screen, extra) {
+    if (screen === 'dashboard') {
+      loadProposals('en_revision', 'status=en_revision');
+      if (state.user.role === 'produccion') loadProposals('mine', 'author_id=' + state.user.id);
+      if (!state.data.ideas) adminApi('/api/editorial/ideas').then(function (r) { setData({ ideas: r }); });
+    } else if (screen === 'ideas') {
+      adminApi('/api/editorial/ideas').then(function (r) { setData({ ideas: r }); });
+    } else if (screen === 'editor') {
+      var id = extra != null ? extra : state.editorProposalId;
+      loadProposals('borrador', 'status=borrador');
+      if (id) {
+        adminApi('/api/editorial/proposals/' + id).then(function (p) {
+          setState({ editorProposalId: id, editorDraft: {
+            title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || ''
+          } });
+        });
+      }
+    } else if (screen === 'aprobacion') {
+      loadProposals('en_revision', 'status=en_revision');
+    } else if (screen === 'comercial') {
+      adminApi('/api/commercial/clients').then(function (r) { setData({ clients: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (screen === 'metricas') {
+      adminApi('/api/editorial/metrics').then(function (r) { setData({ metrics: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (screen === 'radar') {
+      adminApi('/api/listening/topics').then(function (r) { setData({ topics: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (screen === 'propuestas') {
+      loadProposals('propuesta', 'status=propuesta');
+      loadProposals('rechazada', 'status=rechazada');
+    } else if (screen === 'producciones') {
+      adminApi('/api/admin/social').then(function (r) { setData({ socialPosts: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (screen === 'configuracion') {
+      if (state.configTab === 'usuarios') adminApi('/api/auth/users').then(function (r) { setData({ users: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+      if (state.configTab === 'integraciones') adminApi('/api/admin/integrations').then(function (r) { setData({ integrations: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+      if (state.configTab === 'newsletter') {
+        adminApi('/api/newsletter/settings').then(function (r) { setData({ newsletterSettings: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+        adminApi('/api/newsletter/events').then(function (r) { setData({ newsletterEvents: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+      }
+      if (state.configTab === 'servicios') adminApi('/api/commercial/services').then(function (r) { setData({ services: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (screen === 'hermes') {
+      adminApi('/api/admin/activity?limit=20').then(function (r) { setData({ activity: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (screen === 'pipeline') {
+      adminApi('/api/editorial/pipeline').then(function (r) { setData({ pipeline: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+      adminApi('/api/newsletter/subscribers/count').then(function (r) { setState({ newsletterSubscriberCount: r.count }); }).catch(function () { /* best-effort */ });
+      if (!state.newsletterContent) {
+        adminApi('/api/newsletter/pending').then(function (r) { if (r) setState({ newsletterContent: r }); }).catch(function () { /* best-effort */ });
+      }
+    }
   }
 
   // ---------- shared shell pieces ----------
 
   function renderNav() {
-    var allowed = roleModules[state.role] || [];
+    var allowed = state.allowedModules || [];
     return navItemsAll.filter(function (n) { return allowed.indexOf(n.id) !== -1; }).map(function (n) {
       var active = state.screen === n.id;
-      var label = (n.id === 'ideas' && state.role === 'colaborador') ? 'Mis ideas' : n.label;
+      var label = (n.id === 'ideas' && state.user.role === 'colaborador') ? 'Mis ideas' : n.label;
       return '<button type="button" class="padmin-nav-item' + (active ? ' active' : '') + '" data-action="goto" data-id="' + n.id + '">' + esc(label) + '</button>';
     }).join('');
   }
 
+  function getLastNotifSeen() {
+    try { return localStorage.getItem('crea-admin-last-notif-seen'); } catch (e) { return null; }
+  }
+
+  function unseenNotifCount() {
+    var notifs = state.data.notifications;
+    if (!notifs) return 0;
+    var lastSeen = getLastNotifSeen();
+    if (!lastSeen) return notifs.length;
+    return notifs.filter(function (n) { return n.created_at > lastSeen; }).length;
+  }
+
   function renderBellAndNotifs() {
-    var notifications = notificationsData[state.role] || [];
-    var count = notifications.length;
-    var badgeHtml = count ? '<span class="padmin-bell-badge">' + count + '</span>' : '';
+    var notifs = state.data.notifications;
+    var count = unseenNotifCount();
+    var badgeHtml = count > 0 ? '<span class="padmin-bell-badge">' + count + '</span>' : '';
     var panel = '';
     if (state.showNotifications) {
-      panel = '<div class="padmin-notif-panel">' +
-        '<p class="padmin-notif-title">Notificaciones</p>' +
-        notifications.map(function (n) {
-          return '<div class="padmin-notif-item"><p>' + esc(n.text) + '</p><p>' + esc(n.time) + '</p></div>';
-        }).join('') +
-        '</div>';
+      var itemsHtml;
+      if (!notifs) itemsHtml = '<div class="padmin-notif-item"><p>Cargando…</p></div>';
+      else if (!notifs.length) itemsHtml = '<div class="padmin-notif-item"><p>Sin actividad reciente.</p></div>';
+      else itemsHtml = notifs.map(function (n) {
+        return '<div class="padmin-notif-item"><p>' + esc(n.detail || n.action) + '</p><p style="font-size:10px;color:#9A9A93;margin:2px 0 0;">' + esc(relativeTime(n.created_at)) + '</p></div>';
+      }).join('');
+      panel = '<div class="padmin-notif-panel"><p class="padmin-notif-title">Notificaciones</p>' + itemsHtml + '</div>';
     }
-    return '<span class="padmin-bell-wrap">' +
-      '<span class="padmin-bell" data-action="toggle-notifications">' +
+    return '<span class="padmin-bell-wrap"><span class="padmin-bell" data-action="toggle-notifications">' +
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 3h16l-2-3Z" stroke="#3F3F3A" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 21a2.5 2.5 0 0 0 5 0" stroke="#3F3F3A" stroke-width="1.8" stroke-linecap="round"/></svg>' +
-      badgeHtml + '</span>' + panel + '</span>';
+      badgeHtml +
+      '</span>' + panel + '</span>';
   }
 
   function renderSidebar() {
@@ -324,7 +384,7 @@
       '<div class="padmin-nav">' + renderNav() + '</div>' +
       '<div class="padmin-account">' +
         '<div class="padmin-account-row">' +
-          '<div><p class="padmin-account-name">' + esc(roleNames[state.role]) + '</p><p class="padmin-account-role">' + esc(roleLabels[state.role]) + '</p></div>' +
+          '<div><p class="padmin-account-name">' + esc(state.user.name) + '</p><p class="padmin-account-role">' + esc(roleLabels[state.user.role] || state.user.role) + '</p></div>' +
           renderBellAndNotifs() +
         '</div>' +
         '<button type="button" class="padmin-logout" data-action="logout">Cerrar sesión</button>' +
@@ -339,23 +399,16 @@
   // ---------- login screen ----------
 
   function renderLogin() {
+    var errorHtml = state.loginError ? '<p class="padmin-lede" style="color:#A6432E;margin:0 0 12px;">' + esc(state.loginError) + '</p>' : '';
     return '<div class="padmin-login-screen"><div class="padmin-login-card">' +
       '<div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>' +
       '<p class="padmin-login-sub">Herramienta de trabajo para el equipo CREA</p>' +
+      errorHtml +
       '<form data-action="submit-login">' +
-        '<div class="padmin-field"><label for="pl-email">Correo</label><input id="pl-email" type="email" placeholder="tu@crearcontenidos.com" autocomplete="username"></div>' +
-        '<div class="padmin-field"><label for="pl-pass">Contraseña</label><input id="pl-pass" type="password" autocomplete="current-password"></div>' +
-        '<button type="submit" class="padmin-btn" style="width:100%;text-align:center;margin-bottom:22px;">Iniciar sesión</button>' +
+        '<div class="padmin-field"><label for="pl-email">Correo</label><input id="pl-email" type="email" placeholder="tu@crearcontenidos.com" autocomplete="username" required></div>' +
+        '<div class="padmin-field"><label for="pl-pass">Contraseña</label><input id="pl-pass" type="password" autocomplete="current-password" required></div>' +
+        '<button type="submit" class="padmin-btn" style="width:100%;text-align:center;">Iniciar sesión</button>' +
       '</form>' +
-      '<div class="padmin-demo-note">' +
-        '<p class="label">SOLO PARA ESTE PROTOTIPO &middot; ENTRAR COMO</p>' +
-        '<div class="padmin-demo-chips">' +
-          '<span class="padmin-role-chip" data-action="login" data-role="director">Director</span>' +
-          '<span class="padmin-role-chip" data-action="login" data-role="produccion">Producción</span>' +
-          '<span class="padmin-role-chip" data-action="login" data-role="comercial">Comercial</span>' +
-          '<span class="padmin-role-chip" data-action="login" data-role="colaborador">Colaborador externo</span>' +
-        '</div>' +
-      '</div>' +
     '</div></div>';
   }
 
@@ -366,57 +419,55 @@
   }
 
   function renderDashboardDirector() {
-    var withStatus = piecesData.map(function (p) { return p; });
-    var ideasNueva = ideasData.filter(function (i) { return i.column === 'Nueva'; });
-    var piecesInReview = withStatus.filter(function (p) { return p.status === 'En revisión'; });
-    var activePipelineCount = commercialData.filter(function (c) { return c.column !== 'Cerrado'; }).length;
+    var ideas = state.data.ideas;
+    var piecesInReview = state.data.proposalsByKey.en_revision;
+    if (!ideas || !piecesInReview) return loadingCard();
+    var ideasNueva = ideas.filter(function (i) { return i.column_status === 'nueva'; });
 
     return '<div>' +
       '<p style="font-size:13px;color:#6B6A60;margin:0 0 4px;">Buenos días</p>' +
-      '<h1 class="padmin-h1" style="font-size:24px;margin-bottom:24px;">' + esc(roleNames.director) + '</h1>' +
-      '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:28px;">' +
+      '<h1 class="padmin-h1" style="font-size:24px;margin-bottom:24px;">' + esc(state.user.name) + '</h1>' +
+      '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:28px;">' +
         statCard('IDEAS PENDIENTES', ideasNueva.length) +
         statCard('PIEZAS EN REVISIÓN', piecesInReview.length) +
-        statCard('PUBLICADAS ESTA SEMANA', piecesPublished + '<span style="font-size:14px;color:#6B6A60;font-weight:500;"> / ' + weeklyGoal + '</span>', '#2F5233') +
-        statCard('PIPELINE COMERCIAL ACTIVO', activePipelineCount, '#C77D2E') +
       '</div>' +
       '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;">' +
         '<div>' +
           '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;"><p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0;">Ideas pendientes de decisión</p><button type="button" class="padmin-logout" data-action="goto" data-id="ideas">Ver bandeja &rarr;</button></div>' +
-          '<div class="padmin-card">' + ideasNueva.map(function (i) {
-            return '<div class="padmin-row clickable" data-action="goto" data-id="ideas"><div><p class="padmin-row-title">' + esc(i.title) + '</p><p class="padmin-row-meta">' + esc(i.category) + '</p></div><span class="padmin-idea-score">Score ' + i.score + '</span></div>';
-          }).join('') + '</div>' +
+          '<div class="padmin-card">' + (ideasNueva.length ? ideasNueva.map(function (i) {
+            return '<div class="padmin-row clickable" data-action="goto" data-id="ideas"><div><p class="padmin-row-title">' + esc(i.title) + '</p><p class="padmin-row-meta">' + esc(i.category || '') + '</p></div><span class="padmin-idea-score">' + (i.score != null ? 'Score ' + i.score : '') + '</span></div>';
+          }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin ideas pendientes.</p></div>') + '</div>' +
         '</div>' +
         '<div>' +
           '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;"><p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0;">Piezas en revisión</p><button type="button" class="padmin-logout" data-action="goto" data-id="aprobacion">Ir a aprobación &rarr;</button></div>' +
-          '<div class="padmin-card">' + piecesInReview.map(function (p) {
-            return '<div class="padmin-row clickable" data-action="goto" data-id="aprobacion"><div><p class="padmin-row-title">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.section) + ' &middot; ' + esc(p.author) + '</p></div>' + badge(p.status) + '</div>';
-          }).join('') + '</div>' +
+          '<div class="padmin-card">' + (piecesInReview.length ? piecesInReview.map(function (p) {
+            return '<div class="padmin-row clickable" data-action="goto" data-id="aprobacion"><div><p class="padmin-row-title">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.section || '') + '</p></div>' + badge(p.status) + '</div>';
+          }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Nada en revisión.</p></div>') + '</div>' +
         '</div>' +
       '</div>' +
     '</div>';
   }
 
   function renderDashboardProduccion() {
-    var myAuthor = roleNames.produccion;
-    var myPieces = piecesData.filter(function (p) { return p.author === myAuthor; });
-    var myDraftCount = myPieces.filter(function (p) { return p.status === 'Borrador'; }).length;
-    var myReviewCount = myPieces.filter(function (p) { return p.status === 'En revisión'; }).length;
-    var myPublishedCount = myPieces.filter(function (p) { return p.status === 'Publicada'; }).length;
+    var myPieces = state.data.proposalsByKey.mine;
+    if (!myPieces) return loadingCard();
+    var myDraftCount = myPieces.filter(function (p) { return p.status === 'borrador'; }).length;
+    var myReviewCount = myPieces.filter(function (p) { return p.status === 'en_revision'; }).length;
+    var myPublishedCount = myPieces.filter(function (p) { return p.status === 'published'; }).length;
 
     return '<div>' +
       '<p style="font-size:13px;color:#6B6A60;margin:0 0 4px;">Tus tareas</p>' +
-      '<h1 class="padmin-h1" style="font-size:24px;margin-bottom:24px;">' + esc(roleNames.produccion) + '</h1>' +
+      '<h1 class="padmin-h1" style="font-size:24px;margin-bottom:24px;">' + esc(state.user.name) + '</h1>' +
       '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:28px;">' +
         statCard('PIEZAS ASIGNADAS', myPieces.length) +
         statCard('EN BORRADOR', myDraftCount) +
         statCard('EN REVISIÓN', myReviewCount, '#7A4A18') +
-        statCard('PUBLICADAS ESTA SEMANA', myPublishedCount, '#2F5233') +
+        statCard('PUBLICADAS', myPublishedCount, '#2F5233') +
       '</div>' +
       '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 12px;">Piezas en proceso</p>' +
-      '<div class="padmin-card" style="margin-bottom:28px;">' + myPieces.map(function (p) {
-        return '<div class="padmin-row clickable" data-action="goto" data-id="editor"><div><p class="padmin-row-title">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.section) + '</p></div>' + badge(p.status) + '</div>';
-      }).join('') + '</div>' +
+      '<div class="padmin-card" style="margin-bottom:28px;">' + (myPieces.length ? myPieces.map(function (p) {
+        return '<div class="padmin-row clickable" data-action="goto" data-id="editor" data-pid="' + p.id + '"><div><p class="padmin-row-title">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.section || '') + '</p></div>' + badge(p.status) + '</div>';
+      }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin piezas asignadas todavía.</p></div>') + '</div>' +
       '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 12px;">Checklist de publicación &middot; pieza de hoy</p>' +
       '<div class="padmin-card" style="padding:8px 16px;">' + checklistData.map(function (c) {
         var color = c.done ? '#2F5233' : '#D6D5CE';
@@ -427,47 +478,56 @@
   }
 
   function renderDashboard() {
-    if (state.role === 'director') return renderDashboardDirector();
-    if (state.role === 'produccion') return renderDashboardProduccion();
-    return '';
+    if (state.user.role === 'director') return renderDashboardDirector();
+    if (state.user.role === 'produccion') return renderDashboardProduccion();
+    return '<p class="padmin-lede">Sin panel de inicio para tu rol.</p>';
   }
 
   // ---------- ideas ----------
 
-  function ideaCard(i) {
-    return '<div class="padmin-idea-card' + (i.column === 'Descartada' ? ' discarded' : '') + '">' +
-      '<p class="padmin-idea-cat">' + esc(i.category) + '</p>' +
+  function ideaCard(i, canMove) {
+    var moveHtml = canMove ? '<select data-action="move-idea" data-id="' + i.id + '" style="font-size:10px;border:0.5px solid #E3E2DD;border-radius:4px;padding:2px 4px;">' +
+      ['nueva', 'en_analisis', 'aprobada', 'descartada'].map(function (c) {
+        return '<option value="' + c + '"' + (i.column_status === c ? ' selected' : '') + '>' + esc(STATUS_LABEL[c]) + '</option>';
+      }).join('') + '</select>' : '';
+    var deleteHtml = (canMove && state.user.role === 'director')
+      ? '<button type="button" class="padmin-btn-sm padmin-btn-outline" style="margin-top:8px;" data-action="delete-idea" data-id="' + i.id + '">Eliminar</button>' : '';
+    return '<div class="padmin-idea-card' + (i.column_status === 'descartada' ? ' discarded' : '') + '">' +
+      '<p class="padmin-idea-cat">' + esc(i.category || '') + '</p>' +
       '<p class="padmin-idea-title">' + esc(i.title) + '</p>' +
-      '<div class="padmin-idea-foot"><span class="padmin-idea-score">Score ' + i.score + '</span><span class="padmin-idea-avatar">' + initialsOf(i.collaborator) + '</span></div>' +
+      '<div class="padmin-idea-foot"><span class="padmin-idea-score">' + (i.score != null ? 'Score ' + i.score : '') + '</span><span class="padmin-idea-avatar">' + initialsOf(i.collaborator_name) + '</span></div>' +
+      (moveHtml ? '<div style="margin-top:8px;">' + moveHtml + '</div>' : '') +
+      deleteHtml +
     '</div>';
   }
 
   function ideasKanban() {
+    var ideas = state.data.ideas;
+    if (!ideas) return loadingCard();
+    var canMove = state.user.role === 'director' || state.user.role === 'produccion';
     var cols = [
-      { title: 'NUEVA', items: ideasData.filter(function (i) { return i.column === 'Nueva'; }) },
-      { title: 'EN ANÁLISIS', items: ideasData.filter(function (i) { return i.column === 'En análisis'; }) },
-      { title: 'APROBADA', items: ideasData.filter(function (i) { return i.column === 'Aprobada'; }) },
-      { title: 'DESCARTADA', items: ideasData.filter(function (i) { return i.column === 'Descartada'; }) }
-    ];
+      { title: 'NUEVA', key: 'nueva' }, { title: 'EN ANÁLISIS', key: 'en_analisis' },
+      { title: 'APROBADA', key: 'aprobada' }, { title: 'DESCARTADA', key: 'descartada' }
+    ].map(function (c) { return { title: c.title, items: ideas.filter(function (i) { return i.column_status === c.key; }) }; });
     return '<div>' +
       '<h1 class="padmin-h1">Bandeja de ideas</h1><p class="padmin-lede">Flujo editorial de ideas propuestas.</p>' +
       '<div class="padmin-kanban">' + cols.map(function (col) {
-        return '<div><p class="padmin-kanban-col-title">' + col.title + ' &middot; ' + col.items.length + '</p><div class="padmin-kanban-cards">' + col.items.map(ideaCard).join('') + '</div></div>';
+        return '<div><p class="padmin-kanban-col-title">' + col.title + ' &middot; ' + col.items.length + '</p><div class="padmin-kanban-cards">' + col.items.map(function (i) { return ideaCard(i, canMove); }).join('') + '</div></div>';
       }).join('') + '</div>' +
     '</div>';
   }
 
   function ideasMine() {
-    var myCollaborator = roleNames.colaborador;
-    var myIdeas = ideasData.filter(function (i) { return i.collaborator === myCollaborator; });
-    var demoNote = state.demoNote === 'idea' ? '<p class="padmin-demo-hint">' + PROTO_NOTE + '</p>' : '';
+    var ideas = state.data.ideas;
+    if (!ideas) return loadingCard();
+    var demoNote = state.demoNote === 'idea' ? '<p class="padmin-demo-hint">Idea enviada.</p>' : '';
     return '<div style="max-width:640px;">' +
       '<h1 class="padmin-h1" style="font-size:22px;">Tus ideas</h1>' +
       '<p class="padmin-lede">Envía una idea de nota y da seguimiento a su estado.</p>' +
       '<div class="padmin-card" style="padding:20px;margin-bottom:24px;">' +
         '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 14px;">Nueva idea</p>' +
         '<form data-action="submit-idea">' +
-          '<div class="padmin-field"><label for="idea-title">Título</label><input id="idea-title" type="text"></div>' +
+          '<div class="padmin-field"><label for="idea-title">Título</label><input id="idea-title" type="text" required></div>' +
           '<div class="padmin-field"><label for="idea-cat">Categoría</label><select id="idea-cat"><option>Local</option><option>Cultura</option><option>Economía</option><option>Entretenimiento</option><option>Deportes</option><option>Opinión</option></select></div>' +
           '<div class="padmin-field"><label for="idea-desc">Descripción</label><textarea id="idea-desc" style="min-height:70px;"></textarea></div>' +
           '<button type="submit" class="padmin-btn" style="align-self:flex-start;">Enviar idea</button>' +
@@ -475,53 +535,77 @@
         '</form>' +
       '</div>' +
       '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 12px;">Estado de tus ideas</p>' +
-      '<div class="padmin-card">' + myIdeas.map(function (i) {
-        return '<div class="padmin-row"><div><p class="padmin-row-title">' + esc(i.title) + '</p><p class="padmin-row-meta">' + esc(i.category) + '</p></div>' + badge(i.column) + '</div>';
-      }).join('') + '</div>' +
+      '<div class="padmin-card">' + (ideas.length ? ideas.map(function (i) {
+        return '<div class="padmin-row"><div><p class="padmin-row-title">' + esc(i.title) + '</p><p class="padmin-row-meta">' + esc(i.category || '') + '</p></div>' + badge(i.column_status) + '</div>';
+      }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Todavía no envías ninguna idea.</p></div>') + '</div>' +
     '</div>';
   }
 
   function renderIdeas() {
-    return state.role === 'colaborador' ? ideasMine() : ideasKanban();
+    return state.user.role === 'colaborador' ? ideasMine() : ideasKanban();
   }
 
   // ---------- editor ----------
 
+  function renderEditorPicker() {
+    var list = state.data.proposalsByKey.borrador;
+    if (!list) return loadingCard();
+    var mine = state.user.role === 'produccion' ? list.filter(function (p) { return p.author_id === state.user.id; }) : list;
+    return '<div>' +
+      '<h1 style="font-weight:600;font-size:20px;color:#1F2A22;margin:0 0 16px;">Editor de nota</h1>' +
+      '<p class="padmin-lede">Elige una pieza en borrador para editar.</p>' +
+      '<div class="padmin-card">' + (mine.length ? mine.map(function (p) {
+        return '<div class="padmin-row clickable" data-action="open-editor" data-id="' + p.id + '"><div><p class="padmin-row-title">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.section || '') + '</p></div>' + badge(p.status) + '</div>';
+      }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">No hay piezas en borrador. Aprueba una propuesta desde "Propuestas IA".</p></div>') + '</div>' +
+    '</div>';
+  }
+
   function renderEditor() {
+    if (!state.editorProposalId) return renderEditorPicker();
+    if (!state.editorDraft) return loadingCard();
+    var d = state.editorDraft;
     return '<div class="padmin-editor-wrap">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">' +
-        '<h1 style="font-weight:600;font-size:20px;color:#1F2A22;margin:0;">Editor de nota</h1>' + badge('En revisión') +
+        '<h1 style="font-weight:600;font-size:20px;color:#1F2A22;margin:0;">Editor de nota</h1>' + badge('borrador') +
       '</div>' +
       '<div class="padmin-editor-card">' +
         '<label style="font-size:11px;color:#6B6A60;display:block;margin-bottom:8px;">Título</label>' +
-        '<div class="padmin-title-input" contenteditable="true">Fuerte de San Carlos abre nueva ruta nocturna para visitantes</div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<input id="editor-title" class="padmin-title-input" value="' + esc(d.title) + '" style="width:100%;box-sizing:border-box;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:12px;">' +
           '<label style="font-size:11px;color:#6B6A60;">Cuerpo</label>' +
-          '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<select id="draft-model" style="font-size:11px;color:#1F2A22;border:0.5px solid #E3E2DD;border-radius:6px;padding:6px 8px;background:#fff;">' +
-              '<option value="local"' + (state.draftModel === 'local' ? ' selected' : '') + '>Modelo local</option>' +
-              '<option value="sonnet"' + (state.draftModel === 'sonnet' ? ' selected' : '') + '>Claude Sonnet — piezas complejas</option>' +
-            '</select>' +
-            '<button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-draft">Generar borrador con IA</button>' +
-          '</div>' +
+          '<button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-draft" ' + (state.generatingDraft ? 'disabled' : '') + '>' + (state.generatingDraft ? 'Generando…' : 'Generar borrador con IA') + '</button>' +
         '</div>' +
-        '<textarea id="note-body" class="padmin-body-textarea">' + esc(state.noteBody) + '</textarea>' +
+        '<textarea id="editor-body" class="padmin-body-textarea">' + esc(d.body) + '</textarea>' +
         '<div class="padmin-editor-grid2">' +
-          '<div class="padmin-field" style="margin:0;"><label>Sección editorial</label><select><option>Cultura</option><option>Local</option><option>Economía</option><option>Deportes</option><option>Entretenimiento</option><option>Opinión</option></select></div>' +
-          '<div class="padmin-field" style="margin:0;"><label>Colaborador asignado</label><select><option>Ana Torres</option><option>Carlos Mendoza</option><option>Luisa Pérez</option></select></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Sección editorial</label><select id="editor-section">' + ['Local', 'Cultura', 'Economía', 'Entretenimiento', 'Deportes', 'Opinión'].map(function (s) { return '<option' + (d.section === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Dek / bajada</label><input id="editor-dek" type="text" value="' + esc(d.dek) + '"></div>' +
         '</div>' +
-        '<div class="padmin-editor-grid2">' +
-          '<div class="padmin-field" style="margin:0;"><label>Meta título (SEO)</label><input type="text"></div>' +
-          '<div class="padmin-field" style="margin:0;"><label>Slug</label><input type="text" value="/cultura/fuerte-san-carlos-ruta-nocturna"></div>' +
-        '</div>' +
-        '<div class="padmin-field"><label>Meta descripción (SEO)</label><textarea style="min-height:54px;"></textarea></div>' +
-        '<div class="padmin-field" style="margin:0;"><label>Patrocinador asociado (opcional)</label><select><option>Ninguno</option><option>Ferretería Reyes</option><option>Hotel San Carlos</option></select></div>' +
+        '<div class="padmin-field"><label>Slug</label><input id="editor-slug" type="text" value="' + esc(d.slug) + '" placeholder="mi-nota-slug"></div>' +
       '</div>' +
       '<div style="display:flex;gap:10px;">' +
-        '<button type="button" class="padmin-btn padmin-btn-brand">Enviar a revisión</button>' +
-        '<button type="button" class="padmin-btn-outline">Guardar borrador</button>' +
+        '<button type="button" class="padmin-btn padmin-btn-brand" data-action="submit-review" data-id="' + state.editorProposalId + '">Enviar a revisión</button>' +
+        '<button type="button" class="padmin-btn-outline" data-action="save-draft" data-id="' + state.editorProposalId + '">Guardar borrador</button>' +
+        (d.body ? '<button type="button" class="padmin-btn-outline" data-action="run-qa" ' + (state.qaBusy ? 'disabled' : '') + '>' + (state.qaBusy ? 'Verificando…' : 'Verificar texto') + '</button>' : '') +
+        '<button type="button" class="padmin-btn-outline" data-action="close-editor">Volver</button>' +
       '</div>' +
-      (state.demoNote === 'editor' ? '<p class="padmin-demo-hint">' + PROTO_NOTE + '</p>' : '') +
+      renderQaResult() +
+    '</div>';
+  }
+
+  function renderQaResult() {
+    if (!state.qaResult) return '';
+    var q = state.qaResult;
+    var color = q.score > 80 ? '#2F5233' : (q.score >= 50 ? '#C9932F' : '#A6432E');
+    var issues = (q.issues || []).map(function (i) {
+      return '<li style="margin-bottom:4px;">' + '[' + esc(i.type) + (i.line ? ' · línea ' + i.line : '') + '] ' + esc(i.text) + '</li>';
+    }).join('');
+    return '<div class="padmin-editor-card" style="margin-top:10px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+        '<p style="font-size:14px;font-weight:600;color:' + color + ';margin:0;">Score: ' + q.score + '/100</p>' +
+        '<span class="padmin-drawer-close" data-action="close-qa">Cerrar &times;</span>' +
+      '</div>' +
+      '<ul style="font-size:12px;color:#3F3F3A;padding-left:18px;margin:0 0 10px;">' + (issues || '<li>Sin observaciones.</li>') + '</ul>' +
+      '<p style="font-size:12px;color:#6B6A60;margin:0;">' + esc(q.summary || '') + '</p>' +
     '</div>';
   }
 
@@ -534,16 +618,15 @@
       var selected = state.transparency[p.id];
       var approveBg = selected ? '#2F5233' : '#EFEFEA';
       var approveColor = selected ? '#fff' : '#B9B9B0';
-      var approveCursor = selected ? 'pointer' : 'not-allowed';
       var chips = transparencyLabels.map(function (label) {
         var active = selected === label;
         return '<span class="padmin-chip" data-action="set-transparency" data-piece="' + p.id + '" data-label="' + esc(label) + '" style="background:' + (active ? '#2F5233' : '#F0EFEA') + ';color:' + (active ? '#fff' : '#6B6A60') + ';border-color:' + (active ? '#2F5233' : '#E3E2DD') + ';">' + esc(label) + '</span>';
       }).join('');
       return '<div style="padding:16px 18px;border-bottom:0.5px solid #E3E2DD;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
-          '<div><p class="padmin-row-title" style="font-size:14px;">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.section) + ' &middot; ' + esc(p.author) + '</p></div>' +
+          '<div><p class="padmin-row-title" style="font-size:14px;">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.section || '') + '</p></div>' +
           '<div style="display:flex;gap:8px;">' +
-            '<span class="padmin-btn-sm" style="background:' + approveBg + ';color:' + approveColor + ';cursor:' + approveCursor + ';">Aprobar</span>' +
+            '<span class="padmin-btn-sm" style="background:' + approveBg + ';color:' + approveColor + ';cursor:' + (selected ? 'pointer' : 'not-allowed') + ';" ' + (selected ? 'data-action="approve-piece" data-id="' + p.id + '"' : '') + '>Aprobar</span>' +
             '<span class="padmin-btn-sm padmin-btn-outline" style="font-weight:500;" data-action="open-comentario" data-id="' + p.id + '">Devolver con comentarios</span>' +
           '</div>' +
         '</div>' +
@@ -552,23 +635,10 @@
     }).join('') + '</div>';
   }
 
-  function renderAprobacionMobile(piecesInReview) {
-    return '<div style="display:flex;justify-content:center;"><div style="max-width:380px;width:100%;display:flex;flex-direction:column;gap:14px;">' +
-      piecesInReview.map(function (p) {
-        return '<div class="padmin-card" style="padding:14px;">' +
-          '<p class="padmin-row-title" style="font-size:14px;font-weight:600;">' + esc(p.title) + '</p>' +
-          '<p class="padmin-row-meta" style="margin-bottom:12px;">' + esc(p.section) + ' &middot; ' + esc(p.author) + '</p>' +
-          '<div style="display:flex;flex-direction:column;gap:8px;">' +
-            '<span style="display:block;text-align:center;font-size:14px;font-weight:600;background:#EFEFEA;color:#B9B9B0;padding:14px;border-radius:8px;">Aprobar</span>' +
-            '<span class="padmin-btn-outline" style="text-align:center;padding:14px;" data-action="open-comentario" data-id="' + p.id + '">Devolver con comentarios</span>' +
-          '</div>' +
-        '</div>';
-      }).join('') + '</div></div>';
-  }
-
   function renderComentarioModal() {
     if (state.comentarioPieceId == null) return '';
-    var piece = piecesData.filter(function (p) { return p.id === state.comentarioPieceId; })[0];
+    var pieces = state.data.proposalsByKey.en_revision || [];
+    var piece = pieces.filter(function (p) { return p.id === state.comentarioPieceId; })[0];
     if (!piece) return '';
     return '<div class="padmin-overlay">' +
       '<div class="padmin-overlay-bg" data-action="close-comentario"></div>' +
@@ -579,46 +649,76 @@
         '<textarea id="comentario-text" placeholder="Describe qué debe ajustarse antes de publicar..." style="width:100%;min-height:100px;border:0.5px solid #E3E2DD;border-radius:6px;background:#F7F7F5;padding:10px 12px;font-size:13px;font-family:inherit;box-sizing:border-box;resize:vertical;margin-bottom:16px;">' + esc(state.comentarioText) + '</textarea>' +
         '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
           '<button type="button" class="padmin-btn-outline" data-action="close-comentario">Cancelar</button>' +
-          '<button type="button" class="padmin-btn" data-action="confirm-comentario">Confirmar devolución</button>' +
+          '<button type="button" class="padmin-btn" data-action="confirm-comentario" data-id="' + piece.id + '">Confirmar devolución</button>' +
         '</div>' +
       '</div>' +
     '</div>';
   }
 
   function renderAprobacion() {
-    var piecesInReview = piecesData.filter(function (p) { return p.status === 'En revisión'; });
-    var desktopActive = !state.mobileAprobacion;
+    var piecesInReview = state.data.proposalsByKey.en_revision;
+    if (!piecesInReview) return loadingCard();
     return '<div>' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">' +
-        '<h1 class="padmin-h1" style="font-size:22px;margin:0;">Aprobación</h1>' +
-        '<div style="display:flex;gap:6px;flex-shrink:0;">' +
-          '<span class="padmin-chip" data-action="set-mobile" data-value="false" style="background:' + (desktopActive ? '#2F5233' : '#fff') + ';color:' + (desktopActive ? '#fff' : '#1F2A22') + ';">Escritorio</span>' +
-          '<span class="padmin-chip" data-action="set-mobile" data-value="true" style="background:' + (!desktopActive ? '#2F5233' : '#fff') + ';color:' + (!desktopActive ? '#fff' : '#1F2A22') + ';">Vista móvil</span>' +
-        '</div>' +
-      '</div>' +
+      '<h1 class="padmin-h1" style="font-size:22px;margin:0 0 6px;">Aprobación</h1>' +
       '<p class="padmin-lede">Piezas pendientes de revisión editorial.</p>' +
-      (desktopActive ? renderAprobacionDesktop(piecesInReview) : renderAprobacionMobile(piecesInReview)) +
+      (piecesInReview.length ? renderAprobacionDesktop(piecesInReview) : loadingCard('Nada en revisión.')) +
       renderComentarioModal() +
     '</div>';
   }
 
   // ---------- comercial ----------
 
-  function commColumn(title, col, color) {
-    var items = commercialData.filter(function (c) { return c.column === col; });
+  var PIPELINE_STAGES_ORDER = ['identificado', 'contactado', 'propuesta_enviada', 'cerrado'];
+
+  function sponsorFieldsHtml(c) {
+    return '<div style="margin-top:8px;padding-top:8px;border-top:0.5px solid #E3E2DD;">' +
+      '<p style="font-size:10px;color:#9A9A93;margin:0 0 6px;">Datos de patrocinio (newsletter)</p>' +
+      '<input type="text" id="sponsor-link-' + c.id + '" placeholder="Sitio web" value="' + esc(c.website_url || '') + '" style="width:100%;font-size:11px;padding:5px 7px;border:0.5px solid #E3E2DD;border-radius:5px;box-sizing:border-box;margin-bottom:6px;">' +
+      '<input type="text" id="sponsor-copy-' + c.id + '" placeholder="Copy (ej. Todo lo que necesitas para tu hogar)" value="' + esc(c.sponsor_copy || '') + '" style="width:100%;font-size:11px;padding:5px 7px;border:0.5px solid #E3E2DD;border-radius:5px;box-sizing:border-box;margin-bottom:6px;">' +
+      '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="save-sponsor-info" data-id="' + c.id + '">Guardar patrocinio</button>' +
+      (c.last_sponsored_at ? '<p style="font-size:10px;color:#9A9A93;margin:6px 0 0;">Último newsletter: ' + new Date(c.last_sponsored_at).toLocaleDateString('es-MX') + '</p>' : '') +
+    '</div>';
+  }
+
+  function commColumn(title, stage, color, clients, canMove, canDelete) {
+    var items = clients.filter(function (c) { return c.pipeline_stage === stage; });
+    var nextStage = PIPELINE_STAGES_ORDER[PIPELINE_STAGES_ORDER.indexOf(stage) + 1];
     return '<div><p class="padmin-kanban-col-title">' + title + ' &middot; ' + items.length + '</p><div class="padmin-kanban-cards">' + items.map(function (c) {
-      return '<div class="padmin-idea-card"><p class="padmin-row-title" style="margin-bottom:6px;">' + esc(c.business) + '</p><p class="padmin-row-meta" style="margin-bottom:8px;">' + esc(c.interest) + '</p><p style="font-size:12px;font-weight:600;color:' + color + ';margin:0 0 8px;">' + esc(c.value) + '</p><p style="font-size:10px;color:#9A9A93;margin:0;">Últ. seguimiento: ' + esc(c.lastContact) + '</p></div>';
+      return '<div class="padmin-idea-card"><p class="padmin-row-title" style="margin-bottom:6px;">' + esc(c.name) + '</p><p class="padmin-row-meta" style="margin-bottom:8px;">' + esc(c.interest || '') + '</p><p style="font-size:12px;font-weight:600;color:' + color + ';margin:0 0 8px;">' + esc(c.estimated_value || '') + '</p><p style="font-size:10px;color:#9A9A93;margin:0;">Últ. seguimiento: ' + (c.last_contact_at ? new Date(c.last_contact_at).toLocaleDateString('es-MX') : '—') + '</p>' +
+        (canMove && nextStage ? '<button type="button" class="padmin-btn-sm padmin-btn-outline" style="margin-top:8px;" data-action="advance-client" data-id="' + c.id + '" data-stage="' + nextStage + '">Avanzar &rarr;</button>' : '') +
+        (canDelete ? '<button type="button" class="padmin-btn-sm" style="margin-top:8px;margin-left:6px;background:#A6432E;color:#fff;" data-action="delete-client" data-id="' + c.id + '">Eliminar</button>' : '') +
+        (stage === 'cerrado' ? sponsorFieldsHtml(c) : '') +
+      '</div>';
     }).join('') + '</div></div>';
   }
 
   function renderComercial() {
+    var clients = state.data.clients;
+    if (!clients) return loadingCard();
+    var canMove = state.user.role === 'comercial' || state.user.role === 'director';
+    var canDelete = state.user.role === 'director';
+    var errorHtml = state.clientFormError ? '<p class="padmin-lede" style="color:#A6432E;">' + esc(state.clientFormError) + '</p>' : '';
+    var formHtml = state.clientFormOpen ? (
+      '<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">' +
+        errorHtml +
+        '<form data-action="submit-new-client" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+          '<div class="padmin-field" style="margin:0;"><label>Nombre</label><input id="nc-name" type="text" required></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Negocio</label><input id="nc-business" type="text"></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Paquete</label><select id="nc-package"><option value="básico">Básico</option><option value="profesional">Profesional</option><option value="premium">Premium</option></select></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Teléfono</label><input id="nc-phone" type="tel"></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Correo</label><input id="nc-email" type="email"></div>' +
+          '<div style="grid-column:1 / -1;display:flex;gap:8px;"><button type="submit" class="padmin-btn padmin-btn-sm">Crear cliente</button><button type="button" class="padmin-btn-outline" data-action="close-client-form">Cancelar</button></div>' +
+        '</form>' +
+      '</div>'
+    ) : (canMove ? '<button type="button" class="padmin-btn padmin-btn-sm" style="margin-bottom:16px;" data-action="open-client-form">+ Nuevo cliente</button>' : '');
     return '<div>' +
       '<h1 class="padmin-h1">Pipeline comercial</h1><p class="padmin-lede">Prospectos activos del equipo comercial.</p>' +
+      formHtml +
       '<div class="padmin-kanban">' +
-        commColumn('IDENTIFICADO', 'Identificado', '#C77D2E') +
-        commColumn('CONTACTADO', 'Contactado', '#C77D2E') +
-        commColumn('PROPUESTA ENVIADA', 'Propuesta enviada', '#C77D2E') +
-        commColumn('CERRADO', 'Cerrado', '#2F5233') +
+        commColumn('IDENTIFICADO', 'identificado', '#C77D2E', clients, canMove, canDelete) +
+        commColumn('CONTACTADO', 'contactado', '#C77D2E', clients, canMove, canDelete) +
+        commColumn('PROPUESTA ENVIADA', 'propuesta_enviada', '#C77D2E', clients, canMove, canDelete) +
+        commColumn('CERRADO', 'cerrado', '#2F5233', clients, canMove, canDelete) +
       '</div>' +
     '</div>';
   }
@@ -626,35 +726,60 @@
   // ---------- métricas ----------
 
   function renderMetricas() {
-    var maxWeekly = Math.max.apply(null, weeklyPiecesData.map(function (w) { return w.count; }));
-    var chartW = 420, chartH = 110, chartPad = 10;
-    var stepX = (chartW - chartPad * 2) / (weeklyPiecesData.length - 1);
-    var points = weeklyPiecesData.map(function (w, idx) {
-      var x = chartPad + idx * stepX;
-      var y = chartH - chartPad - (w.count / maxWeekly) * (chartH - chartPad * 2);
-      return { x: x, y: y, week: w.week };
-    });
-    var polyline = points.map(function (p) { return p.x + ',' + p.y; }).join(' ');
-    var weeklyPct = Math.round((piecesPublished / weeklyGoal) * 100) + '%';
+    var m = state.data.metrics;
+    if (!m) return loadingCard();
+    var weeklyPct = m.weeklyGoal ? Math.round((m.piecesPublished / m.weeklyGoal) * 100) + '%' : '0%';
+    var chartHtml;
+    if (m.weeklyPieces && m.weeklyPieces.length) {
+      var maxWeekly = Math.max.apply(null, m.weeklyPieces.map(function (w) { return w.count; }));
+      var chartW = 420, chartH = 110, chartPad = 10;
+      var stepX = m.weeklyPieces.length > 1 ? (chartW - chartPad * 2) / (m.weeklyPieces.length - 1) : 0;
+      var points = m.weeklyPieces.map(function (w, idx) {
+        var x = chartPad + idx * stepX;
+        var y = chartH - chartPad - (maxWeekly ? (w.count / maxWeekly) * (chartH - chartPad * 2) : 0);
+        return { x: x, y: y, week: w.week.slice(5) };
+      });
+      var polyline = points.map(function (p) { return p.x + ',' + p.y; }).join(' ');
+      chartHtml = '<svg viewBox="0 0 ' + chartW + ' ' + chartH + '" width="100%" height="110" style="display:block;overflow:visible;">' +
+          '<polyline points="' + polyline + '" fill="none" stroke="#2F5233" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>' +
+          points.map(function (p) { return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#2F5233"></circle>'; }).join('') +
+        '</svg><div class="padmin-chart-labels">' + points.map(function (p) { return '<span>' + esc(p.week) + '</span>'; }).join('') + '</div>';
+    } else {
+      chartHtml = '<p class="padmin-lede" style="margin:0;">Sin piezas publicadas en las últimas semanas.</p>';
+    }
+
+    var topSections = m.topSections || [];
+    var maxSectionCount = topSections.length ? Math.max.apply(null, topSections.map(function (s) { return s.count; })) : 0;
+    var authors = m.authors || [];
 
     return '<div style="max-width:820px;">' +
       '<h1 class="padmin-h1" style="font-size:22px;margin-bottom:22px;">Panel de métricas</h1>' +
       '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:24px;">' +
-        '<div class="padmin-card" style="padding:20px;"><p class="padmin-stat-label">PIEZAS PUBLICADAS VS. OBJETIVO SEMANAL</p><p style="font-weight:700;font-size:24px;color:#1F2A22;margin:0 0 10px;">' + piecesPublished + ' / ' + weeklyGoal + '</p><div style="width:100%;height:8px;background:#F0EFEA;border-radius:4px;overflow:hidden;"><div style="height:100%;background:#2F5233;width:' + weeklyPct + ';"></div></div></div>' +
-        '<div class="padmin-card" style="padding:20px;"><p class="padmin-stat-label">ALCANCE TOTAL</p><div style="display:flex;align-items:baseline;gap:10px;"><p style="font-weight:700;font-size:28px;color:#1F2A22;margin:0;">' + totalReach + '</p><span style="font-size:12px;font-weight:600;color:#2F5233;background:#E1E8DD;padding:3px 8px;border-radius:4px;">+' + reachVsLastWeekPct + '% vs. semana pasada</span></div></div>' +
+        '<div class="padmin-card" style="padding:20px;"><p class="padmin-stat-label">PIEZAS PUBLICADAS ESTA SEMANA VS. OBJETIVO</p><p style="font-weight:700;font-size:24px;color:#1F2A22;margin:0 0 10px;">' + m.piecesPublished + ' / ' + m.weeklyGoal + '</p><div style="width:100%;height:8px;background:#F0EFEA;border-radius:4px;overflow:hidden;"><div style="height:100%;background:#2F5233;width:' + weeklyPct + ';"></div></div></div>' +
+        '<div class="padmin-card" style="padding:20px;"><p class="padmin-stat-label">ALCANCE TOTAL</p>' +
+          '<div style="display:flex;gap:18px;margin-top:10px;">' +
+            '<div><p style="font-size:20px;font-weight:700;color:#1F2A22;margin:0;">' + (m.totalPieces != null ? m.totalPieces : '—') + '</p><p style="font-size:10px;color:#6B6A60;margin:2px 0 0;">PIEZAS PUBLICADAS</p></div>' +
+            '<div><p style="font-size:20px;font-weight:700;color:#1F2A22;margin:0;">' + (m.approvalRate != null ? m.approvalRate + '%' : '—') + '</p><p style="font-size:10px;color:#6B6A60;margin:2px 0 0;">TASA DE APROBACIÓN</p></div>' +
+            '<div><p style="font-size:20px;font-weight:700;color:#1F2A22;margin:0;">' + (m.avgDraftDays != null ? m.avgDraftDays : '—') + '</p><p style="font-size:10px;color:#6B6A60;margin:2px 0 0;">DÍAS PROM. DE PRODUCCIÓN</p></div>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
       '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 12px;">Piezas publicadas por semana</p>' +
-      '<div class="padmin-card" style="padding:20px;margin-bottom:24px;">' +
-        '<svg viewBox="0 0 ' + chartW + ' ' + chartH + '" width="100%" height="110" style="display:block;overflow:visible;">' +
-          '<polyline points="' + polyline + '" fill="none" stroke="#2F5233" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>' +
-          points.map(function (p) { return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#2F5233"></circle>'; }).join('') +
-        '</svg>' +
-        '<div class="padmin-chart-labels">' + points.map(function (p) { return '<span>' + esc(p.week) + '</span>'; }).join('') + '</div>' +
-      '</div>' +
+      '<div class="padmin-card" style="padding:20px;margin-bottom:24px;">' + chartHtml + '</div>' +
       '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 12px;">Crecimiento por canal</p>' +
-      '<div class="padmin-card">' + socialChannelsData.map(function (ch) {
-        return '<div class="padmin-row"><span style="font-size:13px;color:#1F2A22;">' + esc(ch.name) + '</span><span style="font-size:13px;font-weight:600;color:#2F5233;">' + esc(ch.growth) + '</span></div>';
-      }).join('') + '</div>' +
+      '<div class="padmin-card" style="padding:20px;">' +
+        (topSections.length ? (
+          '<p style="font-size:11px;font-weight:600;color:#6B6A60;margin:0 0 10px;">TOP SECCIONES</p>' +
+          topSections.map(function (s) {
+            var pct = maxSectionCount ? Math.round((s.count / maxSectionCount) * 100) : 0;
+            return '<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:12px;color:#1F2A22;margin-bottom:4px;"><span>' + esc(s.section) + '</span><span>' + s.count + '</span></div><div style="width:100%;height:6px;background:#F0EFEA;border-radius:3px;overflow:hidden;"><div style="height:100%;background:#C77D2E;width:' + pct + '%;"></div></div></div>';
+          }).join('') +
+          (authors.length ? '<p style="font-size:11px;font-weight:600;color:#6B6A60;margin:18px 0 10px;">RANKING DE AUTORES</p>' +
+            authors.map(function (a) {
+              return '<div class="padmin-row" style="padding:6px 0;"><span style="font-size:12px;color:#1F2A22;">' + esc(a.name) + '</span><span style="font-size:12px;font-weight:600;color:#6B6A60;">' + a.published + ' publicadas</span></div>';
+            }).join('') : '')
+        ) : '<p class="padmin-lede" style="margin:0;">Sin piezas publicadas todavía.</p>') +
+      '</div>' +
     '</div>';
   }
 
@@ -668,7 +793,8 @@
 
   function renderRadarDetail() {
     if (state.selectedRadarId == null) return '';
-    var topic = radarData.filter(function (r) { return r.id === state.selectedRadarId; })[0];
+    var topics = state.data.topics || [];
+    var topic = topics.filter(function (r) { return r.id === state.selectedRadarId; })[0];
     if (!topic) return '';
     return '<div class="padmin-overlay">' +
       '<div class="padmin-overlay-bg" data-action="close-radar"></div>' +
@@ -676,15 +802,24 @@
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;"><p class="padmin-drawer-eyebrow">FICHA DE CONTEXTO</p><span class="padmin-drawer-close" data-action="close-radar">Cerrar &times;</span></div>' +
         '<h2 style="font-size:18px;font-weight:600;color:#1F2A22;margin:0 0 16px;line-height:1.35;">' + esc(topic.title) + '</h2>' +
         '<div style="display:flex;gap:16px;margin-bottom:22px;"><span style="font-size:11px;color:#6B6A60;">Fuente: <b style="color:#1F2A22;">' + esc(topic.source) + '</b></span><span style="font-size:11px;color:#6B6A60;">Menciones: <b style="color:#1F2A22;">' + topic.mentions + '</b></span></div>' +
-        '<p class="padmin-drawer-section-title">ANTECEDENTES</p><p class="padmin-drawer-section-body">' + esc(topic.antecedentes) + '</p>' +
-        '<p class="padmin-drawer-section-title">ACTORES INVOLUCRADOS</p><p class="padmin-drawer-section-body">' + esc(topic.actores) + '</p>' +
-        '<p class="padmin-drawer-section-title">ÁNGULOS DE COBERTURA SUGERIDOS</p><p class="padmin-drawer-section-body">' + esc(topic.angulos) + '</p>' +
-        '<p class="padmin-drawer-section-title">POTENCIAL DE AUDIENCIA</p><p class="padmin-drawer-section-body" style="margin-bottom:0;">' + esc(topic.audiencia) + '</p>' +
+        '<p class="padmin-drawer-section-title">ANTECEDENTES</p><p class="padmin-drawer-section-body">' + esc(topic.antecedentes || 'Sin datos.') + '</p>' +
+        '<p class="padmin-drawer-section-title">ACTORES INVOLUCRADOS</p><p class="padmin-drawer-section-body">' + esc(topic.actores || 'Sin datos.') + '</p>' +
+        '<p class="padmin-drawer-section-title">ÁNGULOS DE COBERTURA SUGERIDOS</p><p class="padmin-drawer-section-body">' + esc(topic.angulos || 'Sin datos.') + '</p>' +
+        '<p class="padmin-drawer-section-title">POTENCIAL DE AUDIENCIA</p><p class="padmin-drawer-section-body" style="margin-bottom:0;">' + esc(topic.audiencia || 'Sin datos.') + '</p>' +
+        (state.user.role === 'director' || state.user.role === 'produccion' ?
+          '<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid #E3E2DD;display:flex;gap:8px;align-items:center;">' +
+            '<select id="proposal-format-' + topic.id + '" style="font-size:12px;border:0.5px solid #E3E2DD;border-radius:6px;padding:6px 8px;background:#fff;">' +
+              ['nota', 'post', 'guion_audio', 'guion_video'].map(function (f) { return '<option value="' + f + '">' + f + '</option>'; }).join('') +
+            '</select>' +
+            '<button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-proposal-from-topic" data-id="' + topic.id + '" ' + (state.generatingProposal ? 'disabled' : '') + '>' + (state.generatingProposal ? 'Generando…' : 'Generar propuesta IA') + '</button>' +
+          '</div>' : '') +
       '</div>' +
     '</div>';
   }
 
   function renderRadar() {
+    var topics = state.data.topics;
+    if (!topics) return loadingCard();
     var sources = ['Todas', 'Perplexity', 'Facebook', 'TikTok'];
     var statuses = ['Todos', 'Nuevo', 'Revisado'];
     var sourceChips = sources.map(function (src) {
@@ -695,14 +830,17 @@
       var active = state.radarStatus === st;
       return '<span class="padmin-chip" data-action="set-radar-status" data-value="' + esc(st) + '" style="background:' + (active ? '#C77D2E' : '#fff') + ';color:' + (active ? '#fff' : '#1F2A22') + ';border-color:' + (active ? '#C77D2E' : '#E3E2DD') + ';">' + esc(st) + '</span>';
     }).join('');
-    var filtered = radarData.filter(function (r) {
+    var filtered = topics.filter(function (r) {
       return (state.radarSource === 'Todas' || r.source === state.radarSource) && (state.radarStatus === 'Todos' || r.status === state.radarStatus);
     });
 
     return '<div>' +
       '<h1 class="padmin-h1">RADAR &middot; Social listening</h1>' +
-      '<p class="padmin-lede">Temas detectados por el agente en fuentes públicas. Feed de trabajo, no contenido editorial.</p>' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;">' + sourceChips + '<span style="width:1px;height:16px;background:#E3E2DD;margin:0 6px;"></span>' + statusChips + '</div>' +
+      '<p class="padmin-lede">Temas detectados por listening. Feed de trabajo, no contenido editorial.</p>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;">' + sourceChips + '<span style="width:1px;height:16px;background:#E3E2DD;margin:0 6px;"></span>' + statusChips +
+        (state.user.role === 'director' || state.user.role === 'produccion' ?
+          '<button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ' + (state.radarBusy ? 'disabled' : '') + ' style="margin-left:auto;">' + (state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias') + '</button>' : '') +
+      '</div>' +
       '<div class="padmin-card">' +
         '<div class="padmin-table-head" style="grid-template-columns:1fr 100px 90px 90px 90px;"><span>TEMA</span><span>FUENTE</span><span>MENCIONES</span><span>SENTIMIENTO</span><span>ESTADO</span></div>' +
         filtered.map(function (r) {
@@ -725,84 +863,211 @@
 
   var sensColorMap = { verde: '#2F5233', amarillo: '#C9932F', rojo: '#A6432E' };
 
+  function renderPropuestasRechazadas() {
+    var rechazadas = state.data.proposalsByKey.rechazada;
+    if (!rechazadas || !rechazadas.length || state.user.role !== 'director') return '';
+    return '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:24px 0 12px;">Rechazadas</p>' +
+      '<div class="padmin-card">' + rechazadas.map(function (p) {
+        return '<div class="padmin-row"><div><p class="padmin-row-title">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.review_comment || '') + '</p></div>' +
+          '<button type="button" class="padmin-btn-sm" style="background:#A6432E;color:#fff;" data-action="delete-propuesta" data-id="' + p.id + '">Eliminar</button></div>';
+      }).join('') + '</div>';
+  }
+
   function renderPropuestas() {
+    var proposals = state.data.proposalsByKey.propuesta;
+    if (!proposals) return loadingCard();
     return '<div>' +
       '<h1 class="padmin-h1">Propuestas de contenido</h1>' +
-      '<p class="padmin-lede">Generadas por el agente a partir de temas detectados en RADAR.</p>' +
-      '<div class="padmin-propuestas-grid">' + propuestasData.map(function (p) {
-        var decision = state.propuestaDecisions[p.id];
+      '<p class="padmin-lede">Generadas a partir de temas detectados en RADAR. Aprobar pasa la pieza al Editor de nota.</p>' +
+      '<div class="padmin-propuestas-grid">' + (proposals.length ? proposals.map(function (p) {
         var isRejecting = state.propuestaRejecting === p.id;
         var body;
-        if (decision) {
-          var decidedLabel = decision === 'aprobada' ? 'Aprobada' : 'Rechazada';
-          var decidedBg = decision === 'aprobada' ? '#E1E8DD' : '#F0DEDA';
-          var decidedColor = decision === 'aprobada' ? '#2F5233' : '#A6432E';
-          body = '<span class="padmin-badge" style="background:' + decidedBg + ';color:' + decidedColor + ';">' + decidedLabel + '</span>';
-        } else if (isRejecting) {
+        if (isRejecting) {
           body = '<div><label style="font-size:11px;color:#6B6A60;display:block;margin:0 0 6px;">Motivo del rechazo</label>' +
             '<textarea id="reject-reason-' + p.id + '" style="width:100%;min-height:56px;border:0.5px solid #E3E2DD;border-radius:6px;background:#F7F7F5;margin-bottom:8px;padding:8px;font:inherit;font-size:12px;box-sizing:border-box;"></textarea>' +
             '<button type="button" class="padmin-btn-sm" style="background:#A6432E;color:#fff;" data-action="confirm-reject-propuesta" data-id="' + p.id + '">Confirmar rechazo</button></div>';
         } else {
           body = '<div style="display:flex;gap:6px;">' +
             '<button type="button" class="padmin-btn-sm" style="background:#2F5233;color:#fff;" data-action="approve-propuesta" data-id="' + p.id + '">Aprobar</button>' +
-            '<button type="button" class="padmin-btn-sm padmin-btn-outline" style="font-weight:500;">Editar</button>' +
             '<button type="button" class="padmin-btn-sm padmin-btn-danger-outline" data-action="start-reject-propuesta" data-id="' + p.id + '">Rechazar</button>' +
           '</div>';
         }
         return '<div class="padmin-propuesta-card">' +
-          '<span class="padmin-sens-dot" style="background:' + sensColorMap[p.sensibilidad] + ';"></span>' +
-          '<p style="font-size:10px;font-weight:600;color:#7A4A18;background:#F3E4D4;display:inline-block;padding:3px 8px;border-radius:4px;margin:0 0 10px;">' + esc(p.formato) + '</p>' +
-          '<p style="font-size:11px;color:#6B6A60;margin:0 0 4px;">Tema origen (RADAR)</p>' +
-          '<p style="font-size:13px;font-weight:500;color:#1F2A22;margin:0 0 10px;line-height:1.35;">' + esc(p.tema) + '</p>' +
-          '<p style="font-size:12px;color:#3F3F3A;margin:0 0 16px;line-height:1.4;">' + esc(p.angulo) + '</p>' +
+          '<span class="padmin-sens-dot" style="background:' + (sensColorMap[p.sensibilidad] || '#6B6A60') + ';"></span>' +
+          '<p style="font-size:10px;font-weight:600;color:#7A4A18;background:#F3E4D4;display:inline-block;padding:3px 8px;border-radius:4px;margin:0 0 10px;">' + esc(p.format) + '</p>' +
+          '<p style="font-size:13px;font-weight:500;color:#1F2A22;margin:0 0 10px;line-height:1.35;">' + esc(p.title) + '</p>' +
+          '<p style="font-size:12px;color:#3F3F3A;margin:0 0 16px;line-height:1.4;">' + esc(p.angulo || '') + '</p>' +
           body +
         '</div>';
-      }).join('') + '</div>' +
+      }).join('') : '<p class="padmin-lede">Sin propuestas pendientes de decisión.</p>') + '</div>' +
+      renderPropuestasRechazadas() +
     '</div>';
   }
 
-  // ---------- hermes ----------
+  // ---------- hermes / pipeline (estático — fuera de alcance) ----------
 
   function renderHermes() {
+    var activity = state.data.activity;
+    if (!activity) return loadingCard();
+    var skillCounts = {};
+    activity.forEach(function (a) { skillCounts[a.action] = (skillCounts[a.action] || 0) + 1; });
+    var skills = Object.keys(skillCounts).map(function (k) { return { name: k, count: skillCounts[k] }; }).sort(function (a, b) { return b.count - a.count; });
     return '<div>' +
       '<h1 class="padmin-h1">Estado del agente Hermes</h1>' +
-      '<p class="padmin-lede">Bitácora de actividad y habilidades generadas por el agente.</p>' +
       '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 12px;">Actividad reciente</p>' +
-      '<div class="padmin-hermes-log">' + hermesLogData.map(function (h) {
-        var ok = h.result === 'exito';
-        return '<div class="padmin-hermes-row"><span class="padmin-hermes-time">' + esc(h.time) + '</span><span class="padmin-hermes-task">' + esc(h.task) + '</span><span style="color:' + (ok ? '#7CB084' : '#D98A7A') + ';flex-shrink:0;">' + (ok ? '✓ éxito' : '✕ falló') + '</span></div>';
-      }).join('') + '</div>' +
-      '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 4px;">Skills generados desde tareas repetidas</p>' +
-      '<p style="font-size:11px;color:#6B6A60;margin:0 0 12px;">El agente convierte patrones recurrentes en habilidades reutilizables.</p>' +
-      '<div class="padmin-card">' + hermesSkillsData.map(function (sk) {
-        return '<div class="padmin-row"><span style="font-size:13px;color:#1F2A22;">' + esc(sk.name) + '</span><span style="font-size:12px;font-weight:600;color:#6B6A60;">' + sk.count + ' usos</span></div>';
-      }).join('') + '</div>' +
+      (activity.length ? '<div class="padmin-hermes-log">' + activity.map(function (h) {
+        var ok = h.status === 'exito';
+        return '<div class="padmin-hermes-row"><span class="padmin-hermes-time">' + esc(relativeTime(h.created_at)) + '</span><span class="padmin-hermes-task">' + esc(h.detail || h.action) + '</span><span style="color:' + (ok ? '#7CB084' : '#D98A7A') + ';flex-shrink:0;">' + (ok ? '✓ éxito' : '✕ falló') + '</span></div>';
+      }).join('') + '</div>' : '<p class="padmin-lede">Sin actividad registrada todavía.</p>') +
+      (skills.length ? '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:20px 0 4px;">Skills generados desde tareas repetidas</p>' +
+        '<div class="padmin-card">' + skills.map(function (sk) {
+          return '<div class="padmin-row"><span style="font-size:13px;color:#1F2A22;">' + esc(sk.name) + '</span><span style="font-size:12px;font-weight:600;color:#6B6A60;">' + sk.count + ' usos</span></div>';
+        }).join('') + '</div>' : '') +
     '</div>';
   }
-
-  // ---------- pipeline ----------
 
   function pipelineStepStyle(st) {
     if (st.status === 'completado') return { dotColor: '#2F5233', ringColor: '#2F5233', badgeBg: '#E1E8DD', badgeColor: '#2F5233', badgeLabel: '✅ Automático completado', textColor: '#1F2A22', weight: 500 };
     if (st.status === 'esperando') return { dotColor: '#C77D2E', ringColor: '#C77D2E', badgeBg: '#F3E4D4', badgeColor: '#7A4A18', badgeLabel: '⏳ Esperando aprobación', textColor: '#1F2A22', weight: 600 };
-    if (st.status === 'fallo') return { dotColor: '#A6432E', ringColor: '#A6432E', badgeBg: '#F0DEDA', badgeColor: '#A6432E', badgeLabel: '❌ Falló', textColor: '#1F2A22', weight: 500 };
-    return { dotColor: '#fff', ringColor: '#D6D5CE', badgeBg: '#F0EFEA', badgeColor: '#9A9A93', badgeLabel: 'Pendiente', textColor: '#9A9A93', weight: 400 };
+    return { dotColor: '#fff', ringColor: '#D6D5CE', badgeBg: '#F0EFEA', badgeColor: '#9A9A93', badgeLabel: 'Pendiente — sin automatización', textColor: '#9A9A93', weight: 400 };
   }
 
   function renderPipeline() {
+    var steps = state.data.pipeline;
+    if (!steps) return loadingCard();
     return '<div>' +
       '<h1 class="padmin-h1">Pipeline &middot; Buenos días, Perote</h1>' +
-      '<p class="padmin-lede" style="margin-bottom:26px;">Newsletter matutino automatizado. El único punto de intervención humana obligatoria se resalta en ocre.</p>' +
-      '<div style="max-width:640px;">' + pipelineStepsData.map(function (st) {
+      '<p class="padmin-lede" style="margin-bottom:26px;">Estado del boletín matutino, derivado de la pieza editorial más reciente.</p>' +
+      '<div style="max-width:640px;">' + steps.map(function (st) {
         var sty = pipelineStepStyle(st);
         return '<div class="padmin-pipeline-step">' +
           '<div class="padmin-pipeline-rail"><span class="padmin-pipeline-dot" style="background:' + sty.dotColor + ';border-color:' + sty.ringColor + ';"></span><span class="padmin-pipeline-line"></span></div>' +
           '<div class="padmin-pipeline-body">' +
-            '<div class="padmin-pipeline-head"><p style="font-size:14px;font-weight:' + sty.weight + ';color:' + sty.textColor + ';margin:0;">' + esc(st.label) + '</p><span style="font-size:11px;color:#9A9A93;">' + esc(st.time) + '</span></div>' +
+            '<div class="padmin-pipeline-head"><p style="font-size:14px;font-weight:' + sty.weight + ';color:' + sty.textColor + ';margin:0;">' + esc(st.label) + '</p><span style="font-size:11px;color:#9A9A93;">' + esc(st.at ? relativeTime(st.at) : '—') + '</span></div>' +
             '<span class="padmin-badge" style="background:' + sty.badgeBg + ';color:' + sty.badgeColor + ';">' + sty.badgeLabel + '</span>' +
           '</div>' +
         '</div>';
       }).join('') + '</div>' +
+      renderNewsletterCard() +
+    '</div>';
+  }
+
+  // ---------- newsletter "Buenos días, Perote" ----------
+
+  function readNewsletterForm() {
+    var enBreveRaw = document.getElementById('nl-en-breve').value;
+    return {
+      weekday: state.newsletterContent.weekday,
+      date: state.newsletterContent.date,
+      clima: document.getElementById('nl-clima').value,
+      notaDelDia: {
+        titulo: document.getElementById('nl-nota-titulo').value,
+        cuerpo: document.getElementById('nl-nota-cuerpo').value,
+      },
+      enBreve: enBreveRaw.split('\n').map(function (s) { return s.trim(); }).filter(Boolean),
+      datoDelDia: document.getElementById('nl-dato').value,
+      agenda: document.getElementById('nl-agenda').value || null,
+      patrocinador: document.getElementById('nl-patro-nombre').value ? {
+        nombre: document.getElementById('nl-patro-nombre').value,
+        copy: document.getElementById('nl-patro-copy').value,
+        link: document.getElementById('nl-patro-link').value,
+      } : null,
+    };
+  }
+
+  function renderNewsletterCard() {
+    var count = state.newsletterSubscriberCount;
+    var countHtml = '<p style="font-size:12px;color:#6B6A60;margin:0 0 14px;">' + (count == null ? 'Cargando suscriptores…' : count + ' suscriptor' + (count === 1 ? '' : 'es') + ' activos en Resend.') + '</p>';
+
+    if (!state.newsletterContent) {
+      return '<div class="padmin-card" style="max-width:640px;margin-top:28px;padding:20px;">' +
+        '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 10px;">Newsletter del día</p>' +
+        countHtml +
+        '<button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-newsletter" ' + (state.newsletterBusy ? 'disabled' : '') + '>' + (state.newsletterBusy ? 'Generando…' : 'Generar contenido con IA') + '</button>' +
+        (state.errorMsg ? '<p style="font-size:12px;color:#A6432E;margin:10px 0 0;">' + esc(state.errorMsg) + '</p>' : '') +
+      '</div>';
+    }
+
+    var c = state.newsletterContent;
+    var enBreveText = (c.enBreve || []).join('\n');
+    return '<div class="padmin-card" style="max-width:640px;margin-top:28px;padding:20px;">' +
+      '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 10px;">Newsletter del día — ' + esc(c.weekday) + ' ' + esc(c.date) + '</p>' +
+      countHtml +
+      '<div class="padmin-field"><label>El clima</label><input id="nl-clima" type="text" value="' + esc(c.clima) + '"></div>' +
+      '<div class="padmin-field"><label>La nota del día — título</label><input id="nl-nota-titulo" type="text" value="' + esc(c.notaDelDia.titulo) + '"></div>' +
+      '<div class="padmin-field"><label>La nota del día — cuerpo</label><textarea id="nl-nota-cuerpo" style="width:100%;min-height:80px;box-sizing:border-box;">' + esc(c.notaDelDia.cuerpo) + '</textarea></div>' +
+      '<div class="padmin-field"><label>En breve (una por línea)</label><textarea id="nl-en-breve" style="width:100%;min-height:70px;box-sizing:border-box;">' + esc(enBreveText) + '</textarea></div>' +
+      '<div class="padmin-field"><label>Dato del día</label><input id="nl-dato" type="text" value="' + esc(c.datoDelDia || '') + '"></div>' +
+      '<div class="padmin-field"><label>Agenda (manual — sin fuente automática)</label><textarea id="nl-agenda" style="width:100%;min-height:50px;box-sizing:border-box;">' + esc(c.agenda || '') + '</textarea></div>' +
+      '<div class="padmin-editor-grid2">' +
+        '<div class="padmin-field" style="margin:0;"><label>Patrocinador (opcional)</label><input id="nl-patro-nombre" type="text" value="' + esc(c.patrocinador ? c.patrocinador.nombre : '') + '" placeholder="Nombre"></div>' +
+        '<div class="padmin-field" style="margin:0;"><label>Link</label><input id="nl-patro-link" type="text" value="' + esc(c.patrocinador ? c.patrocinador.link : '') + '" placeholder="https://…"></div>' +
+      '</div>' +
+      '<div class="padmin-field"><label>Copy del patrocinador</label><input id="nl-patro-copy" type="text" value="' + esc(c.patrocinador ? c.patrocinador.copy : '') + '"></div>' +
+      (state.errorMsg ? '<p style="font-size:12px;color:#A6432E;margin:10px 0;">' + esc(state.errorMsg) + '</p>' : '') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">' +
+        '<button type="button" class="padmin-btn-outline" data-action="regenerate-newsletter" ' + (state.newsletterBusy ? 'disabled' : '') + '>' + (state.newsletterBusy ? 'Generando…' : 'Regenerar con IA') + '</button>' +
+        '<button type="button" class="padmin-btn-outline" data-action="preview-newsletter">Vista previa</button>' +
+        '<button type="button" class="padmin-btn-outline" data-action="generate-newsletter-audio" ' + (state.newsletterAudioBusy ? 'disabled' : '') + '>' + (state.newsletterAudioBusy ? 'Generando audio…' : 'Generar audio (prueba)') + '</button>' +
+        (state.user.role === 'director' ? '<button type="button" class="padmin-btn padmin-btn-brand" data-action="send-newsletter" ' + (state.newsletterSending ? 'disabled' : '') + '>' + (state.newsletterSending ? 'Enviando…' : 'Enviar newsletter') + '</button>' : '') +
+      '</div>' +
+      (state.newsletterAudioUrl ? '<audio controls src="' + esc(state.newsletterAudioUrl) + '" style="width:100%;margin-top:14px;"></audio>' : '') +
+      renderNewsletterPreview() +
+    '</div>';
+  }
+
+  function renderNewsletterPreview() {
+    if (!state.newsletterPreview) return '';
+    return '<div style="margin-top:16px;border-top:1px solid #E3E2DD;padding-top:14px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><p style="font-size:11px;font-weight:600;color:#1F2A22;margin:0;">VISTA PREVIA</p><span class="padmin-drawer-close" data-action="close-newsletter-preview">Cerrar &times;</span></div>' +
+      '<iframe srcdoc="' + esc(state.newsletterPreview) + '" style="width:100%;height:520px;border:1px solid #E3E2DD;border-radius:6px;"></iframe>' +
+    '</div>';
+  }
+
+  // ---------- producciones (social embeds) ----------
+
+  function renderProducciones() {
+    var posts = state.data.socialPosts;
+    if (!posts) return loadingCard();
+    var errorHtml = state.socialFormError ? '<p class="padmin-lede" style="color:#A6432E;">' + esc(state.socialFormError) + '</p>' : '';
+    var formHtml = state.socialFormOpen ? (
+      '<div class="padmin-card" style="padding:18px;margin-bottom:18px;max-width:760px;">' +
+        errorHtml +
+        '<form data-action="submit-social">' +
+          '<div class="padmin-field" style="margin:0 0 12px;"><label>URL del video (TikTok, YouTube, Facebook o Instagram)</label><input id="social-url" type="text" required placeholder="https://www.tiktok.com/@cuenta/video/... — o el código &lt;iframe&gt; que da Facebook al presionar &quot;Insertar&quot;"><p class="padmin-row-meta" style="margin:4px 0 0;">Para Facebook también puedes pegar directo el código &lt;iframe&gt; del botón "Insertar" del video: sacamos la URL nosotros.</p></div>' +
+          '<div class="padmin-field" style="margin:0 0 12px;"><label>Posición (menor = primero)</label><input id="social-position" type="number" min="0" value="0" style="max-width:140px;"></div>' +
+          '<div style="display:flex;gap:8px;align-items:center;">' +
+            '<button type="submit" class="padmin-btn padmin-btn-sm" ' + (state.socialBusy ? 'disabled' : '') + '>' + (state.socialBusy ? 'Resolviendo…' : 'Agregar') + '</button>' +
+            '<button type="button" class="padmin-btn-outline" data-action="close-social-form" ' + (state.socialBusy ? 'disabled' : '') + '>Cancelar</button>' +
+            '<span style="font-size:11px;color:var(--text-mute);margin-left:6px;">Al agregar resolvemos el embed y dejamos el post listo para publicar.</span>' +
+          '</div>' +
+        '</form>' +
+      '</div>'
+    ) : '<button type="button" class="padmin-btn padmin-btn-sm" style="margin-bottom:16px;" data-action="open-social-form">+ Agregar URL</button>';
+
+    return '<div>' +
+      '<h1 class="padmin-h1">Producciones CREA</h1>' +
+      '<p class="padmin-lede">Videos y clips de redes sociales que se muestran en la sección pública <code>/producciones.html</code>. TikTok, YouTube, Facebook e Instagram soportados.</p>' +
+      formHtml +
+      '<div class="padmin-card">' +
+        '<div class="padmin-table-head" style="grid-template-columns:50px 100px 1fr 90px 90px 130px;"><span></span><span>RED</span><span>TÍTULO / URL</span><span>POSICIÓN</span><span>ESTADO</span><span></span></div>' +
+        (posts.length ? posts.map(function (p) {
+          var pub = p.is_published ? { label: 'Publicado', bg: '#E1E8DD', color: '#2F5233' } : { label: 'Borrador', bg: '#F3E4D4', color: '#7A4A18' };
+          var titleLine = p.title ? '<p class="padmin-row-title" style="margin:0 0 2px;">' + esc(p.title) + '</p>' : '<p class="padmin-row-title" style="margin:0 0 2px;color:#9A9A93;">(sin título)</p>';
+          return '<div class="padmin-table-row" style="grid-template-columns:50px 100px 1fr 90px 90px 130px;align-items:center;">' +
+            (p.thumbnail_url ? '<img src="' + esc(p.thumbnail_url) + '" alt="" style="width:42px;height:42px;object-fit:cover;border-radius:4px;background:#E3E2DD;">' : '<div style="width:42px;height:42px;background:#E3E2DD;border-radius:4px;"></div>') +
+            '<span style="font-size:12px;font-weight:600;color:var(--brand);text-transform:uppercase;">' + esc(p.network) + '</span>' +
+            '<div style="min-width:0;">' + titleLine + '<p class="padmin-row-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:380px;">' + esc(p.external_url) + '</p></div>' +
+            '<span style="font-size:12px;color:#1F2A22;">' + p.position + '</span>' +
+            '<span class="padmin-badge" style="background:' + pub.bg + ';color:' + pub.color + ';width:fit-content;">' + pub.label + '</span>' +
+            '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+              '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="toggle-social" data-id="' + p.id + '" data-pub="' + (!p.is_published) + '">' + (p.is_published ? 'Despublicar' : 'Publicar') + '</button>' +
+              '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="refetch-social" data-id="' + p.id + '">Refetch</button>' +
+              (state.user.role === 'director' ? '<button type="button" class="padmin-btn-sm" style="background:#A6432E;color:#fff;" data-action="delete-social" data-id="' + p.id + '">Borrar</button>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Aún no hay producciones. Agrega una URL de TikTok, YouTube, Facebook o Instagram para empezar.</p></div>') +
+      '</div>' +
     '</div>';
   }
 
@@ -815,19 +1080,40 @@
     return '<div class="padmin-denied-wrap"><div style="max-width:380px;text-align:center;">' +
       '<div class="padmin-denied-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#A6432E" stroke-width="1.8"/><path d="M8 8l8 8M16 8l-8 8" stroke="#A6432E" stroke-width="1.8" stroke-linecap="round"/></svg></div>' +
       '<h1 style="font-weight:600;font-size:19px;color:#1F2A22;margin:0 0 8px;">Sin acceso</h1>' +
-      '<p style="font-size:13px;color:#6B6A60;margin:0 0 24px;line-height:1.5;">Tu rol (' + esc(roleLabels[state.role]) + ') no tiene permiso para ver «' + esc(label) + '». Si crees que esto es un error, contacta a tu Director editorial.</p>' +
-      '<button type="button" class="padmin-btn" data-action="goto" data-id="' + landingFor(state.role) + '">Volver a Inicio</button>' +
+      '<p style="font-size:13px;color:#6B6A60;margin:0 0 24px;line-height:1.5;">Tu rol (' + esc(roleLabels[state.user.role] || state.user.role) + ') no tiene permiso para ver «' + esc(label) + '». Si crees que esto es un error, contacta a tu Director editorial.</p>' +
+      '<button type="button" class="padmin-btn" data-action="goto" data-id="' + landingFor(state.user.role) + '">Volver a Inicio</button>' +
     '</div></div>';
   }
 
   // ---------- configuración ----------
 
   function renderConfigUsuarios() {
-    return '<div class="padmin-card" style="max-width:640px;">' +
-      '<div class="padmin-table-head" style="grid-template-columns:1fr 1fr 90px;"><span>NOMBRE</span><span>ROL</span><span>ESTADO</span></div>' +
-      usersData.map(function (u) {
+    var users = state.data.users;
+    if (!users) return loadingCard();
+    var errorHtml = state.newUserError ? '<p class="padmin-lede" style="color:#A6432E;">' + esc(state.newUserError) + '</p>' : '';
+    var formHtml = state.newUserOpen ? (
+      '<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">' +
+        errorHtml +
+        '<form data-action="submit-new-user" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+          '<div class="padmin-field" style="margin:0;"><label>Nombre</label><input id="nu-name" type="text" required></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Correo</label><input id="nu-email" type="email" required></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Contraseña</label><input id="nu-password" type="password" required></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Rol</label><select id="nu-role">' + Object.keys(roleLabels).map(function (r) { return '<option value="' + r + '">' + esc(roleLabels[r]) + '</option>'; }).join('') + '</select></div>' +
+          '<div style="grid-column:1 / -1;display:flex;gap:8px;"><button type="submit" class="padmin-btn padmin-btn-sm">Crear usuario</button><button type="button" class="padmin-btn-outline" data-action="close-new-user">Cancelar</button></div>' +
+        '</form>' +
+      '</div>'
+    ) : '<button type="button" class="padmin-btn padmin-btn-sm" style="margin-bottom:16px;" data-action="open-new-user">+ Nuevo usuario</button>';
+
+    return formHtml + '<div class="padmin-card" style="max-width:640px;">' +
+      '<div class="padmin-table-head" style="grid-template-columns:1fr 1fr 90px 90px;"><span>NOMBRE</span><span>ROL</span><span>ESTADO</span><span></span></div>' +
+      users.map(function (u) {
         var st = u.active ? { label: 'Activo', bg: '#E1E8DD', color: '#2F5233' } : { label: 'Inactivo', bg: '#EFEFEA', color: '#9A9A93' };
-        return '<div class="padmin-table-row" style="grid-template-columns:1fr 1fr 90px;"><span style="font-size:13px;color:#1F2A22;">' + esc(u.name) + '</span><span style="font-size:12px;color:#6B6A60;">' + esc(u.role) + '</span><span class="padmin-badge" style="background:' + st.bg + ';color:' + st.color + ';width:fit-content;">' + st.label + '</span></div>';
+        return '<div class="padmin-table-row" style="grid-template-columns:1fr 1fr 90px 90px;align-items:center;">' +
+          '<span style="font-size:13px;color:#1F2A22;">' + esc(u.name) + '</span>' +
+          '<span style="font-size:12px;color:#6B6A60;">' + esc(roleLabels[u.role] || u.role) + '</span>' +
+          '<span class="padmin-badge" style="background:' + st.bg + ';color:' + st.color + ';width:fit-content;">' + st.label + '</span>' +
+          '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="toggle-user-active" data-id="' + u.id + '" data-active="' + (!u.active) + '">' + (u.active ? 'Desactivar' : 'Activar') + '</button>' +
+        '</div>';
       }).join('') + '</div>';
   }
 
@@ -845,15 +1131,96 @@
   }
 
   function renderConfigIntegraciones() {
-    return '<div class="padmin-integraciones-grid">' + integracionesData.map(function (i) {
+    var integrations = state.data.integrations;
+    if (!integrations) return loadingCard();
+    return '<div class="padmin-integraciones-grid">' + integrations.map(function (i) {
       var st = i.connected ? { label: 'Conectado', bg: '#E1E8DD', color: '#2F5233', dot: '#2F5233' } : { label: 'Desconectado', bg: '#F0EFEA', color: '#9A9A93', dot: '#C7C6BC' };
       return '<div class="padmin-integracion-card"><div style="display:flex;align-items:center;gap:10px;"><span class="padmin-dot" style="background:' + st.dot + ';"></span><div><p style="font-size:13px;font-weight:500;color:#1F2A22;margin:0 0 2px;">' + esc(i.name) + '</p><p style="font-size:11px;color:#6B6A60;margin:0;">' + esc(i.desc) + '</p></div></div><span class="padmin-badge" style="background:' + st.bg + ';color:' + st.color + ';">' + st.label + '</span></div>';
     }).join('') + '</div>';
   }
 
+  function renderConfigNewsletter() {
+    var settings = state.data.newsletterSettings;
+    if (!settings) return loadingCard();
+    var hours = Array.from({ length: 24 }, function (_, i) { return i; });
+    var minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+    return '<div class="padmin-card" style="max-width:480px;padding:20px;">' +
+      '<form data-action="submit-newsletter-settings">' +
+        '<div class="padmin-field padmin-field-inline">' +
+          '<input id="nls-enabled" type="checkbox"' + (settings.enabled ? ' checked' : '') + '>' +
+          '<label for="nls-enabled">Envío automático diario activo</label>' +
+        '</div>' +
+        '<p style="font-size:12px;color:#6B6A60;margin:0 0 14px;">A la hora configurada, el sistema genera el contenido (clima real + IA) y lo deja pendiente de aprobación en Pipeline → Buenos días, Perote. Nunca se envía solo.</p>' +
+        '<div class="padmin-editor-grid2">' +
+          '<div class="padmin-field" style="margin:0;"><label>Hora</label><select id="nls-hour">' + hours.map(function (h) { return '<option value="' + h + '"' + (h === settings.send_hour ? ' selected' : '') + '>' + String(h).padStart(2, '0') + '</option>'; }).join('') + '</select></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Minuto</label><select id="nls-minute">' + minutes.map(function (m) { return '<option value="' + m + '"' + (m === settings.send_minute ? ' selected' : '') + '>' + String(m).padStart(2, '0') + '</option>'; }).join('') + '</select></div>' +
+        '</div>' +
+        '<p style="font-size:11px;color:#9A9A93;margin:10px 0 14px;">Zona horaria: America/Mexico_City.</p>' +
+        (state.errorMsg ? '<p style="font-size:12px;color:#A6432E;margin:0 0 10px;">' + esc(state.errorMsg) + '</p>' : '') +
+        '<button type="submit" class="padmin-btn padmin-btn-sm">Guardar</button>' +
+      '</form>' +
+    '</div>' +
+    renderConfigAgenda();
+  }
+
+  function renderConfigAgenda() {
+    var events = state.data.newsletterEvents;
+    return '<div class="padmin-card" style="max-width:480px;padding:20px;margin-top:16px;">' +
+      '<p style="font-size:12px;font-weight:600;color:#1F2A22;margin:0 0 10px;">Agenda del newsletter</p>' +
+      '<p style="font-size:12px;color:#6B6A60;margin:0 0 14px;">Eventos reales del día (cortes de agua, eventos culturales, partidos, trámites). Sin esto, la sección "Agenda" del newsletter queda vacía — nunca se inventa.</p>' +
+      '<form data-action="submit-newsletter-event" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">' +
+        '<input id="ne-date" type="date" required style="flex:0 0 150px;">' +
+        '<input id="ne-title" type="text" placeholder="Ej. Corte de agua en colonia Centro, 9am-2pm" required style="flex:1;min-width:200px;">' +
+        '<button type="submit" class="padmin-btn-sm">Agregar</button>' +
+      '</form>' +
+      (events == null ? loadingCard() : (events.length ? events.map(function (ev) {
+        return '<div class="padmin-row" style="padding:8px 0;"><div><p class="padmin-row-title" style="font-size:13px;">' + esc(ev.title) + '</p><p class="padmin-row-meta">' + esc(ev.event_date) + '</p></div>' +
+          '<button type="button" class="padmin-btn-sm" style="background:#A6432E;color:#fff;" data-action="delete-newsletter-event" data-id="' + ev.id + '">Eliminar</button></div>';
+      }).join('') : '<p class="padmin-lede">Sin eventos próximos cargados.</p>')) +
+    '</div>';
+  }
+
+  function renderConfigServicios() {
+    var services = state.data.services;
+    if (!services) return loadingCard();
+    var editing = state.editingServiceId != null ? services.find(function (s) { return s.id === state.editingServiceId; }) : null;
+    var errorHtml = state.serviceFormError ? '<p class="padmin-lede" style="color:#A6432E;">' + esc(state.serviceFormError) + '</p>' : '';
+    var formHtml = state.serviceFormOpen ? (
+      '<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">' +
+        errorHtml +
+        '<form data-action="submit-service" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+          '<div class="padmin-field" style="margin:0;grid-column:1 / -1;"><label>Nombre del paquete</label><input id="sv-name" type="text" required value="' + esc(editing ? editing.name : '') + '"></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Precio (texto libre)</label><input id="sv-price" type="text" placeholder="$2,500–$5,000 MXN/mes" required value="' + esc(editing ? editing.price_label : '') + '"></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Interés para el form de contacto</label><input id="sv-interest" type="text" placeholder="Otro" value="' + esc(editing ? editing.cta_interest : '') + '"></div>' +
+          '<div class="padmin-field" style="margin:0;grid-column:1 / -1;"><label>Descripción</label><textarea id="sv-desc" required style="min-height:70px;">' + esc(editing ? editing.description : '') + '</textarea></div>' +
+          '<div class="padmin-field" style="margin:0;grid-column:1 / -1;"><label>Qué incluye (una por línea)</label><textarea id="sv-features" style="min-height:70px;">' + esc(editing ? (editing.features || []).join('\n') : '') + '</textarea></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Orden</label><input id="sv-order" type="number" value="' + (editing ? editing.sort_order : services.length) + '"></div>' +
+          '<div class="padmin-field padmin-field-inline" style="margin:0;padding-top:18px;"><input id="sv-active" type="checkbox"' + (editing ? (editing.active ? ' checked' : '') : ' checked') + '><label>Activo (visible en el sitio)</label></div>' +
+          '<div style="grid-column:1 / -1;display:flex;gap:8px;"><button type="submit" class="padmin-btn padmin-btn-sm">' + (editing ? 'Guardar cambios' : 'Crear paquete') + '</button><button type="button" class="padmin-btn-outline" data-action="close-service-form">Cancelar</button></div>' +
+        '</form>' +
+      '</div>'
+    ) : '<button type="button" class="padmin-btn padmin-btn-sm" style="margin-bottom:16px;" data-action="open-new-service">+ Nuevo servicio</button>';
+
+    return formHtml + '<div class="padmin-card" style="max-width:780px;">' +
+      '<div class="padmin-table-head" style="grid-template-columns:2fr 1fr 90px 130px;"><span>NOMBRE</span><span>PRECIO</span><span>ESTADO</span><span></span></div>' +
+      (services.length ? services.map(function (s) {
+        var st = s.active ? { label: 'Activo', bg: '#E1E8DD', color: '#2F5233' } : { label: 'Inactivo', bg: '#EFEFEA', color: '#9A9A93' };
+        return '<div class="padmin-table-row" style="grid-template-columns:2fr 1fr 90px 130px;align-items:center;">' +
+          '<span style="font-size:13px;color:#1F2A22;">' + esc(s.name) + '</span>' +
+          '<span style="font-size:12px;color:#6B6A60;">' + esc(s.price_label) + '</span>' +
+          '<span class="padmin-badge" style="background:' + st.bg + ';color:' + st.color + ';width:fit-content;">' + st.label + '</span>' +
+          '<span style="display:flex;gap:6px;">' +
+            '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="edit-service" data-id="' + s.id + '">Editar</button>' +
+            '<button type="button" class="padmin-btn-sm" style="background:#A6432E;color:#fff;" data-action="delete-service" data-id="' + s.id + '">Borrar</button>' +
+          '</span>' +
+        '</div>';
+      }).join('') : '<p class="padmin-lede" style="padding:16px;">Sin paquetes cargados. El catálogo público quedará vacío hasta que agregues uno.</p>') +
+    '</div>';
+  }
+
   function renderConfiguracion() {
     var tab = state.configTab;
-    var body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : renderConfigUsuarios());
+    var body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : renderConfigUsuarios())));
     function tabBtn(id, label) {
       var active = tab === id;
       return '<button type="button" class="padmin-tab' + (active ? ' active' : '') + '" data-action="set-config-tab" data-tab="' + id + '">' + label + '</button>';
@@ -861,7 +1228,7 @@
     return '<div>' +
       '<h1 class="padmin-h1">Configuración</h1>' +
       '<p class="padmin-lede">Usuarios, permisos e integraciones del panel. Solo visible para Director.</p>' +
-      '<div class="padmin-tabs">' + tabBtn('usuarios', 'Usuarios') + tabBtn('permisos', 'Permisos') + tabBtn('integraciones', 'Integraciones') + '</div>' +
+      '<div class="padmin-tabs">' + tabBtn('usuarios', 'Usuarios') + tabBtn('permisos', 'Permisos') + tabBtn('integraciones', 'Integraciones') + tabBtn('newsletter', 'Newsletter') + tabBtn('servicios', 'Servicios') + '</div>' +
       body +
     '</div>';
   }
@@ -869,34 +1236,21 @@
   // ---------- top-level render ----------
 
   var screenRenderers = {
-    dashboard: renderDashboard,
-    ideas: renderIdeas,
-    editor: renderEditor,
-    aprobacion: renderAprobacion,
-    comercial: renderComercial,
-    metricas: renderMetricas,
-    radar: renderRadar,
-    propuestas: renderPropuestas,
-    hermes: renderHermes,
-    pipeline: renderPipeline,
-    denegado: renderDenegado,
-    configuracion: renderConfiguracion
+    dashboard: renderDashboard, ideas: renderIdeas, editor: renderEditor, aprobacion: renderAprobacion,
+    comercial: renderComercial, metricas: renderMetricas, radar: renderRadar, propuestas: renderPropuestas,
+    producciones: renderProducciones,
+    hermes: renderHermes, pipeline: renderPipeline, denegado: renderDenegado, configuracion: renderConfiguracion
   };
 
   function render() {
     var app = document.getElementById('app');
-    if (state.screen === 'login') {
+    if (state.screen === 'login' || !state.user) {
       app.innerHTML = renderLogin();
       return;
     }
     var fn = screenRenderers[state.screen] || renderDashboard;
     app.innerHTML = renderShell(fn());
-    focusPreservingInputs();
   }
-
-  // Textareas whose value is state-backed (noteBody, comentarioText) get their value set via
-  // the template string above; nothing extra to focus here — kept as a hook for later screens.
-  function focusPreservingInputs() {}
 
   // ---------- event delegation ----------
 
@@ -905,25 +1259,136 @@
     if (!el) return;
     var action = el.getAttribute('data-action');
     switch (action) {
-      case 'login': login(el.getAttribute('data-role')); break;
       case 'logout': logout(); break;
-      case 'goto': goTo(el.getAttribute('data-id')); break;
-      case 'toggle-notifications': setState({ showNotifications: !state.showNotifications }); break;
+      case 'goto': goTo(el.getAttribute('data-id'), el.getAttribute('data-pid') ? Number(el.getAttribute('data-pid')) : null); break;
+      case 'open-editor': goTo('editor', Number(el.getAttribute('data-id'))); break;
+      case 'close-editor': setState({ editorProposalId: null, editorDraft: null }); break;
+      case 'toggle-notifications':
+        var opening = !state.showNotifications;
+        setState({ showNotifications: opening });
+        if (opening) {
+          try { localStorage.setItem('crea-admin-last-notif-seen', new Date().toISOString()); } catch (e) { /* modo privado */ }
+        }
+        break;
       case 'set-radar-source': setState({ radarSource: el.getAttribute('data-value') }); break;
       case 'set-radar-status': setState({ radarStatus: el.getAttribute('data-value') }); break;
       case 'open-radar': setState({ selectedRadarId: Number(el.getAttribute('data-id')) }); break;
       case 'close-radar': setState({ selectedRadarId: null }); break;
       case 'open-comentario': setState({ comentarioPieceId: Number(el.getAttribute('data-id')), comentarioText: '' }); break;
       case 'close-comentario': setState({ comentarioPieceId: null, comentarioText: '' }); break;
-      case 'confirm-comentario': setState({ comentarioPieceId: null, comentarioText: '', demoNote: 'aprobacion' }); break;
-      case 'set-mobile': setState({ mobileAprobacion: el.getAttribute('data-value') === 'true' }); break;
+      case 'confirm-comentario': submitReturn(Number(el.getAttribute('data-id'))); break;
       case 'set-transparency': setState({ transparency: mergeKey(state.transparency, el.getAttribute('data-piece'), el.getAttribute('data-label')) }); break;
-      case 'set-config-tab': setState({ configTab: el.getAttribute('data-tab') }); break;
-      case 'approve-propuesta': setState({ propuestaDecisions: mergeKey(state.propuestaDecisions, el.getAttribute('data-id'), 'aprobada') }); break;
+      case 'approve-piece': submitPublish(Number(el.getAttribute('data-id'))); break;
+      case 'set-config-tab': setState({ configTab: el.getAttribute('data-tab') }); loadScreenData('configuracion'); break;
+      case 'approve-propuesta': submitApproveProposal(Number(el.getAttribute('data-id'))); break;
       case 'start-reject-propuesta': setState({ propuestaRejecting: Number(el.getAttribute('data-id')) }); break;
-      case 'confirm-reject-propuesta': setState({ propuestaDecisions: mergeKey(state.propuestaDecisions, el.getAttribute('data-id'), 'rechazada'), propuestaRejecting: null }); break;
+      case 'confirm-reject-propuesta': submitRejectProposal(Number(el.getAttribute('data-id'))); break;
+      case 'advance-client': submitAdvanceClient(Number(el.getAttribute('data-id')), el.getAttribute('data-stage')); break;
+      case 'delete-idea': submitDeleteIdea(Number(el.getAttribute('data-id'))); break;
+      case 'open-client-form': setState({ clientFormOpen: true, clientFormError: null }); break;
+      case 'close-client-form': setState({ clientFormOpen: false, clientFormError: null }); break;
+      case 'delete-client': submitDeleteClient(Number(el.getAttribute('data-id'))); break;
+      case 'delete-propuesta': submitDeleteProposal(Number(el.getAttribute('data-id'))); break;
+      case 'save-draft': submitDraft(Number(el.getAttribute('data-id')), false); break;
+      case 'submit-review': submitDraft(Number(el.getAttribute('data-id')), true); break;
+      case 'open-new-user': setState({ newUserOpen: true, newUserError: null }); break;
+      case 'close-new-user': setState({ newUserOpen: false, newUserError: null }); break;
+      case 'toggle-user-active': submitToggleUser(Number(el.getAttribute('data-id')), el.getAttribute('data-active') === 'true'); break;
+      case 'open-new-service': setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: null }); break;
+      case 'edit-service': setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: Number(el.getAttribute('data-id')) }); break;
+      case 'close-service-form': setState({ serviceFormOpen: false, serviceFormError: null, editingServiceId: null }); break;
+      case 'delete-service': submitDeleteService(Number(el.getAttribute('data-id'))); break;
       case 'generate-draft':
-        setState({ noteBody: state.draftModel === 'sonnet' ? draftSonnet : draftLocal });
+        if (!state.editorProposalId) break;
+        setState({ generatingDraft: true });
+        adminApi('/api/content/generate-draft', { method: 'POST', body: { proposal_id: state.editorProposalId } })
+          .then(function (res) {
+            if (state.editorDraft) state.editorDraft.body = res.body;
+            setState({ generatingDraft: false });
+          })
+          .catch(function (err) { setState({ generatingDraft: false, errorMsg: err.message }); });
+        break;
+      case 'run-qa':
+        if (!state.editorProposalId) break;
+        setState({ qaBusy: true, qaResult: null });
+        adminApi('/api/content/qa-check', { method: 'POST', body: { proposal_id: state.editorProposalId } })
+          .then(function (res) { setState({ qaBusy: false, qaResult: res }); })
+          .catch(function (err) { setState({ qaBusy: false, errorMsg: err.message }); });
+        break;
+      case 'close-qa': setState({ qaResult: null }); break;
+      case 'generate-newsletter':
+      case 'regenerate-newsletter':
+        setState({ newsletterBusy: true, errorMsg: null });
+        adminApi('/api/newsletter/generate', { method: 'POST' })
+          .then(function (content) { setState({ newsletterBusy: false, newsletterContent: content, newsletterPreview: null, newsletterAudioUrl: null }); })
+          .catch(function (err) { setState({ newsletterBusy: false, errorMsg: err.message }); });
+        break;
+      case 'preview-newsletter':
+        adminApi('/api/newsletter/preview', { method: 'POST', body: readNewsletterForm() })
+          .then(function (res) { setState({ newsletterPreview: res.html, errorMsg: null }); })
+          .catch(function (err) { setState({ errorMsg: err.message }); });
+        break;
+      case 'close-newsletter-preview': setState({ newsletterPreview: null }); break;
+      case 'generate-newsletter-audio':
+        setState({ newsletterAudioBusy: true, errorMsg: null });
+        adminApiBlob('/api/newsletter/audio', { method: 'POST', body: readNewsletterForm() })
+          .then(function (blob) {
+            setState({ newsletterAudioBusy: false, newsletterAudioUrl: URL.createObjectURL(blob) });
+          })
+          .catch(function (err) { setState({ newsletterAudioBusy: false, errorMsg: err.message }); });
+        break;
+      case 'send-newsletter':
+        if (!confirm('¿Enviar el newsletter a todos los suscriptores activos? Esta acción no se puede deshacer.')) break;
+        setState({ newsletterSending: true, errorMsg: null });
+        adminApi('/api/newsletter/send', { method: 'POST', body: readNewsletterForm() })
+          .then(function () {
+            setState({ newsletterSending: false, newsletterContent: null, newsletterPreview: null, newsletterAudioUrl: null });
+            alert('Newsletter enviado.');
+          })
+          .catch(function (err) { setState({ newsletterSending: false, errorMsg: err.message }); });
+        break;
+      case 'detect-radar':
+        setState({ radarBusy: true });
+        adminApi('/api/listening/topics/detect', { method: 'POST' })
+          .then(function () { return adminApi('/api/listening/topics'); })
+          .then(function (topics) {
+            setState({ radarBusy: false, data: Object.assign({}, state.data, { topics: topics }) });
+          })
+          .catch(function (err) { setState({ radarBusy: false, errorMsg: err.message }); });
+        break;
+      case 'generate-proposal-from-topic':
+        var topicId = Number(el.getAttribute('data-id'));
+        var format = document.getElementById('proposal-format-' + topicId);
+        setState({ generatingProposal: true });
+        adminApi('/api/content/generate-proposal', { method: 'POST', body: { topic_id: topicId, format: format ? format.value : 'nota' } })
+          .then(function (proposal) {
+            setState({ generatingProposal: false, selectedRadarId: null });
+            alert('Propuesta creada: ' + proposal.title);
+            state.data.proposalsByKey = {};
+          })
+          .catch(function (err) { setState({ generatingProposal: false, errorMsg: err.message }); });
+        break;
+      case 'open-social-form': setState({ socialFormOpen: true, socialFormError: null }); break;
+      case 'close-social-form': setState({ socialFormOpen: false, socialFormError: null, socialBusy: false }); break;
+      case 'toggle-social': submitToggleSocial(Number(el.getAttribute('data-id')), el.getAttribute('data-pub') === 'true'); break;
+      case 'refetch-social': submitRefetchSocial(Number(el.getAttribute('data-id'))); break;
+      case 'delete-social': submitDeleteSocial(Number(el.getAttribute('data-id'))); break;
+      case 'delete-newsletter-event':
+        var evId = Number(el.getAttribute('data-id'));
+        adminApi('/api/newsletter/events/' + evId, { method: 'DELETE' })
+          .then(function () { setData({ newsletterEvents: (state.data.newsletterEvents || []).filter(function (ev) { return ev.id !== evId; }) }); })
+          .catch(function (err) { setState({ errorMsg: err.message }); });
+        break;
+      case 'save-sponsor-info':
+        var spId = Number(el.getAttribute('data-id'));
+        adminApi('/api/commercial/clients/' + spId, { method: 'PATCH', body: {
+          website_url: document.getElementById('sponsor-link-' + spId).value.trim(),
+          sponsor_copy: document.getElementById('sponsor-copy-' + spId).value.trim(),
+        } })
+          .then(function (updated) {
+            setData({ clients: (state.data.clients || []).map(function (c) { return c.id === spId ? Object.assign({}, c, updated) : c; }) });
+          })
+          .catch(function (err) { setState({ errorMsg: err.message }); });
         break;
       default: break;
     }
@@ -936,27 +1401,291 @@
     return copy;
   }
 
+  // ---------- write actions ----------
+
+  function setProposalsKey(key, list) {
+    var byKey = Object.assign({}, state.data.proposalsByKey);
+    byKey[key] = list;
+    setData({ proposalsByKey: byKey });
+  }
+
+  function submitApproveProposal(id) {
+    adminApi('/api/editorial/proposals/' + id + '/approve', { method: 'PATCH' })
+      .then(function () {
+        var list = state.data.proposalsByKey.propuesta.filter(function (p) { return p.id !== id; });
+        var byKey = Object.assign({}, state.data.proposalsByKey, { propuesta: list, borrador: null });
+        setData({ proposalsByKey: byKey });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitRejectProposal(id) {
+    var textarea = document.getElementById('reject-reason-' + id);
+    var reason = textarea ? textarea.value.trim() : '';
+    if (!reason) { textarea && textarea.focus(); return; }
+    adminApi('/api/editorial/proposals/' + id + '/reject', { method: 'PATCH', body: { reason: reason } })
+      .then(function () {
+        var list = state.data.proposalsByKey.propuesta.filter(function (p) { return p.id !== id; });
+        setState({ propuestaRejecting: null });
+        setProposalsKey('propuesta', list);
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDraft(id, thenSubmitReview) {
+    var body = {
+      title: document.getElementById('editor-title').value,
+      body: document.getElementById('editor-body').value,
+      section: document.getElementById('editor-section').value,
+      dek: document.getElementById('editor-dek').value,
+      slug: document.getElementById('editor-slug').value,
+    };
+    adminApi('/api/editorial/proposals/' + id + '/draft', { method: 'PATCH', body: body })
+      .then(function (updated) {
+        if (!thenSubmitReview) {
+          // Se queda en el editor — solo refresca el borrador guardado.
+          setState({ editorDraft: { title: updated.title || '', body: updated.body || '', section: updated.section || '', dek: updated.dek || '', slug: updated.slug || '' } });
+          return;
+        }
+        return adminApi('/api/editorial/proposals/' + id + '/submit-review', { method: 'PATCH' }).then(function () {
+          state.editorProposalId = null;
+          state.editorDraft = null;
+          state.data.proposalsByKey = {};
+          goTo('dashboard');
+        });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitPublish(id) {
+    var origin = state.transparency[id];
+    if (!origin) return;
+    adminApi('/api/editorial/proposals/' + id + '/publish', { method: 'PATCH', body: { origin: origin } })
+      .then(function () {
+        var list = state.data.proposalsByKey.en_revision.filter(function (p) { return p.id !== id; });
+        setProposalsKey('en_revision', list);
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitReturn(id) {
+    var comment = (document.getElementById('comentario-text') || {}).value || '';
+    if (!comment.trim()) return;
+    adminApi('/api/editorial/proposals/' + id + '/return', { method: 'PATCH', body: { comment: comment } })
+      .then(function () {
+        var list = state.data.proposalsByKey.en_revision.filter(function (p) { return p.id !== id; });
+        setState({ comentarioPieceId: null, comentarioText: '' });
+        setProposalsKey('en_revision', list);
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitAdvanceClient(id, nextStage) {
+    adminApi('/api/commercial/clients/' + id, { method: 'PATCH', body: { pipeline_stage: nextStage } })
+      .then(function (updated) {
+        var list = state.data.clients.map(function (c) { return c.id === id ? Object.assign({}, c, updated) : c; });
+        setData({ clients: list });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeleteService(id) {
+    if (!confirm('¿Eliminar este paquete? Desaparece de servicios.html de inmediato. No se puede deshacer.')) return;
+    adminApi('/api/commercial/services/' + id, { method: 'DELETE' })
+      .then(function () {
+        setData({ services: (state.data.services || []).filter(function (s) { return s.id !== id; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitToggleUser(id, active) {
+    adminApi('/api/auth/users/' + id, { method: 'PATCH', body: { active: active } })
+      .then(function (updated) {
+        var list = state.data.users.map(function (u) { return u.id === id ? updated : u; });
+        setData({ users: list });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitToggleSocial(id, isPublished) {
+    adminApi('/api/admin/social/' + id, { method: 'PATCH', body: { is_published: isPublished } })
+      .then(function (updated) {
+        var list = state.data.socialPosts.map(function (p) { return p.id === id ? Object.assign({}, p, updated) : p; });
+        setData({ socialPosts: list });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitRefetchSocial(id) {
+    adminApi('/api/admin/social/' + id, { method: 'PATCH', body: { refetch: true } })
+      .then(function (updated) {
+        var list = state.data.socialPosts.map(function (p) { return p.id === id ? Object.assign({}, p, updated) : p; });
+        setData({ socialPosts: list });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeleteIdea(id) {
+    if (!confirm('¿Eliminar esta idea? No se puede deshacer.')) return;
+    adminApi('/api/editorial/ideas/' + id, { method: 'DELETE' })
+      .then(function () {
+        setData({ ideas: (state.data.ideas || []).filter(function (i) { return i.id !== id; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeleteClient(id) {
+    if (!confirm('¿Eliminar este cliente? No se puede deshacer.')) return;
+    adminApi('/api/commercial/clients/' + id, { method: 'DELETE' })
+      .then(function () {
+        setData({ clients: (state.data.clients || []).filter(function (c) { return c.id !== id; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeleteProposal(id) {
+    if (!confirm('¿Eliminar esta propuesta rechazada? No se puede deshacer.')) return;
+    adminApi('/api/editorial/proposals/' + id, { method: 'DELETE' })
+      .then(function () {
+        setProposalsKey('rechazada', (state.data.proposalsByKey.rechazada || []).filter(function (p) { return p.id !== id; }));
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeleteSocial(id) {
+    if (!confirm('¿Borrar esta producción? No se puede deshacer.')) return;
+    adminApi('/api/admin/social/' + id, { method: 'DELETE' })
+      .then(function () {
+        var list = state.data.socialPosts.filter(function (p) { return p.id !== id; });
+        setData({ socialPosts: list });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  // ---------- forms ----------
+
   function handleSubmit(e) {
     var form = e.target.closest('[data-action]');
     if (!form) return;
     var action = form.getAttribute('data-action');
     if (action === 'submit-login') {
       e.preventDefault();
-      login('director');
+      login(form.querySelector('#pl-email').value.trim(), form.querySelector('#pl-pass').value);
     } else if (action === 'submit-idea') {
       e.preventDefault();
-      form.reset();
-      setState({ demoNote: 'idea' });
+      var title = form.querySelector('#idea-title').value.trim();
+      if (!title) return;
+      adminApi('/api/editorial/ideas', { method: 'POST', body: {
+        title: title, category: form.querySelector('#idea-cat').value, description: form.querySelector('#idea-desc').value.trim()
+      } }).then(function (created) {
+        form.reset();
+        setState({ demoNote: 'idea' });
+        setData({ ideas: (state.data.ideas || []).concat([Object.assign(created, { collaborator_name: state.user.name })]) });
+      }).catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (action === 'submit-new-user') {
+      e.preventDefault();
+      adminApi('/api/auth/users', { method: 'POST', body: {
+        name: form.querySelector('#nu-name').value.trim(),
+        email: form.querySelector('#nu-email').value.trim(),
+        password: form.querySelector('#nu-password').value,
+        role: form.querySelector('#nu-role').value,
+      } }).then(function (created) {
+        setState({ newUserOpen: false, newUserError: null });
+        setData({ users: (state.data.users || []).concat([created]) });
+      }).catch(function (err) {
+        setState({ newUserError: (err.fields && Object.values(err.fields)[0]) || err.message });
+      });
+    } else if (action === 'submit-service') {
+      e.preventDefault();
+      var svBody = {
+        name: form.querySelector('#sv-name').value.trim(),
+        price_label: form.querySelector('#sv-price').value.trim(),
+        description: form.querySelector('#sv-desc').value.trim(),
+        cta_interest: form.querySelector('#sv-interest').value.trim() || 'Otro',
+        features: form.querySelector('#sv-features').value.split('\n').map(function (f) { return f.trim(); }).filter(Boolean),
+        sort_order: Number(form.querySelector('#sv-order').value) || 0,
+        active: form.querySelector('#sv-active').checked,
+      };
+      var svId = state.editingServiceId;
+      var req = svId
+        ? adminApi('/api/commercial/services/' + svId, { method: 'PATCH', body: svBody })
+        : adminApi('/api/commercial/services', { method: 'POST', body: svBody });
+      req.then(function (saved) {
+        setState({ serviceFormOpen: false, serviceFormError: null, editingServiceId: null });
+        var list = svId
+          ? (state.data.services || []).map(function (s) { return s.id === svId ? saved : s; })
+          : (state.data.services || []).concat([saved]);
+        setData({ services: list });
+      }).catch(function (err) {
+        setState({ serviceFormError: (err.fields && Object.values(err.fields)[0]) || err.message });
+      });
+    } else if (action === 'submit-newsletter-settings') {
+      e.preventDefault();
+      adminApi('/api/newsletter/settings', { method: 'PATCH', body: {
+        enabled: form.querySelector('#nls-enabled').checked,
+        send_hour: Number(form.querySelector('#nls-hour').value),
+        send_minute: Number(form.querySelector('#nls-minute').value),
+      } }).then(function (updated) {
+        setState({ errorMsg: null });
+        setData({ newsletterSettings: updated });
+      }).catch(function (err) {
+        setState({ errorMsg: err.message });
+      });
+    } else if (action === 'submit-newsletter-event') {
+      e.preventDefault();
+      var evDate = form.querySelector('#ne-date').value;
+      var evTitle = form.querySelector('#ne-title').value.trim();
+      if (!evDate || !evTitle) return;
+      adminApi('/api/newsletter/events', { method: 'POST', body: { event_date: evDate, title: evTitle } })
+        .then(function (created) {
+          form.reset();
+          setData({ newsletterEvents: (state.data.newsletterEvents || []).concat([created]) });
+        })
+        .catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (action === 'submit-new-client') {
+      e.preventDefault();
+      var name = form.querySelector('#nc-name').value.trim();
+      if (!name) return;
+      adminApi('/api/commercial/clients', { method: 'POST', body: {
+        name: name,
+        business_name: form.querySelector('#nc-business').value.trim(),
+        package: form.querySelector('#nc-package').value,
+        phone: form.querySelector('#nc-phone').value.trim(),
+        email: form.querySelector('#nc-email').value.trim(),
+      } }).then(function (created) {
+        setState({ clientFormOpen: false, clientFormError: null });
+        setData({ clients: (state.data.clients || []).concat([created]) });
+      }).catch(function (err) {
+        setState({ clientFormError: (err.fields && Object.values(err.fields)[0]) || err.message });
+      });
+    } else if (action === 'submit-social') {
+      e.preventDefault();
+      var url = form.querySelector('#social-url').value.trim();
+      var pos = parseInt(form.querySelector('#social-position').value, 10);
+      if (!url) return;
+      setState({ socialBusy: true, socialFormError: null });
+      adminApi('/api/admin/social', { method: 'POST', body: {
+        external_url: url,
+        position: isNaN(pos) ? 0 : pos,
+      } }).then(function (created) {
+        setState({ socialFormOpen: false, socialBusy: false, socialFormError: null });
+        setData({ socialPosts: (state.data.socialPosts || []).concat([created]) });
+      }).catch(function (err) {
+        setState({ socialBusy: false, socialFormError: (err.fields && err.fields.external_url) || err.message });
+      });
     }
   }
 
   function handleChange(e) {
-    if (e.target.id === 'draft-model') state.draftModel = e.target.value;
-  }
-
-  function handleInput(e) {
-    if (e.target.id === 'comentario-text') state.comentarioText = e.target.value;
-    if (e.target.id === 'note-body') state.noteBody = e.target.value;
+    if (e.target.getAttribute && e.target.getAttribute('data-action') === 'move-idea') {
+      var id = Number(e.target.getAttribute('data-id'));
+      adminApi('/api/editorial/ideas/' + id, { method: 'PATCH', body: { column_status: e.target.value } })
+        .then(function (updated) {
+          var list = state.data.ideas.map(function (i) { return i.id === id ? Object.assign({}, i, updated) : i; });
+          setData({ ideas: list });
+        })
+        .catch(function (err) { setState({ errorMsg: err.message }); });
+    }
   }
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -964,7 +1693,6 @@
     app.addEventListener('click', handleClick);
     app.addEventListener('submit', handleSubmit);
     app.addEventListener('change', handleChange);
-    app.addEventListener('input', handleInput);
-    render();
+    tryResumeSession();
   });
 })();

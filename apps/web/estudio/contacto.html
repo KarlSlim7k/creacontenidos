@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Contacto comercial · Estudio CREA</title>
+<meta name="description" content="Contacto comercial del Estudio CREA. Cuéntanos qué necesita tu marca y el equipo te responde en menos de 48 horas.">
+<meta name="crea-api-base" content="http://localhost:3000">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/tokens.css">
@@ -25,7 +27,7 @@
   </div>
 </header>
 
-<div class="mobile-menu">
+<div class="mobile-menu" role="navigation" aria-label="Menú">
   <div class="head"><span class="title">Menú</span><button class="close" data-menu-close aria-label="Cerrar menú">&times;</button></div>
   <a href="servicios.html">Servicios</a>
   <a href="tercer-tiempo.html">Tercer Tiempo</a>
@@ -34,15 +36,21 @@
   <a href="../index.html" style="color:var(--brand);">Portal editorial</a>
 </div>
 
-<main class="container" style="padding:30px 0 30px;">
+<main class="container" style="padding-top:30px;padding-bottom:30px;">
   <div class="eyebrow" style="margin-bottom:10px;">CONTACTO COMERCIAL</div>
   <h1 style="font-size:30px;margin:0 0 8px;">Hablemos de tu marca</h1>
   <p class="card-dek" style="font-size:13px;margin:0 0 28px;max-width:480px;">Cuéntanos qué necesitas y un miembro del equipo comercial te responde en menos de 48 horas.</p>
 
   <div class="grid grid-2" style="gap:36px;">
-    <form data-demo-form style="display:flex;flex-direction:column;gap:2px;">
-      <div class="field"><label for="c-nombre">Nombre</label><input id="c-nombre" name="nombre" type="text" required></div>
-      <div class="field"><label for="c-negocio">Negocio o marca</label><input id="c-negocio" name="negocio" type="text" required></div>
+    <form data-lead-form style="display:flex;flex-direction:column;gap:2px;">
+      <div class="field"><label for="c-nombre">Nombre</label><input id="c-nombre" name="nombre" type="text" required maxlength="200"></div>
+      <div class="field"><label for="c-email">Correo electrónico</label><input id="c-email" name="email" type="email" required maxlength="320" autocomplete="email"></div>
+      <div class="field"><label for="c-negocio">Negocio o marca</label><input id="c-negocio" name="negocio" type="text" required maxlength="200"></div>
+      <!-- Honeypot: los humanos no lo ven ni lo tabulan; si trae valor, el backend lo descarta. -->
+      <div class="field visually-hidden" aria-hidden="true">
+        <label for="c-website">Sitio web (no llenar)</label>
+        <input id="c-website" name="website" type="text" tabindex="-1" autocomplete="off">
+      </div>
       <div class="field">
         <label>Tipo de interés</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;">
@@ -53,9 +61,9 @@
           <button type="button" class="chip" data-interest data-value="Otro">Otro</button>
         </div>
       </div>
-      <div class="field"><label for="c-mensaje">Mensaje</label><textarea id="c-mensaje" name="mensaje" style="min-height:110px;" required></textarea></div>
+      <div class="field"><label for="c-mensaje">Mensaje</label><textarea id="c-mensaje" name="mensaje" style="min-height:110px;" required maxlength="5000"></textarea></div>
       <button type="submit" class="btn btn-accent" style="align-self:flex-start;margin-top:6px;">Enviar mensaje</button>
-      <p data-form-note style="font-size:12px;color:var(--brand);margin-top:12px;"></p>
+      <p data-form-note role="status" aria-live="polite" tabindex="-1" style="font-size:12px;color:var(--brand);margin-top:12px;outline:none;"></p>
     </form>
     <div>
       <div class="panel" style="margin-bottom:16px;">
@@ -80,5 +88,6 @@
 </div>
 
 <script src="../assets/js/main.js"></script>
+<script src="../assets/js/estudio-contacto.js"></script>
 </body>
 </html>

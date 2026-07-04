@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Perfil de colaborador · CREA Contenidos</title>
+<meta name="description" content="Conoce a quienes hacen CREA Contenidos: colaboradores del medio y sus piezas publicadas.">
+<meta name="crea-api-base" content="http://localhost:3000">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/tokens.css">
@@ -29,7 +31,7 @@
   </div>
 </header>
 
-<div class="mobile-menu">
+<div class="mobile-menu" role="navigation" aria-label="Menú">
   <div class="head"><span class="title">Menú</span><button class="close" data-menu-close aria-label="Cerrar menú">&times;</button></div>
   <a href="seccion.html?s=Local">Local</a>
   <a href="seccion.html?s=Cultura">Cultura</a>
@@ -41,34 +43,20 @@
   <a href="estudio/index.html" style="color:var(--brand);">Visitar Estudio &rarr;</a>
 </div>
 
-<main class="container narrow" data-profile-page style="padding:32px 0 0;">
-  <div style="display:flex;gap:20px;align-items:center;margin-bottom:24px;">
-    <div class="avatar" style="width:84px;height:84px;"><span style="font-size:26px;" data-avatar>CM</span></div>
+<main class="container narrow" data-profile-page style="padding-top:32px;">
+  <div style="display:flex;gap:20px;align-items:center;margin-bottom:28px;">
+    <div class="avatar" style="width:84px;height:84px;"><span style="font-size:26px;" data-avatar></span></div>
     <div>
-      <h1 style="font-size:28px;margin:0 0 4px;" data-name>Carlos Mendoza</h1>
-      <p style="font-size:13px;color:var(--text-mute);margin:0 0 4px;" data-role>Reportero · Local y Economía</p>
-      <p style="font-size:11px;color:var(--text-mute);margin:0;" data-meta>86 piezas publicadas · colabora desde 2022</p>
+      <h1 style="font-size:28px;margin:0 0 4px;" data-name></h1>
+      <p style="font-size:13px;color:var(--text-mute);margin:0 0 4px;" data-role></p>
+      <p style="font-size:11px;color:var(--text-mute);margin:0;" data-meta></p>
     </div>
   </div>
 
-  <div class="panel" style="margin-bottom:24px;display:flex;align-items:center;gap:20px;">
-    <div style="font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--accent);flex-shrink:0;" data-level>Nv.3</div>
-    <div style="flex:1;">
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-mute);margin-bottom:6px;">
-        <span data-level-label>Colaborador Nivel 3</span>
-        <span data-level-points>1180 / 1500 pts</span>
-      </div>
-      <div style="width:100%;height:6px;background:var(--bg-3);border-radius:4px;overflow:hidden;">
-        <div style="height:100%;background:var(--brand);" data-level-bar></div>
-      </div>
-    </div>
-  </div>
-
-  <p style="font-size:14px;line-height:1.7;margin:0 0 28px;" data-bio>Cubre la fuente de Local y Economía para CREA Contenidos desde 2022.</p>
-  <div class="eyebrow" style="margin-bottom:14px;">PIEZAS PUBLICADAS</div>
+  <h2 class="eyebrow" style="margin-bottom:14px;font-size:11px;">PIEZAS PUBLICADAS</h2>
 </main>
 
-<div class="container narrow" style="padding:0 20px 28px;">
+<div class="container narrow" style="padding-bottom:28px;">
   <div data-pieces-list></div>
 </div>
 

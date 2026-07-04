@@ -77,6 +77,12 @@
   font: inherit; font-size: 13px; padding: 10px 12px; width: 100%;
 }
 .padmin-field textarea { resize: vertical; min-height: 90px; }
+/* Checkbox + label en una fila (ej. "Activo", "Envío automático") — .padmin-field
+   por defecto es columna, así que un simple `style="display:flex"` inline no alcanza:
+   la propiedad flex-direction:column de la clase sigue ganando por no estar overrideada. */
+.padmin-field-inline { flex-direction: row; align-items: center; gap: 8px; }
+.padmin-field-inline input[type="checkbox"] { width: auto; }
+.padmin-field-inline label { margin: 0; }
 .padmin-demo-hint { font-size: 11px; color: #7A4A18; margin: 10px 0 0; }
 
 /* ---------- kanban ---------- */
@@ -139,7 +145,7 @@
 .padmin-hermes-log { background: #15201A; border-radius: 8px; padding: 4px 0; margin-bottom: 28px; }
 .padmin-hermes-row { display: flex; align-items: center; gap: 14px; padding: 9px 18px; font-family: Menlo, Consolas, monospace; font-size: 12px; border-bottom: 0.5px solid #23301F; }
 .padmin-hermes-row:last-child { border-bottom: none; }
-.padmin-hermes-time { color: #7CB084; flex-shrink: 0; width: 44px; }
+.padmin-hermes-time { color: #7CB084; flex-shrink: 0; width: 62px; white-space: nowrap; }
 .padmin-hermes-task { color: #F2EFE6; flex: 1; }
 
 /* ---------- pipeline ---------- */

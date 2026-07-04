@@ -1,9 +1,21 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>El mercado de Perote se prepara para la temporada alta de la papa · CREA Contenidos</title>
+<title>Nota · CREA Contenidos</title>
+<meta name="description" content="Notas y reportajes de CREA Contenidos, medio digital local de Perote, Veracruz y el corredor Perote–Xalapa–Puebla.">
+<!-- Open Graph: renderNotaPage() (main.js) actualiza estos valores al cargar la nota.
+     Limitación conocida: página estática sin render en servidor, así que los crawlers
+     que no ejecutan JS (Facebook, WhatsApp) solo ven estos valores genéricos.
+     La solución server-side queda fuera de alcance en v1. -->
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="CREA Contenidos">
+<meta property="og:title" content="Nota · CREA Contenidos">
+<meta property="og:description" content="Notas y reportajes de CREA Contenidos, medio digital local de Perote, Veracruz.">
+<meta property="og:url" content="">
+<meta property="og:image" content="">
+<meta name="crea-api-base" content="http://localhost:3000">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/tokens.css">
@@ -16,7 +28,7 @@
     <div class="left">
       <a href="index.html" class="logo"><img src="assets/img/logo-crea.png" alt="CREA"></a>
       <nav class="ed-nav desktop-only" style="border-bottom:none;padding:0;">
-        <a href="seccion.html?s=Local" data-section="Local" class="active">Local</a>
+        <a href="seccion.html?s=Local" data-section="Local">Local</a>
         <a href="seccion.html?s=Cultura" data-section="Cultura">Cultura</a>
         <a href="seccion.html?s=Economía" data-section="Economía">Economía</a>
         <a href="seccion.html?s=Entretenimiento" data-section="Entretenimiento">Entretenimiento</a>
@@ -29,7 +41,7 @@
   </div>
 </header>
 
-<div class="mobile-menu">
+<div class="mobile-menu" role="navigation" aria-label="Menú">
   <div class="head"><span class="title">Menú</span><button class="close" data-menu-close aria-label="Cerrar menú">&times;</button></div>
   <a href="seccion.html?s=Local">Local</a>
   <a href="seccion.html?s=Cultura">Cultura</a>
@@ -41,50 +53,13 @@
   <a href="estudio/index.html" style="color:var(--brand);">Visitar Estudio &rarr;</a>
 </div>
 
-<main class="container narrow" style="padding:28px 0 0;">
-  <a href="seccion.html?s=Local" class="eyebrow" style="display:block;margin-bottom:10px;">LOCAL</a>
-  <h1 style="font-size:34px;line-height:1.2;margin:0 0 16px;">El mercado de Perote se prepara para la temporada alta de la papa</h1>
-
-  <div style="display:flex;align-items:center;gap:12px;padding-bottom:20px;border-bottom:0.5px solid var(--line);margin-bottom:24px;">
-    <a href="perfil.html?id=carlos-mendoza" class="avatar" style="width:36px;height:36px;"><span style="font-size:13px;">CM</span></a>
-    <div style="font-size:12px;color:var(--text-mute);">
-      <a href="perfil.html?id=carlos-mendoza" style="color:var(--text);font-weight:500;">Carlos Mendoza</a> &middot; 30 de junio, 2026 &middot; 4 min de lectura
-    </div>
-  </div>
-
-  <div class="img-ph featured ratio-16-9" style="margin-bottom:24px;"><span class="cap">foto: mercado municipal de Perote</span></div>
-
-  <p style="font-size:16px;line-height:1.75;margin:0 0 18px;">El mercado municipal de Perote comenzó esta semana los preparativos para lo que productores locales describen como una temporada alta &ldquo;tranquila pero sostenida&rdquo; para la papa, el cultivo insignia de la región.</p>
-  <p style="font-size:16px;line-height:1.75;margin:0 0 18px;">Según comerciantes consultados por CREA, el frío adelantado de las últimas semanas no afectó el volumen de cosecha esperado para julio. El producto viene parejo, sin las mermas grandes que se vieron el año pasado.</p>
-
-  <blockquote style="border-left:3px solid var(--accent);padding:4px 0 4px 18px;margin:8px 0 24px;">
-    <p style="font-family:var(--font-display);font-style:italic;font-size:19px;line-height:1.5;margin:0;">&ldquo;El producto viene parejo, no hay mermas grandes como el año pasado.&rdquo;</p>
-  </blockquote>
-
-  <div style="background:var(--bg-3);border-radius:8px;padding:18px 20px;margin-bottom:24px;">
-    <div class="eyebrow" style="margin-bottom:8px;">CONTENIDO PATROCINADO</div>
-    <p style="font-size:13px;margin:0;line-height:1.55;">Ferretería Reyes apoya la cobertura económica de Perote. <a href="estudio/servicios.html" style="color:var(--accent-text);text-decoration:underline;">Conoce cómo patrocinar</a></p>
-  </div>
-
-  <p style="font-size:16px;line-height:1.75;margin:0 0 18px;">El ayuntamiento confirmó que los puestos de fin de semana en la explanada se ampliarán de 40 a 55 espacios a partir del próximo sábado, para dar cabida a productores de comunidades cercanas como Los Pescados y Tenextepec.</p>
-  <p style="font-size:16px;line-height:1.75;margin:0 0 18px;">La recomendación para quienes visiten el mercado este fin de semana es llegar temprano: los locatarios coinciden en que el mejor producto se agota antes del mediodía.</p>
-
-  <a href="perfil.html?id=carlos-mendoza" style="display:flex;gap:14px;align-items:center;background:var(--bg-2);border:0.5px solid var(--line);border-radius:8px;padding:16px 18px;margin:28px 0;">
-    <div class="avatar" style="width:44px;height:44px;"><span style="font-size:15px;">CM</span></div>
-    <div>
-      <p style="font-size:13px;font-weight:600;margin:0 0 2px;">Carlos Mendoza</p>
-      <p style="font-size:12px;color:var(--text-mute);margin:0;">Reportero · Local y Economía &middot; Ver perfil</p>
-    </div>
-  </a>
+<main class="container narrow" data-nota-page style="padding-top:28px;">
+  <!-- La nota se pinta desde la API (?slug=...) — ver renderNotaPage() en main.js -->
 </main>
 
-<div class="container" style="max-width:900px;padding:8px 20px 24px;">
-  <div class="eyebrow" style="margin-bottom:14px;">NOTAS RELACIONADAS</div>
-  <div class="grid grid-3">
-    <a href="seccion.html?s=Cultura"><div class="img-ph ratio-4-3" style="margin-bottom:8px;"></div><p class="card-title" style="font-size:13px;line-height:1.4;">Fuerte de San Carlos abre nueva ruta nocturna para visitantes</p></a>
-    <a href="seccion.html?s=Local"><div class="img-ph ratio-4-3" style="margin-bottom:8px;"></div><p class="card-title" style="font-size:13px;line-height:1.4;">Cierre parcial de la carretera Perote–Xalapa por niebla</p></a>
-    <a href="seccion.html?s=Deportes"><div class="img-ph ratio-4-3" style="margin-bottom:8px;"></div><p class="card-title" style="font-size:13px;line-height:1.4;">Equipo local de basquetbol clasifica a la final regional</p></a>
-  </div>
+<div class="container" data-related-block hidden style="max-width:900px;padding-top:8px;padding-bottom:24px;">
+  <h2 class="eyebrow" style="margin-bottom:14px;font-size:11px;">NOTAS RELACIONADAS</h2>
+  <div class="grid grid-3" data-related></div>
 </div>
 
 <div class="container">

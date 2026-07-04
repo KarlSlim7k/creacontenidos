@@ -3,13 +3,32 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: crea
-      POSTGRES_PASSWORD: crea_dev
-      POSTGRES_DB: crea_command_center
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-crea}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD (definila en .env)}
+      POSTGRES_DB: ${POSTGRES_DB:-crea_command_center}
     volumes:
       - crea_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crea} -d ${POSTGRES_DB:-crea_command_center}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    # Keys (NOUS/RESEND/ELEVENLABS/JWT_SECRET…) desde apps/api/.env — copiar de .env.example.
+    env_file: apps/api/.env
+    environment:
+      # Sobrescribe DATABASE_URL para apuntar al servicio db (no localhost).
+      DATABASE_URL: postgres://${POSTGRES_USER:-crea}:${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD (definila en .env)}@db:5432/${POSTGRES_DB:-crea_command_center}
+      PORT: 3000
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   crea_db_data:
