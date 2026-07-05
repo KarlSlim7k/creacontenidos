@@ -37,6 +37,8 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_AUDIENCE_ID: ${RESEND_AUDIENCE_ID:-}
       RESEND_FROM: ${RESEND_FROM:-Buenos días, Perote <hola@crea-contenidos.com>}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-contacto@crea-contenidos.com}
+      COMUNIDAD_EMAIL: ${COMUNIDAD_EMAIL:-comunidad@crea-contenidos.com}
       NOUS_PORTAL_API_KEY: ${NOUS_PORTAL_API_KEY:-}
       AI_MODEL_DEFAULT: ${AI_MODEL_DEFAULT:-deepseek/deepseek-v4-flash}
       AI_MODEL_COMPLEX: ${AI_MODEL_COMPLEX:-minimax/minimax-m3}

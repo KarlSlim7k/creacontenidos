@@ -129,6 +129,44 @@ adminRouter.get('/activity', requireAuth, requireRole('director'), async (req, r
   }
 });
 
+// GET/PATCH /api/admin/site-metrics — Configuración → Métricas del sitio (solo director).
+adminRouter.get('/site-metrics', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM site_metrics WHERE id = 1');
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.patch('/site-metrics', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      `UPDATE site_metrics SET
+         monthly_reach_label = COALESCE($1, monthly_reach_label),
+         municipalities_count = COALESCE($2, municipalities_count),
+         tercer_tiempo_listeners_label = COALESCE($3, tercer_tiempo_listeners_label),
+         audience_age_18_24_pct = COALESCE($4, audience_age_18_24_pct),
+         audience_age_25_44_pct = COALESCE($5, audience_age_25_44_pct),
+         audience_age_45_plus_pct = COALESCE($6, audience_age_45_plus_pct),
+         updated_at = now()
+       WHERE id = 1 RETURNING *`,
+      [
+        b.monthly_reach_label || null,
+        Number.isFinite(Number(b.municipalities_count)) ? Number(b.municipalities_count) : null,
+        b.tercer_tiempo_listeners_label || null,
+        Number.isFinite(Number(b.audience_age_18_24_pct)) ? Number(b.audience_age_18_24_pct) : null,
+        Number.isFinite(Number(b.audience_age_25_44_pct)) ? Number(b.audience_age_25_44_pct) : null,
+        Number.isFinite(Number(b.audience_age_45_plus_pct)) ? Number(b.audience_age_45_plus_pct) : null,
+      ]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/admin/integrations — estado por presencia de env vars, cualquier usuario autenticado.
 adminRouter.get('/integrations', requireAuth, async (req, res, next) => {
   try {

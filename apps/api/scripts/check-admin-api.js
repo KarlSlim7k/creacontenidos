@@ -235,7 +235,20 @@ async function main() {
     assert.strictEqual((await fetch(`${BASE}/api/listening/competitors/${cpost.id}`, { method: 'DELETE', headers: auth(colaboradorToken) })).status, 403);
     assert.strictEqual((await fetch(`${BASE}/api/listening/competitors/${cpost.id}`, { method: 'DELETE', headers: auth(directorToken) })).status, 204);
 
-    console.log('OK: panel admin verificado (auth por rol, ideas por colaborador, pipeline propuesta→publicada, RADAR, comercial, permisos vivos, leads, distribución, competencia).');
+    // 13. Métricas del sitio (Configuración → Métricas del sitio → estudio/*.html): solo director, PATCH parcial con COALESCE.
+    assert.strictEqual((await fetch(`${BASE}/api/admin/site-metrics`, { headers: auth(produccionToken) })).status, 403);
+    const metricsBefore = await (await fetch(`${BASE}/api/admin/site-metrics`, { headers: auth(directorToken) })).json();
+    const metricsAfter = await (await fetch(`${BASE}/api/admin/site-metrics`, {
+      method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ monthly_reach_label: '[check] 99K' }),
+    })).json();
+    assert.strictEqual(metricsAfter.monthly_reach_label, '[check] 99K');
+    assert.strictEqual(metricsAfter.municipalities_count, metricsBefore.municipalities_count, 'PATCH parcial no debe tocar los campos no enviados');
+    const publicMetrics = await (await fetch(`${BASE}/api/public/site-metrics`)).json();
+    assert.strictEqual(publicMetrics.monthly_reach_label, '[check] 99K', 'el cambio debe verse de inmediato en el endpoint público');
+    await pool.query('UPDATE site_metrics SET monthly_reach_label = $1 WHERE id = 1', [metricsBefore.monthly_reach_label]);
+
+    console.log('OK: panel admin verificado (auth por rol, ideas por colaborador, pipeline propuesta→publicada, RADAR, comercial, permisos vivos, leads, distribución, competencia, métricas del sitio).');
   } finally {
     server.kill();
     if (proposalId) {

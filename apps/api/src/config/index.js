@@ -19,6 +19,11 @@ module.exports = {
   resendApiKey: process.env.RESEND_API_KEY,
   resendAudienceId: process.env.RESEND_AUDIENCE_ID,
   resendFrom: process.env.RESEND_FROM || 'Buenos días, Perote <hola@crea-contenidos.com>',
+  // ponytail: solo direcciones de contacto para mostrar en el sitio (mailto:) hasta que
+  // el dominio esté verificado en Resend — cuando lo esté, sirven de remitente/reply-to
+  // para notificaciones (ej. aviso de lead nuevo). No hay envío real todavía.
+  contactEmail: process.env.CONTACT_EMAIL || 'contacto@crea-contenidos.com',
+  comunidadEmail: process.env.COMUNIDAD_EMAIL || 'comunidad@crea-contenidos.com',
   elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM',
   apiKeys: {
     perplexity: process.env.PERPLEXITY_API_KEY,

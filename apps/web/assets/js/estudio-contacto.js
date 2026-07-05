@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
       })
       .catch(function () {
-        setNote('No pudimos conectar con el servidor. Inténtalo de nuevo o escríbenos a estudio@crearcontenidos.com.', 'error');
+        setNote('No pudimos conectar con el servidor. Inténtalo de nuevo o escríbenos a estudio@crea-contenidos.com.', 'error');
       })
       .finally(function () {
         submitBtn.disabled = false;

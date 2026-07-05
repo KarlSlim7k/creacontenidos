@@ -82,7 +82,7 @@
   var state = {
     token: null, user: null, allowedModules: [],
     screen: 'login', loginError: null,
-    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null, distLog: null, distChannels: null, competitors: null },
+    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null, distLog: null, distChannels: null, competitors: null, siteMetrics: null },
     distBusy: null,
     radarSource: 'Todas', radarStatus: 'Todos', radarBusy: false,
     radarTab: 'temas', competitorsBusy: false,
@@ -367,6 +367,7 @@
         adminApi('/api/newsletter/events').then(function (r) { setData({ newsletterEvents: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
       }
       if (state.configTab === 'servicios') adminApi('/api/commercial/services').then(function (r) { setData({ services: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+      if (state.configTab === 'metricas-sitio') adminApi('/api/admin/site-metrics').then(function (r) { setData({ siteMetrics: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
     } else if (screen === 'hermes') {
       adminApi('/api/admin/activity?limit=20').then(function (r) { setData({ activity: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
     } else if (screen === 'pipeline') {
@@ -1506,9 +1507,31 @@
     '</div>';
   }
 
+  // Estadísticas de audiencia mostradas en estudio/index.html, media-kit.html y
+  // tercer-tiempo.html — antes copiadas a mano en los 3 archivos, ahora una sola fuente.
+  function renderConfigMetricas() {
+    var m = state.data.siteMetrics;
+    if (!m) return loadingCard();
+    return '<div class="padmin-card" style="max-width:480px;padding:20px;">' +
+      '<form data-action="submit-site-metrics" class="padmin-grid2" style="gap:10px;">' +
+        '<div class="padmin-field" style="margin:0;"><label>Alcance mensual</label><input id="sm-reach" type="text" value="' + esc(m.monthly_reach_label) + '" placeholder="42K"></div>' +
+        '<div class="padmin-field" style="margin:0;"><label>Municipios cubiertos</label><input id="sm-municipios" type="number" min="0" value="' + m.municipalities_count + '"></div>' +
+        '<div class="padmin-field" style="margin:0;"><label>Oyentes Tercer Tiempo</label><input id="sm-listeners" type="text" value="' + esc(m.tercer_tiempo_listeners_label) + '" placeholder="+1K"></div>' +
+        '<div></div>' +
+        '<div class="padmin-field" style="margin:0;"><label>Edad 18-24 (%)</label><input id="sm-age-1" type="number" min="0" max="100" value="' + m.audience_age_18_24_pct + '"></div>' +
+        '<div class="padmin-field" style="margin:0;"><label>Edad 25-44 (%)</label><input id="sm-age-2" type="number" min="0" max="100" value="' + m.audience_age_25_44_pct + '"></div>' +
+        '<div class="padmin-field" style="margin:0;"><label>Edad 45+ (%)</label><input id="sm-age-3" type="number" min="0" max="100" value="' + m.audience_age_45_plus_pct + '"></div>' +
+        '<div></div>' +
+        (state.errorMsg ? '<p style="grid-column:1 / -1;font-size:12px;color:var(--danger);margin:0;">' + esc(state.errorMsg) + '</p>' : '') +
+        '<div style="grid-column:1 / -1;"><button type="submit" class="padmin-btn padmin-btn-sm">Guardar</button></div>' +
+      '</form>' +
+      '<p style="font-size:11px;color:var(--mute-2);margin:12px 0 0;">Actualizado ' + esc(relativeTime(m.updated_at)) + ' &middot; se refleja de inmediato en Estudio (Inicio, Media kit, Tercer Tiempo).</p>' +
+    '</div>';
+  }
+
   function renderConfiguracion() {
     var tab = state.configTab;
-    var body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : renderConfigUsuarios())));
+    var body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : (tab === 'metricas-sitio' ? renderConfigMetricas() : renderConfigUsuarios()))));
     function tabBtn(id, label) {
       var active = tab === id;
       return '<button type="button" class="padmin-tab' + (active ? ' active' : '') + '" data-action="set-config-tab" data-tab="' + id + '">' + label + '</button>';
@@ -1516,7 +1539,7 @@
     return '<div>' +
       '<h1 class="padmin-h1">Configuración</h1>' +
       '<p class="padmin-lede">Usuarios, permisos e integraciones del panel. Solo visible para Director.</p>' +
-      '<div class="padmin-tabs">' + tabBtn('usuarios', 'Usuarios') + tabBtn('permisos', 'Permisos') + tabBtn('integraciones', 'Integraciones') + tabBtn('newsletter', 'Newsletter') + tabBtn('servicios', 'Servicios') + '</div>' +
+      '<div class="padmin-tabs">' + tabBtn('usuarios', 'Usuarios') + tabBtn('permisos', 'Permisos') + tabBtn('integraciones', 'Integraciones') + tabBtn('newsletter', 'Newsletter') + tabBtn('servicios', 'Servicios') + tabBtn('metricas-sitio', 'Métricas del sitio') + '</div>' +
       body +
     '</div>';
   }
@@ -2051,6 +2074,21 @@
       } }).then(function (updated) {
         setState({ errorMsg: null });
         setData({ newsletterSettings: updated });
+      }).catch(function (err) {
+        setState({ errorMsg: err.message });
+      });
+    } else if (action === 'submit-site-metrics') {
+      e.preventDefault();
+      adminApi('/api/admin/site-metrics', { method: 'PATCH', body: {
+        monthly_reach_label: form.querySelector('#sm-reach').value.trim(),
+        municipalities_count: Number(form.querySelector('#sm-municipios').value),
+        tercer_tiempo_listeners_label: form.querySelector('#sm-listeners').value.trim(),
+        audience_age_18_24_pct: Number(form.querySelector('#sm-age-1').value),
+        audience_age_25_44_pct: Number(form.querySelector('#sm-age-2').value),
+        audience_age_45_plus_pct: Number(form.querySelector('#sm-age-3').value),
+      } }).then(function (updated) {
+        setState({ errorMsg: null, successMsg: 'Métricas actualizadas.' });
+        setData({ siteMetrics: updated });
       }).catch(function (err) {
         setState({ errorMsg: err.message });
       });

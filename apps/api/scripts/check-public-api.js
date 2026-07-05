@@ -92,6 +92,16 @@ async function main() {
     assert.ok(byAuthor.length >= 1);
     assert.ok(byAuthor.every((a) => a.author_name === 'Ana Torres'));
 
+    // 5b. Métricas del sitio (estudio/*.html) y lista de autores publicados (comunidad.html).
+    let { status: s5b, body: metrics } = await getJson(`${BASE}/api/public/site-metrics`);
+    assert.strictEqual(s5b, 200);
+    assert.ok(metrics.monthly_reach_label && Number.isInteger(metrics.municipalities_count));
+
+    let { status: s5c, body: authors } = await getJson(`${BASE}/api/public/authors`);
+    assert.strictEqual(s5c, 200);
+    assert.ok(authors.length >= 1, 'no hay autores con notas publicadas para el check');
+    assert.ok(authors.every((a) => a.article_count >= 1 && Array.isArray(a.sections)));
+
     // 6. Rate limit: ráfaga hasta pasar 300 req/15min → 429. (Va al final:
     // deja la IP limitada en este proceso de server, que muere al salir.)
     const statuses = await Promise.all(

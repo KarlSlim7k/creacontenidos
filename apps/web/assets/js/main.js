@@ -410,6 +410,57 @@ function renderEstudioSponsors() {
   });
 }
 
+// ---------- estudio: métricas de audiencia ----------
+
+// Antes copiadas a mano en estudio/index.html, media-kit.html y tercer-tiempo.html.
+// Ahora una sola fila en site_metrics (editable en el panel admin → Configuración).
+function renderSiteMetrics() {
+  var els = document.querySelectorAll('[data-metric-reach],[data-metric-municipios],[data-metric-listeners],[data-metric-age-18-24],[data-metric-age-25-44],[data-metric-age-45-plus],[data-metric-updated]');
+  if (!els.length) return;
+
+  creaApi('/api/public/site-metrics').then(function (m) {
+    document.querySelectorAll('[data-metric-reach]').forEach(function (el) { el.textContent = m.monthly_reach_label; });
+    document.querySelectorAll('[data-metric-municipios]').forEach(function (el) { el.textContent = m.municipalities_count; });
+    document.querySelectorAll('[data-metric-listeners]').forEach(function (el) { el.textContent = m.tercer_tiempo_listeners_label; });
+    setAgeBar('18-24', m.audience_age_18_24_pct);
+    setAgeBar('25-44', m.audience_age_25_44_pct);
+    setAgeBar('45-plus', m.audience_age_45_plus_pct);
+    document.querySelectorAll('[data-metric-updated]').forEach(function (el) {
+      el.textContent = 'Actualizado ' + new Date(m.updated_at).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+    });
+  }).catch(function () {
+    els.forEach(function (el) { if (el.tagName !== 'DIV') el.textContent = '—'; });
+  });
+}
+
+function setAgeBar(key, pct) {
+  document.querySelectorAll('[data-metric-age-' + key + ']').forEach(function (el) { el.textContent = pct + '%'; });
+  document.querySelectorAll('[data-metric-age-bar-' + key + ']').forEach(function (el) { el.style.width = pct + '%'; });
+}
+
+// ---------- comunidad: colaboradores activos ----------
+
+// Antes 5 nombres fijos en comunidad.html. Se deriva de content_proposals (mismo
+// espíritu que renderEstudioSponsors): autores reales con notas ya publicadas.
+function renderColaboradores() {
+  var mount = document.querySelector('[data-colaboradores]');
+  if (!mount) return;
+
+  creaApi('/api/public/authors').then(function (authors) {
+    if (!authors.length) { mount.hidden = true; return; }
+    mount.innerHTML = authors.map(function (a) {
+      var initials = a.author_name.split(' ').map(function (w) { return w[0]; }).slice(0, 2).join('').toUpperCase();
+      var sections = (a.sections || []).slice(0, 2).join(' y ');
+      return '<a href="perfil.html?autor=' + encodeURIComponent(a.author_name) + '" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:0.5px solid var(--line);">' +
+        '<div class="avatar" style="width:38px;height:38px;"><span style="font-size:12px;">' + esc(initials) + '</span></div>' +
+        '<div><p style="font-size:13px;font-weight:500;margin:0 0 2px;">' + esc(a.author_name) + '</p>' +
+        '<p style="font-size:11px;color:var(--text-mute);margin:0;">' + esc(sections) + '</p></div></a>';
+    }).join('');
+  }).catch(function () {
+    mount.hidden = true;
+  });
+}
+
 // ---------- estudio: servicios.html ----------
 
 function renderServiciosPage() {
@@ -575,6 +626,8 @@ document.addEventListener('DOMContentLoaded', function () {
   renderEstudioSponsors();
   renderServiciosPage();
   renderTercerTiempoEpisodes();
+  renderSiteMetrics();
+  renderColaboradores();
 
   initChips('[data-date-filter]');
 

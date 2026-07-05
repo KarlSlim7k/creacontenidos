@@ -88,6 +88,35 @@ router.get('/services', async (req, res, next) => {
   }
 });
 
+// GET /api/public/site-metrics — estadísticas de audiencia (estudio/*.html), editables
+// en el panel admin (Configuración → Métricas del sitio). Fila única.
+router.get('/site-metrics', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM site_metrics WHERE id = 1');
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/public/authors — autores con al menos una nota publicada, derivado de
+// content_proposals (comunidad.html → "Colaboradores activos"). Sin tabla propia.
+router.get('/authors', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT author_name, COUNT(*)::int AS article_count, array_agg(DISTINCT section) AS sections
+       FROM content_proposals
+       WHERE status = 'published' AND author_name IS NOT NULL
+       GROUP BY author_name
+       ORDER BY article_count DESC
+       LIMIT 12`
+    );
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/public/authors/:name/articles — piezas publicadas por autor (perfil.html).
 router.get('/authors/:name/articles', async (req, res, next) => {
   try {
