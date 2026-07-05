@@ -73,8 +73,8 @@ async function perplexitySearch(systemPrompt, userMessage) {
 
 async function detectTopics(query) {
   const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-  const system = `Eres un analista de tendencias para un medio editorial en Perote, Puebla, México. Detectas temas relevantes para audiencia local y regional. Hoy es ${fecha}. Busca en la web noticias y tendencias recientes (últimos días) — nunca reportes eventos de años anteriores como si fueran de hoy.`;
-  const user = `Busca tendencias y noticias actuales relevantes para un medio de contenido en Perote, Puebla sobre: "${query}". Para cada topic, devuelve un JSON array con objetos que tengan: title, source (Web Search), mentions (número estimado), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). En "antecedentes" siempre precisa cuándo ocurrió el hecho (fecha exacta o al menos día/semana aproximada según la fuente) — si la fuente no da fecha, dilo explícitamente ("fecha exacta no reportada por la fuente") en vez de omitirlo. Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
+  const system = `Eres un analista de tendencias para un medio editorial en Perote, Veracruz, México. Detectas temas relevantes para audiencia local y regional. Hoy es ${fecha}. Busca en la web noticias y tendencias recientes (últimos días) — nunca reportes eventos de años anteriores como si fueran de hoy.`;
+  const user = `Busca tendencias y noticias actuales relevantes para un medio de contenido en Perote, Veracruz sobre: "${query}". Para cada topic, devuelve un JSON array con objetos que tengan: title, source (Web Search), mentions (número estimado), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). En "antecedentes" siempre precisa cuándo ocurrió el hecho (fecha exacta o al menos día/semana aproximada según la fuente) — si la fuente no da fecha, dilo explícitamente ("fecha exacta no reportada por la fuente") en vez de omitirlo. Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
   const content = await perplexitySearch(system, user);
   return parseJson(content);
 }
@@ -91,14 +91,14 @@ async function detectCompetitorPosts(competitors) {
 
 async function generateProposal(context, format, angle) {
   const modelKey = format === 'guion_audio' || format === 'guion_video' ? 'complex' : 'default';
-  const system = 'Eres un editor asistente para CREA Contenidos, un medio digital en Perote, Puebla. Generas propuestas de contenido en español mexicano profesional.';
+  const system = 'Eres un editor asistente para CREA Contenidos, un medio digital en Perote, Veracruz. Generas propuestas de contenido en español mexicano profesional.';
   const user = `Tema: ${context.title}\nDescripción: ${context.description || ''}\nAntecedentes: ${context.antecedentes || ''}\nActores: ${context.actores || ''}\nÁngulos sugeridos: ${context.angulos || ''}\nAudiencia: ${context.audiencia || ''}\nFormato pedido: ${format}\nÁngulo editorial: ${angle || 'libre'}\n\nGenera una propuesta de contenido. Devuelve SOLO un JSON con: title, body (resumen de 2-3 párrafos), dek (subtítulo de 1 línea), section, angulo, sensibilidad (verde/amarillo/rojo).`;
   const content = await chatComplete(system, user, modelKey);
   return parseJson(content);
 }
 
 async function generateDraft(proposal, instructions) {
-  const system = 'Eres un redactor para CREA Contenidos, medio digital en Perote, Puebla. Escribes artículos completos en español mexicano, tono profesional pero accesible. NO uses emojis. NO uses caracteres CJK o no latinos.';
+  const system = 'Eres un redactor para CREA Contenidos, medio digital en Perote, Veracruz. Escribes artículos completos en español mexicano, tono profesional pero accesible. NO uses emojis. NO uses caracteres CJK o no latinos.';
   const user = `Título: ${proposal.title}\nDek: ${proposal.dek || ''}\nSección: ${proposal.section || ''}\nÁngulo: ${proposal.angulo || ''}\nCuerpo actual: ${proposal.body || ''}\nInstrucciones del editor: ${instructions || 'ninguna'}\n\nEscribe el cuerpo completo del artículo.`;
   return chatComplete(system, user, 'default');
 }

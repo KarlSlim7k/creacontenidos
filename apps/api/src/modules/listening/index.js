@@ -11,7 +11,7 @@ const DEFAULT_COMPETITORS = ['Diario de Xalapa', 'AVC Noticias', 'El Dictamen'];
 
 // POST /api/listening/topics/detect — detección de tendencias vía IA (Nous Portal).
 router.post('/topics/detect', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
-  const query = (req.body && req.body.query) || 'tendencias y noticias relevantes en Perote, Puebla, México';
+  const query = (req.body && req.body.query) || 'tendencias y noticias relevantes en Perote, Veracruz, México';
   try {
     const detected = await detectTopics(query);
     const inserted = [];
