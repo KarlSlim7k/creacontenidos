@@ -48,6 +48,12 @@ router.get('/session', requireAuth, async (req, res, next) => {
   }
 });
 
+// GET /api/auth/roles — mapa rol → módulos para la tabla de Configuración → Permisos.
+// Se sirve desde ROLE_MODULES para que la UI nunca mantenga una copia que pueda divergir.
+router.get('/roles', requireAuth, requireRole('director'), (req, res) => {
+  res.json(ROLE_MODULES);
+});
+
 // --- Usuarios (Configuración → Usuarios, solo director) ---
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

@@ -271,8 +271,9 @@ router.patch('/admin/social/:id', requireAuth, async (req, res, next) => {
     }
     if (req.body.refetch === true) {
       try {
+        // fetchOembed() no devuelve embed_html (el iframe se construye on-demand en
+        // GET /public/social/:id/embed); escribirlo aquí anulaba la columna en cada refetch.
         const fresh = await fetchOembed(current[0].network, current[0].external_url);
-        params.push(fresh.embed_html); sets.push(`embed_html = $${params.length}`);
         if (fresh.title) { params.push(fresh.title.slice(0, 300)); sets.push(`title = $${params.length}`); }
         if (fresh.author_name) { params.push(fresh.author_name.slice(0, 200)); sets.push(`author_name = $${params.length}`); }
         if (fresh.thumbnail_url) { params.push(fresh.thumbnail_url); sets.push(`thumbnail_url = $${params.length}`); }
