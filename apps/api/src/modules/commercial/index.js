@@ -85,6 +85,82 @@ router.patch('/clients/:id', requireAuth, requireRole('comercial', 'director'), 
   }
 });
 
+// --- Leads del formulario de contacto (POST /api/public/leads los escribe) ---
+
+const LEAD_STATUSES = ['nuevo', 'contactado', 'descartado'];
+const LEAD_FIELDS = 'id, name, email, company, service_interest, message, source_page, status, notes, created_at';
+
+// GET /api/commercial/leads?status= — bandeja de mensajes del formulario.
+router.get('/leads', requireAuth, requireRole('comercial', 'director'), async (req, res, next) => {
+  try {
+    const params = [];
+    let where = '';
+    if (req.query.status && LEAD_STATUSES.includes(req.query.status)) {
+      params.push(req.query.status);
+      where = `WHERE status = $${params.length}`;
+    }
+    const { rows } = await pool.query(
+      `SELECT ${LEAD_FIELDS} FROM leads ${where} ORDER BY created_at DESC`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/commercial/leads/:id — cambiar estado / anotar seguimiento.
+router.patch('/leads/:id', requireAuth, requireRole('comercial', 'director'), async (req, res, next) => {
+  try {
+    const { status, notes } = req.body || {};
+    if (status !== undefined && !LEAD_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { status: 'Valor inválido' } });
+    }
+    if (status === undefined && notes === undefined) return res.status(400).json({ error: 'Nada que actualizar' });
+    const { rows } = await pool.query(
+      `UPDATE leads SET status = COALESCE($1, status), notes = COALESCE($2, notes)
+       WHERE id = $3 RETURNING ${LEAD_FIELDS}`,
+      [status || null, notes === undefined ? null : notes, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Lead no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/commercial/leads/:id/convert — crea el prospecto en el pipeline
+// (etapa 'identificado') y marca el lead como contactado.
+router.post('/leads/:id/convert', requireAuth, requireRole('comercial', 'director'), async (req, res, next) => {
+  try {
+    const { rows: leads } = await pool.query(`SELECT ${LEAD_FIELDS} FROM leads WHERE id = $1`, [req.params.id]);
+    const lead = leads[0];
+    if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
+    const { rows } = await pool.query(
+      `INSERT INTO clients (name, business_name, email, pipeline_stage, interest, owner_id, last_contact_at)
+       VALUES ($1, $2, $3, 'identificado', $4, $5, now())
+       RETURNING id, name, business_name, package, phone, email, active, pipeline_stage,
+                 interest, estimated_value, last_contact_at, owner_id`,
+      [lead.name, lead.company || null, lead.email || null, lead.service_interest || null, req.user.id]
+    );
+    await pool.query(`UPDATE leads SET status = 'contactado' WHERE id = $1`, [lead.id]);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/commercial/leads/:id — solo director.
+router.delete('/leads/:id', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('DELETE FROM leads WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Lead no encontrado' });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- Catálogo de servicios (servicios.html) — CRUD exclusivo de Director ---
 // El sitio público lo lee vía GET /api/public/services (solo activos).
 

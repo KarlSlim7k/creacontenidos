@@ -70,6 +70,7 @@
     { id: 'aprobacion', label: 'Aprobación' },
     { id: 'producciones', label: 'Producciones' },
     { id: 'comercial', label: 'Pipeline comercial' },
+    { id: 'leads', label: 'Leads' },
     { id: 'metricas', label: 'Métricas' },
     { id: 'hermes', label: 'Estado del agente' },
     { id: 'pipeline', label: 'Buenos días, Perote' },
@@ -81,8 +82,9 @@
   var state = {
     token: null, user: null, allowedModules: [],
     screen: 'login', loginError: null,
-    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null },
+    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null },
     radarSource: 'Todas', radarStatus: 'Todos', radarBusy: false,
+    leadsStatus: 'todos',
     propuestaRejecting: null,
     editorProposalId: null, editorDraft: null,
     generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false, notaPreviewHtml: null,
@@ -178,17 +180,19 @@
 
   function statusStyle(label) {
     if (label === 'borrador' || label === 'nueva' || label === 'identificado') return { bg: 'var(--bg-soft)', color: 'var(--text-mute)' };
-    if (label === 'en_revision' || label === 'en_analisis' || label === 'contactado') return { bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
-    if (label === 'aprobada' || label === 'propuesta_enviada') return { bg: 'var(--brand-soft)', color: 'var(--brand)' };
+    if (label === 'nuevo') return { bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
+    if (label === 'en_revision' || label === 'en_analisis') return { bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
+    if (label === 'aprobada' || label === 'propuesta_enviada' || label === 'contactado') return { bg: 'var(--brand-soft)', color: 'var(--brand)' };
     if (label === 'published' || label === 'cerrado') return { bg: 'var(--brand)', color: '#fff' };
-    if (label === 'descartada' || label === 'rechazada') return { bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
+    if (label === 'descartada' || label === 'rechazada' || label === 'descartado') return { bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
     return { bg: 'var(--bg-soft)', color: 'var(--text-mute)' };
   }
 
   var STATUS_LABEL = {
     borrador: 'Borrador', en_revision: 'En revisión', published: 'Publicada', rechazada: 'Rechazada', propuesta: 'Propuesta',
     nueva: 'Nueva', en_analisis: 'En análisis', aprobada: 'Aprobada', descartada: 'Descartada',
-    identificado: 'Identificado', contactado: 'Contactado', propuesta_enviada: 'Propuesta enviada', cerrado: 'Cerrado'
+    identificado: 'Identificado', contactado: 'Contactado', propuesta_enviada: 'Propuesta enviada', cerrado: 'Cerrado',
+    nuevo: 'Nuevo', descartado: 'Descartado'
   };
 
   function badge(statusKey) {
@@ -335,6 +339,8 @@
       loadProposals('en_revision', 'status=en_revision');
     } else if (screen === 'comercial') {
       adminApi('/api/commercial/clients').then(function (r) { setData({ clients: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (screen === 'leads') {
+      adminApi('/api/commercial/leads').then(function (r) { setData({ leads: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
     } else if (screen === 'metricas') {
       adminApi('/api/editorial/metrics').then(function (r) { setData({ metrics: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
     } else if (screen === 'radar') {
@@ -871,6 +877,45 @@
     '</div>';
   }
 
+  // ---------- leads (formulario de contacto del Estudio) ----------
+
+  function renderLeads() {
+    var leads = state.data.leads;
+    if (!leads) return loadingCard();
+    var canDelete = state.user.role === 'director';
+    var statuses = ['todos', 'nuevo', 'contactado', 'descartado'];
+    var chips = statuses.map(function (st) {
+      var active = state.leadsStatus === st;
+      return '<span class="padmin-chip" data-action="set-leads-status" data-value="' + st + '" style="background:' + (active ? 'var(--brand)' : 'var(--surface)') + ';color:' + (active ? '#fff' : 'var(--text)') + ';border-color:' + (active ? 'var(--brand)' : 'var(--line-soft)') + ';">' + (st === 'todos' ? 'Todos' : STATUS_LABEL[st]) + '</span>';
+    }).join('');
+    var filtered = leads.filter(function (l) { return state.leadsStatus === 'todos' || l.status === state.leadsStatus; });
+    var nuevos = leads.filter(function (l) { return l.status === 'nuevo'; }).length;
+
+    return '<div>' +
+      '<h1 class="padmin-h1">Leads</h1>' +
+      '<p class="padmin-lede">Mensajes del formulario de contacto del sitio. ' + (nuevos ? nuevos + ' sin atender.' : 'Sin pendientes.') + '</p>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;">' + chips + '</div>' +
+      '<div class="padmin-card">' +
+        '<div class="padmin-table-head padmin-cols-leads"><span>RECIBIDO</span><span>CONTACTO</span><span>INTERÉS</span><span>MENSAJE</span><span>ESTADO</span><span>ACCIONES</span></div>' +
+        (filtered.length ? filtered.map(function (l) {
+          return '<div class="padmin-table-row padmin-cols-leads">' +
+            '<span style="font-size:11px;color:var(--text-mute);">' + esc(relativeTime(l.created_at)) + '</span>' +
+            '<div style="min-width:0;"><p class="padmin-row-title">' + esc(l.name) + (l.company ? ' · ' + esc(l.company) : '') + '</p><p class="padmin-row-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(l.email || '') + '</p></div>' +
+            '<span style="font-size:12px;color:var(--text-mute);">' + esc(l.service_interest || '—') + '</span>' +
+            '<span style="font-size:12px;color:var(--text-2);line-height:1.4;" title="' + esc(l.message || '') + '">' + esc((l.message || '—').slice(0, 140)) + ((l.message || '').length > 140 ? '…' : '') + '</span>' +
+            '<span>' + badge(l.status) + '</span>' +
+            '<span style="display:flex;gap:4px;flex-wrap:wrap;">' +
+              (l.status === 'nuevo' ? '<button type="button" class="padmin-icon-btn" title="Marcar contactado" data-action="mark-lead" data-id="' + l.id + '" data-status="contactado">✓</button>' : '') +
+              (l.status !== 'descartado' ? '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="convert-lead" data-id="' + l.id + '">→ Cliente</button>' : '') +
+              (l.status !== 'descartado' ? '<button type="button" class="padmin-icon-btn" title="Descartar" data-action="mark-lead" data-id="' + l.id + '" data-status="descartado">✕</button>' : '') +
+              (canDelete ? '<button type="button" class="padmin-icon-btn" title="Eliminar" data-action="delete-lead" data-id="' + l.id + '">🗑</button>' : '') +
+            '</span>' +
+          '</div>';
+        }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">' + (leads.length ? 'Sin leads con ese estado.' : 'Todavía no llegan mensajes del formulario de contacto.') + '</p></div>') +
+      '</div>' +
+    '</div>';
+  }
+
   // ---------- métricas ----------
 
   function renderMetricas() {
@@ -1398,7 +1443,7 @@
 
   var screenRenderers = {
     dashboard: renderDashboard, ideas: renderIdeas, editor: renderEditor, aprobacion: renderAprobacion,
-    comercial: renderComercial, metricas: renderMetricas, radar: renderRadar, propuestas: renderPropuestas,
+    comercial: renderComercial, leads: renderLeads, metricas: renderMetricas, radar: renderRadar, propuestas: renderPropuestas,
     producciones: renderProducciones,
     hermes: renderHermes, pipeline: renderPipeline, denegado: renderDenegado, configuracion: renderConfiguracion
   };
@@ -1442,6 +1487,10 @@
         break;
       case 'set-radar-source': setState({ radarSource: el.getAttribute('data-value') }); break;
       case 'set-radar-status': setState({ radarStatus: el.getAttribute('data-value') }); break;
+      case 'set-leads-status': setState({ leadsStatus: el.getAttribute('data-value') }); break;
+      case 'mark-lead': submitMarkLead(Number(el.getAttribute('data-id')), el.getAttribute('data-status')); break;
+      case 'convert-lead': submitConvertLead(Number(el.getAttribute('data-id'))); break;
+      case 'delete-lead': submitDeleteLead(Number(el.getAttribute('data-id'))); break;
       case 'open-radar': setState({ selectedRadarId: Number(el.getAttribute('data-id')) }); break;
       case 'close-radar': setState({ selectedRadarId: null }); break;
       case 'approve-topic': submitApproveTopic(Number(el.getAttribute('data-id'))); break;
@@ -1715,6 +1764,34 @@
     adminApi('/api/commercial/clients/' + id, { method: 'DELETE' })
       .then(function () {
         setData({ clients: (state.data.clients || []).filter(function (c) { return c.id !== id; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitMarkLead(id, status) {
+    adminApi('/api/commercial/leads/' + id, { method: 'PATCH', body: { status: status } })
+      .then(function (updated) {
+        setData({ leads: (state.data.leads || []).map(function (l) { return l.id === id ? updated : l; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitConvertLead(id) {
+    adminApi('/api/commercial/leads/' + id + '/convert', { method: 'POST' })
+      .then(function (client) {
+        // El pipeline se refresca al entrar (clients: null fuerza el fetch).
+        state.data.clients = null;
+        setData({ leads: (state.data.leads || []).map(function (l) { return l.id === id ? Object.assign({}, l, { status: 'contactado' }) : l; }) });
+        setState({ successMsg: 'Cliente creado en el pipeline: ' + client.name });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeleteLead(id) {
+    if (!confirm('¿Eliminar este lead? No se puede deshacer.')) return;
+    adminApi('/api/commercial/leads/' + id, { method: 'DELETE' })
+      .then(function () {
+        setData({ leads: (state.data.leads || []).filter(function (l) { return l.id !== id; }) });
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });
   }
