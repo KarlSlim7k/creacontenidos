@@ -82,7 +82,8 @@
   var state = {
     token: null, user: null, allowedModules: [],
     screen: 'login', loginError: null,
-    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null },
+    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null, distLog: null, distChannels: null },
+    distBusy: null,
     radarSource: 'Todas', radarStatus: 'Todos', radarBusy: false,
     leadsStatus: 'todos',
     propuestaRejecting: null,
@@ -337,6 +338,9 @@
       }
     } else if (screen === 'aprobacion') {
       loadProposals('en_revision', 'status=en_revision');
+      loadProposals('published', 'status=published');
+      adminApi('/api/distribution/channels').then(function (r) { setData({ distChannels: r }); }).catch(function () { /* best-effort */ });
+      adminApi('/api/distribution/log?limit=30').then(function (r) { setData({ distLog: r }); }).catch(function () { /* best-effort */ });
     } else if (screen === 'comercial') {
       adminApi('/api/commercial/clients').then(function (r) { setData({ clients: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
     } else if (screen === 'leads') {
@@ -809,6 +813,37 @@
     '</div>';
   }
 
+  // Distribución: paso posterior a publicar. Push por canal + historial (published_content).
+  function renderDistribucion() {
+    var published = state.data.proposalsByKey.published;
+    var channels = state.data.distChannels;
+    if (!published || !channels) return '';
+    var lastPush = {};
+    (state.data.distLog || []).forEach(function (e) {
+      var k = e.proposal_id + ':' + e.platform;
+      if (!lastPush[k]) lastPush[k] = e; // el log viene DESC — el primero es el más reciente
+    });
+    var rows = published.slice(0, 10).map(function (p) {
+      var buttons = channels.map(function (ch) {
+        var push = lastPush[p.id + ':' + ch.channel];
+        var busy = state.distBusy === ch.channel + ':' + p.id;
+        var mark = '';
+        if (push && push.status === 'ok') mark = '<span title="Enviado ' + esc(relativeTime(push.published_at)) + '" style="color:var(--brand);font-size:11px;margin-left:2px;">✓</span>';
+        else if (push) mark = '<span title="' + esc(push.detail || 'Falló') + '" style="color:var(--danger);font-size:11px;margin-left:2px;">✕</span>';
+        return '<span style="display:inline-flex;align-items:center;">' +
+          '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="distribute" data-channel="' + ch.channel + '" data-id="' + p.id + '" ' +
+          (!ch.connected || busy ? 'disabled' : '') + (!ch.connected ? ' title="Canal no configurado (variables de entorno)"' : '') + '>' +
+          (busy ? 'Enviando…' : esc(ch.label)) + '</button>' + mark + '</span>';
+      }).join('');
+      return '<div class="padmin-row" style="flex-wrap:wrap;gap:8px;">' +
+        '<div style="min-width:0;"><p class="padmin-row-title">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.section || '') + (p.published_at ? ' · publicada ' + esc(relativeTime(p.published_at)) : '') + '</p></div>' +
+        '<span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' + buttons + '</span>' +
+      '</div>';
+    }).join('');
+    return '<p style="font-size:12px;font-weight:600;color:var(--text);margin:28px 0 12px;">Distribución &middot; publicadas recientes</p>' +
+      '<div class="padmin-card">' + (rows || '<div class="padmin-row"><p class="padmin-row-meta">Todavía no hay notas publicadas para distribuir.</p></div>') + '</div>';
+  }
+
   function renderAprobacion() {
     var piecesInReview = state.data.proposalsByKey.en_revision;
     if (!piecesInReview) return loadingCard();
@@ -816,6 +851,7 @@
       '<h1 class="padmin-h1" style="font-size:22px;margin:0 0 6px;">Aprobación</h1>' +
       '<p class="padmin-lede">Piezas pendientes de revisión editorial.</p>' +
       (piecesInReview.length ? renderAprobacionDesktop(piecesInReview) : loadingCard('Nada en revisión.')) +
+      renderDistribucion() +
       renderComentarioModal() +
     '</div>';
   }
@@ -1500,6 +1536,7 @@
       case 'confirm-comentario': submitReturn(Number(el.getAttribute('data-id'))); break;
       case 'set-transparency': setState({ transparency: mergeKey(state.transparency, el.getAttribute('data-piece'), el.getAttribute('data-label')) }); break;
       case 'approve-piece': submitPublish(Number(el.getAttribute('data-id'))); break;
+      case 'distribute': submitDistribute(el.getAttribute('data-channel'), Number(el.getAttribute('data-id'))); break;
       case 'set-config-tab': setState({ configTab: el.getAttribute('data-tab') }); loadScreenData('configuracion'); break;
       case 'approve-propuesta': submitApproveProposal(Number(el.getAttribute('data-id'))); break;
       case 'start-reject-propuesta': setState({ propuestaRejecting: Number(el.getAttribute('data-id')) }); break;
@@ -1766,6 +1803,23 @@
         setData({ clients: (state.data.clients || []).filter(function (c) { return c.id !== id; }) });
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDistribute(channel, proposalId) {
+    setState({ distBusy: channel + ':' + proposalId });
+    adminApi('/api/distribution/' + channel, { method: 'POST', body: { proposal_id: proposalId } })
+      .then(function (r) {
+        // WhatsApp devuelve share_url: se abre para que el director comparta desde su cuenta.
+        if (r && r.share_url) window.open(r.share_url, '_blank');
+        setState({ distBusy: null, successMsg: 'Nota enviada a ' + channel + '.' });
+      })
+      .catch(function (err) { setState({ distBusy: null, errorMsg: err.message }); })
+      .then(function () {
+        // Éxito o error quedan en la bitácora — refrescar siempre.
+        return adminApi('/api/distribution/log?limit=30');
+      })
+      .then(function (log) { setData({ distLog: log }); })
+      .catch(function () { /* best-effort */ });
   }
 
   function submitMarkLead(id, status) {

@@ -135,7 +135,7 @@ adminRouter.get('/integrations', requireAuth, async (req, res, next) => {
     res.json([
       { name: 'Nous Portal', desc: 'Fuente de temas del RADAR', connected: Boolean(process.env.NOUS_PORTAL_API_KEY) },
       { name: 'WordPress', desc: 'Publicación del sitio', connected: Boolean(process.env.WORDPRESS_URL) },
-      { name: 'Meta', desc: 'Publicación en Facebook', connected: Boolean(process.env.FACEBOOK_APP_TOKEN) },
+      { name: 'Meta', desc: 'Publicación en Facebook', connected: Boolean(process.env.FACEBOOK_PAGE_ID && process.env.FACEBOOK_PAGE_ACCESS_TOKEN) },
       { name: 'ElevenLabs', desc: 'Generación de audio', connected: Boolean(process.env.ELEVENLABS_API_KEY) },
     ]);
   } catch (err) {

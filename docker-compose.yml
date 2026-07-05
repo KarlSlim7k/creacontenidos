@@ -41,6 +41,12 @@ services:
       AI_MODEL_DEFAULT: ${AI_MODEL_DEFAULT:-deepseek/deepseek-v4-flash}
       AI_MODEL_COMPLEX: ${AI_MODEL_COMPLEX:-minimax/minimax-m3}
       AI_MODEL_QA: ${AI_MODEL_QA:-openai/gpt-5-nano}
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-https://crea-contenidos.com}
+      FACEBOOK_PAGE_ID: ${FACEBOOK_PAGE_ID:-}
+      FACEBOOK_PAGE_ACCESS_TOKEN: ${FACEBOOK_PAGE_ACCESS_TOKEN:-}
+      WORDPRESS_URL: ${WORDPRESS_URL:-}
+      WORDPRESS_USER: ${WORDPRESS_USER:-}
+      WORDPRESS_APP_PASSWORD: ${WORDPRESS_APP_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET (definila en .env)}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
     ports:
