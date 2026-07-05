@@ -79,6 +79,16 @@ async function detectTopics(query) {
   return parseJson(content);
 }
 
+// Radar de competencia: publicaciones recientes de medios competidores de la región,
+// vía Perplexity (web en vivo). El resultado mapea 1:1 a columnas de competitor_posts (008).
+async function detectCompetitorPosts(competitors) {
+  const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  const system = `Eres un analista de competencia para CREA Contenidos, medio digital en Perote, Veracruz, México. Hoy es ${fecha}. Busca en la web publicaciones recientes (últimos días) de los medios competidores indicados — nunca reportes contenido de años anteriores como si fuera actual.`;
+  const user = `Medios competidores a revisar: ${competitors.join(', ')}.\n\nBusca sus publicaciones más recientes o con más interacción (notas, posts en redes sociales). Devuelve SOLO un JSON array (máximo 10 objetos) con: source_platform (facebook/instagram/tiktok/web), source_account (nombre del medio o cuenta), post_url, post_text (texto o resumen del post), post_date (ISO 8601, o null si la fuente no da fecha — no la inventes), reactions, comments, shares (números; 0 si no hay dato), media_type (texto/foto/video o null).`;
+  const content = await perplexitySearch(system, user);
+  return parseJson(content);
+}
+
 async function generateProposal(context, format, angle) {
   const modelKey = format === 'guion_audio' || format === 'guion_video' ? 'complex' : 'default';
   const system = 'Eres un editor asistente para CREA Contenidos, un medio digital en Perote, Puebla. Generas propuestas de contenido en español mexicano profesional.';
@@ -122,4 +132,4 @@ async function logActivity(pool, action, detail, userId, status, metadata) {
   );
 }
 
-module.exports = { chatComplete, detectTopics, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, logActivity };
+module.exports = { chatComplete, detectTopics, detectCompetitorPosts, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, logActivity };

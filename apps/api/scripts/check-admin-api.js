@@ -169,7 +169,73 @@ async function main() {
     })).json();
     assert.strictEqual(updated.pipeline_stage, 'contactado');
 
-    console.log('OK: panel admin verificado (auth por rol, ideas por colaborador, pipeline propuesta→publicada, RADAR, comercial).');
+    // 9. Permisos vivos: GET /api/auth/roles solo director; produccion incluye 'pipeline'.
+    assert.strictEqual((await fetch(`${BASE}/api/auth/roles`, { headers: auth(comercialToken) })).status, 403);
+    const roles = await (await fetch(`${BASE}/api/auth/roles`, { headers: auth(directorToken) })).json();
+    assert.ok(roles.produccion.includes('pipeline'), 'produccion debe tener acceso al módulo pipeline');
+    assert.ok(roles.comercial.includes('leads'), 'comercial debe tener acceso al módulo leads');
+
+    // 10. Leads: alta pública → lista/estado/convertir a cliente; delete solo director.
+    assert.strictEqual((await fetch(`${BASE}/api/public/leads`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: '[check] lead', email: 'check-lead@test.mx', message: 'mensaje de prueba', service_interest: 'Básico' }),
+    })).status, 201);
+    let leads = await (await fetch(`${BASE}/api/commercial/leads?status=nuevo`, { headers: auth(comercialToken) })).json();
+    const lead = leads.find((l) => l.name === '[check] lead');
+    assert.ok(lead, 'el lead recién creado debe aparecer en la bandeja');
+    assert.strictEqual((await fetch(`${BASE}/api/commercial/leads`, { headers: auth(produccionToken) })).status, 403);
+    const marked = await (await fetch(`${BASE}/api/commercial/leads/${lead.id}`, {
+      method: 'PATCH', headers: { ...auth(comercialToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'contactado', notes: 'seguimiento' }),
+    })).json();
+    assert.strictEqual(marked.status, 'contactado');
+    const client = await (await fetch(`${BASE}/api/commercial/leads/${lead.id}/convert`, {
+      method: 'POST', headers: auth(comercialToken),
+    })).json();
+    assert.strictEqual(client.pipeline_stage, 'identificado', 'convertir debe crear el cliente en identificado');
+    assert.strictEqual((await fetch(`${BASE}/api/commercial/leads/${lead.id}`, { method: 'DELETE', headers: auth(comercialToken) })).status, 403);
+    assert.strictEqual((await fetch(`${BASE}/api/commercial/leads/${lead.id}`, { method: 'DELETE', headers: auth(directorToken) })).status, 204);
+    await pool.query('DELETE FROM clients WHERE id = $1', [client.id]);
+
+    // 11. Distribución: whatsapp funciona sin credenciales y queda en la bitácora;
+    // facebook sin env → 503; todo es solo-director.
+    const wa = await fetch(`${BASE}/api/distribution/whatsapp`, {
+      method: 'POST', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal_id: proposalId }),
+    });
+    assert.strictEqual(wa.status, 200, 'whatsapp debe funcionar sin credenciales');
+    const waBody = await wa.json();
+    assert.ok(waBody.share_url && waBody.share_url.startsWith('https://wa.me/?text='));
+    const distLog = await (await fetch(`${BASE}/api/distribution/log`, { headers: auth(directorToken) })).json();
+    assert.ok(distLog.some((e) => e.proposal_id === proposalId && e.platform === 'whatsapp' && e.status === 'ok'));
+    if (!process.env.FACEBOOK_PAGE_ACCESS_TOKEN) {
+      assert.strictEqual((await fetch(`${BASE}/api/distribution/facebook`, {
+        method: 'POST', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposal_id: proposalId }),
+      })).status, 503, 'facebook sin credenciales debe responder 503');
+    }
+    assert.strictEqual((await fetch(`${BASE}/api/distribution/whatsapp`, {
+      method: 'POST', headers: { ...auth(produccionToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal_id: proposalId }),
+    })).status, 403, 'distribuir es solo-director');
+    await pool.query('DELETE FROM published_content WHERE proposal_id = $1', [proposalId]);
+
+    // 12. Radar de competencia: CRUD sin IA (detect requiere PERPLEXITY_API_KEY — no se llama aquí).
+    const { rows: [cpost] } = await pool.query(
+      `INSERT INTO competitor_posts (source_platform, source_account, post_url, post_text)
+       VALUES ('web', '[check] medio', 'https://example.com/check-post', 'texto de prueba') RETURNING id`
+    );
+    const cposts = await (await fetch(`${BASE}/api/listening/competitors?analyzed=false`, { headers: auth(directorToken) })).json();
+    assert.ok(cposts.some((c) => c.id === cpost.id));
+    const analyzed = await (await fetch(`${BASE}/api/listening/competitors/${cpost.id}`, {
+      method: 'PATCH', headers: { ...auth(produccionToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analyzed: true }),
+    })).json();
+    assert.strictEqual(analyzed.analyzed, true);
+    assert.strictEqual((await fetch(`${BASE}/api/listening/competitors/${cpost.id}`, { method: 'DELETE', headers: auth(colaboradorToken) })).status, 403);
+    assert.strictEqual((await fetch(`${BASE}/api/listening/competitors/${cpost.id}`, { method: 'DELETE', headers: auth(directorToken) })).status, 204);
+
+    console.log('OK: panel admin verificado (auth por rol, ideas por colaborador, pipeline propuesta→publicada, RADAR, comercial, permisos vivos, leads, distribución, competencia).');
   } finally {
     server.kill();
     if (proposalId) {

@@ -82,9 +82,10 @@
   var state = {
     token: null, user: null, allowedModules: [],
     screen: 'login', loginError: null,
-    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null, distLog: null, distChannels: null },
+    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null, distLog: null, distChannels: null, competitors: null },
     distBusy: null,
     radarSource: 'Todas', radarStatus: 'Todos', radarBusy: false,
+    radarTab: 'temas', competitorsBusy: false,
     leadsStatus: 'todos',
     propuestaRejecting: null,
     editorProposalId: null, editorDraft: null,
@@ -349,6 +350,9 @@
       adminApi('/api/editorial/metrics').then(function (r) { setData({ metrics: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
     } else if (screen === 'radar') {
       adminApi('/api/listening/topics').then(function (r) { setData({ topics: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+      if (state.radarTab === 'competencia' && !state.data.competitors) {
+        adminApi('/api/listening/competitors').then(function (r) { setData({ competitors: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+      }
     } else if (screen === 'propuestas') {
       loadProposals('propuesta', 'status=propuesta');
       loadProposals('rechazada', 'status=rechazada');
@@ -1049,6 +1053,52 @@
   }
 
   function renderRadar() {
+    var tabs = '<div class="padmin-tabs">' + [
+      { id: 'temas', label: 'Temas' },
+      { id: 'competencia', label: 'Competencia' }
+    ].map(function (t) {
+      return '<button type="button" class="padmin-tab' + (state.radarTab === t.id ? ' active' : '') + '" data-action="set-radar-tab" data-tab="' + t.id + '">' + t.label + '</button>';
+    }).join('') + '</div>';
+    return '<div>' +
+      '<h1 class="padmin-h1">RADAR &middot; Social listening</h1>' +
+      '<p class="padmin-lede">Temas detectados por listening y publicaciones de la competencia. Feed de trabajo, no contenido editorial.</p>' +
+      tabs +
+      (state.radarTab === 'competencia' ? renderRadarCompetencia() : renderRadarTemas()) +
+    '</div>';
+  }
+
+  function renderRadarCompetencia() {
+    var posts = state.data.competitors;
+    if (!posts) return loadingCard();
+    var canManage = state.user.role === 'director' || state.user.role === 'produccion';
+    var detectBtn = canManage
+      ? '<div style="display:flex;justify-content:flex-end;margin-bottom:16px;"><button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-competitors" ' + (state.competitorsBusy ? 'disabled' : '') + '>' + (state.competitorsBusy ? 'Explorando…' : '🔎 Explorar competencia') + '</button></div>'
+      : '';
+    return detectBtn +
+      '<div class="padmin-card">' +
+        '<div class="padmin-table-head padmin-cols-competencia"><span>CUENTA</span><span>PUBLICACIÓN</span><span>FECHA</span><span>INTERACCIONES</span><span>ESTADO</span><span>ACCIONES</span></div>' +
+        (posts.length ? posts.map(function (p) {
+          var inter = (p.reactions || 0) + (p.comments || 0) + (p.shares || 0);
+          var st = p.analyzed ? { label: 'Analizado', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Nuevo', bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
+          var text = String(p.post_text || '—');
+          return '<div class="padmin-table-row padmin-cols-competencia">' +
+            '<div style="min-width:0;"><p class="padmin-row-title">' + esc(p.source_account || '—') + '</p><p class="padmin-row-meta" style="text-transform:uppercase;">' + esc(p.source_platform || '') + '</p></div>' +
+            '<div style="min-width:0;"><span style="font-size:12px;color:var(--text-2);line-height:1.4;" title="' + esc(text) + '">' + esc(text.slice(0, 160)) + (text.length > 160 ? '…' : '') + '</span>' +
+              (p.post_url ? '<a href="' + esc(p.post_url) + '" target="_blank" rel="noopener" style="display:block;font-size:11px;color:var(--accent-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(p.post_url) + '</a>' : '') + '</div>' +
+            '<span style="font-size:11px;color:var(--text-mute);">' + (p.post_date ? new Date(p.post_date).toLocaleDateString('es-MX') : '—') + '</span>' +
+            '<span style="font-size:12px;font-weight:600;color:var(--text);">' + inter + '</span>' +
+            '<span><span class="padmin-badge" style="background:' + st.bg + ';color:' + st.color + ';">' + st.label + '</span></span>' +
+            '<span style="display:flex;gap:4px;flex-wrap:wrap;">' +
+              (canManage ? '<button type="button" class="padmin-btn-sm padmin-btn-outline" title="Crear idea en la bandeja a partir de esta publicación" data-action="competitor-to-idea" data-id="' + p.id + '">→ Idea</button>' : '') +
+              (canManage && !p.analyzed ? '<button type="button" class="padmin-icon-btn" title="Marcar analizado" data-action="analyze-competitor" data-id="' + p.id + '">✓</button>' : '') +
+              (canManage ? '<button type="button" class="padmin-icon-btn" title="Eliminar" data-action="delete-competitor" data-id="' + p.id + '">🗑</button>' : '') +
+            '</span>' +
+          '</div>';
+        }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin publicaciones de competencia. Usa "Explorar competencia" para escanear con IA.</p></div>') +
+      '</div>';
+  }
+
+  function renderRadarTemas() {
     var topics = state.data.topics;
     if (!topics) return loadingCard();
     var sources = ['Todas', 'Perplexity', 'Facebook', 'TikTok'];
@@ -1065,10 +1115,7 @@
       return (state.radarSource === 'Todas' || r.source === state.radarSource) && (state.radarStatus === 'Todos' || r.status === state.radarStatus);
     });
 
-    return '<div>' +
-      '<h1 class="padmin-h1">RADAR &middot; Social listening</h1>' +
-      '<p class="padmin-lede">Temas detectados por listening. Feed de trabajo, no contenido editorial.</p>' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;">' + sourceChips + '<span style="width:1px;height:16px;background:var(--line-soft);margin:0 6px;"></span>' + statusChips +
+    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;">' + sourceChips + '<span style="width:1px;height:16px;background:var(--line-soft);margin:0 6px;"></span>' + statusChips +
         (state.user.role === 'director' || state.user.role === 'produccion' ?
           '<button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ' + (state.radarBusy ? 'disabled' : '') + ' style="margin-left:auto;">' + (state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias') + '</button>' : '') +
       '</div>' +
@@ -1092,8 +1139,7 @@
           '</div>';
         }).join('') +
       '</div>' +
-      renderRadarDetail() +
-    '</div>';
+      renderRadarDetail();
   }
 
   // ---------- propuestas ----------
@@ -1523,6 +1569,20 @@
         break;
       case 'set-radar-source': setState({ radarSource: el.getAttribute('data-value') }); break;
       case 'set-radar-status': setState({ radarStatus: el.getAttribute('data-value') }); break;
+      case 'set-radar-tab': setState({ radarTab: el.getAttribute('data-tab') }); loadScreenData('radar'); break;
+      case 'detect-competitors':
+        setState({ competitorsBusy: true });
+        adminApi('/api/listening/competitors/detect', { method: 'POST' })
+          .then(function () { return adminApi('/api/listening/competitors'); })
+          .then(function (posts) {
+            state.data.competitors = posts;
+            setState({ competitorsBusy: false, successMsg: 'Exploración de competencia completada.' });
+          })
+          .catch(function (err) { setState({ competitorsBusy: false, errorMsg: err.message }); });
+        break;
+      case 'analyze-competitor': submitAnalyzeCompetitor(Number(el.getAttribute('data-id'))); break;
+      case 'delete-competitor': submitDeleteCompetitor(Number(el.getAttribute('data-id'))); break;
+      case 'competitor-to-idea': submitCompetitorToIdea(Number(el.getAttribute('data-id'))); break;
       case 'set-leads-status': setState({ leadsStatus: el.getAttribute('data-value') }); break;
       case 'mark-lead': submitMarkLead(Number(el.getAttribute('data-id')), el.getAttribute('data-status')); break;
       case 'convert-lead': submitConvertLead(Number(el.getAttribute('data-id'))); break;
@@ -1846,6 +1906,42 @@
     adminApi('/api/commercial/leads/' + id, { method: 'DELETE' })
       .then(function () {
         setData({ leads: (state.data.leads || []).filter(function (l) { return l.id !== id; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitAnalyzeCompetitor(id) {
+    adminApi('/api/listening/competitors/' + id, { method: 'PATCH', body: { analyzed: true } })
+      .then(function (updated) {
+        setData({ competitors: (state.data.competitors || []).map(function (p) { return p.id === id ? updated : p; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeleteCompetitor(id) {
+    if (!confirm('¿Eliminar esta publicación de competencia? No se puede deshacer.')) return;
+    adminApi('/api/listening/competitors/' + id, { method: 'DELETE' })
+      .then(function () {
+        setData({ competitors: (state.data.competitors || []).filter(function (p) { return p.id !== id; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  // Crea una idea en la bandeja a partir del post del competidor (reusa POST /ideas)
+  // y lo marca analizado — no hace falta endpoint nuevo.
+  function submitCompetitorToIdea(id) {
+    var post = (state.data.competitors || []).filter(function (p) { return p.id === id; })[0];
+    if (!post) return;
+    var title = (post.source_account ? post.source_account + ': ' : '') + String(post.post_text || 'publicación de competencia').slice(0, 120);
+    var description = (post.post_text || '') + (post.post_url ? '\n\nFuente: ' + post.post_url : '');
+    adminApi('/api/editorial/ideas', { method: 'POST', body: { title: title, category: 'Local', description: description } })
+      .then(function () {
+        state.data.ideas = null; // la bandeja se refresca al entrar
+        setState({ successMsg: 'Idea creada en la bandeja.' });
+        return adminApi('/api/listening/competitors/' + id, { method: 'PATCH', body: { analyzed: true } });
+      })
+      .then(function (updated) {
+        if (updated) setData({ competitors: (state.data.competitors || []).map(function (p) { return p.id === id ? updated : p; }) });
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });
   }

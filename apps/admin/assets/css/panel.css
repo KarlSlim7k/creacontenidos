@@ -178,6 +178,7 @@
 .padmin-cols-permisos { grid-template-columns: 2fr 70px 90px 80px 90px; min-width: 560px; }
 .padmin-cols-services { grid-template-columns: 2fr 1fr 90px 130px; min-width: 540px; }
 .padmin-cols-leads { grid-template-columns: 80px 1fr 110px 2fr 100px 170px; min-width: 760px; }
+.padmin-cols-competencia { grid-template-columns: 140px 2fr 90px 110px 90px 140px; min-width: 760px; }
 
 /* ---------- editor ---------- */
 .padmin-editor-wrap { max-width: 760px; }
