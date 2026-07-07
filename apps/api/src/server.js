@@ -19,15 +19,18 @@ const { startNewsletterCron } = require('./lib/newsletter-cron');
 
 const app = express();
 
-// Servir archivos estáticos del frontend (apps/web/) y del panel admin (apps/admin/)
-app.use(express.static(path.join(__dirname, '../../web')));
-app.use('/admin', express.static(path.join(__dirname, '../../admin')));
-
+// helmet/cors ANTES de los estáticos: express.static termina la respuesta al
+// encontrar el archivo y nunca llama a next(), así que si helmet va después las
+// páginas HTML (sitio + panel admin) se sirven sin CSP/X-Frame-Options/nosniff.
 app.use(helmet());
 // Abierto en dev (portal en :4000, API en :3000). En producción, restringir
 // con CORS_ORIGIN (lista separada por comas) en .env.
 app.use(cors(config.corsOrigin ? { origin: config.corsOrigin.split(',') } : undefined));
 app.use(express.json());
+
+// Servir archivos estáticos del frontend (apps/web/) y del panel admin (apps/admin/)
+app.use(express.static(path.join(__dirname, '../../web')));
+app.use('/admin', express.static(path.join(__dirname, '../../admin')));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

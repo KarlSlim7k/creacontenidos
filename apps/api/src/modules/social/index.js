@@ -67,17 +67,26 @@ async function fetchOembed(network, url) {
   return value;
 }
 
+// Escapa TODO lo peligroso en un atributo HTML (no solo comillas dobles): un
+// title con `"><script>` rompía el atributo e inyectaba HTML — el embed se mete
+// vía innerHTML en el sitio público (main.js), así que esto es XSS almacenado.
+function escAttr(str) {
+  return String(str == null ? '' : str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 function buildEmbedHtml(network, externalUrl, title) {
   if (network === 'tiktok') {
     const m = externalUrl.match(/\/video\/(\d+)/);
     if (!m) return null;
-    const safeTitle = (title || '').replace(/"/g, '&quot;');
+    const safeTitle = escAttr(title);
     return '<iframe src="https://www.tiktok.com/embed/v2/' + m[1] + '" title="' + safeTitle + '" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy" style="width:100%;height:100%;border:0;"></iframe>';
   }
   if (network === 'youtube') {
     const m = externalUrl.match(/(?:youtu\.be\/|v=|\/shorts\/)([\w-]{11})/);
     if (!m) return null;
-    const safeTitle = (title || '').replace(/"/g, '&quot;');
+    const safeTitle = escAttr(title);
     return '<iframe src="https://www.youtube.com/embed/' + m[1] + '?rel=0" title="' + safeTitle + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy" style="width:100%;height:100%;border:0;"></iframe>';
   }
   // Facebook: el Video Plugin (facebook.com/plugins/video.php) es público y no
@@ -195,7 +204,7 @@ router.get('/public/social/:id/embed', async (req, res, next) => {
 // --- admin ---
 
 // GET /api/admin/social — todos los posts, publicados o no.
-router.get('/admin/social', requireAuth, async (req, res, next) => {
+router.get('/admin/social', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT sp.id, sp.network, sp.external_url, sp.title, sp.author_name, sp.thumbnail_url,
@@ -212,7 +221,7 @@ router.get('/admin/social', requireAuth, async (req, res, next) => {
 // Si oEmbed falla (URL privada, red caída), el post queda guardado igual con
 // is_published=false para que el editor decida qué hacer.
 const POST_BODY_MAX = 600;
-router.post('/admin/social', requireAuth, async (req, res, next) => {
+router.post('/admin/social', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const rawInput = (req.body && req.body.external_url) || '';
     const external_url = typeof rawInput === 'string' ? extractVideoUrl(rawInput) : rawInput;
@@ -257,7 +266,7 @@ router.post('/admin/social', requireAuth, async (req, res, next) => {
 });
 
 // PATCH /api/admin/social/:id — toggle publicado, mover posición, re-resolver embed.
-router.patch('/admin/social/:id', requireAuth, async (req, res, next) => {
+router.patch('/admin/social/:id', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const { rows: current } = await pool.query('SELECT * FROM social_posts WHERE id = $1', [req.params.id]);
     if (!current[0]) return res.status(404).json({ error: 'Post no encontrado' });
