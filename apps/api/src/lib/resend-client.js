@@ -53,12 +53,20 @@ async function sendEmail({ to, subject, html, text }) {
 }
 
 async function countActiveSubscribers() {
-  // ponytail: la API de contactos de Resend no expone cursor de paginación hoy
-  // (devuelve la lista completa en `data`). Si Resend agrega paginación, iterar
-  // aquí con el cursor — hasta entonces esto es lo correcto, no una sola página de N.
-  const json = await resendFetch(`/audiences/${config.resendAudienceId}/contacts`);
-  const contacts = json.data || [];
-  return contacts.filter((c) => !c.unsubscribed).length;
+  // Resend pagina los contactos con ?limit + ?after=<id del último de la página>.
+  // Iterar hasta has_more=false; sin esto, con la lista grande el panel muestra
+  // solo la primera página (verificado contra la API: has_more y after funcionan).
+  let count = 0;
+  let after;
+  for (let guard = 0; guard < 1000; guard++) { // tope de seguridad (~100k contactos)
+    const qs = `?limit=100${after ? `&after=${encodeURIComponent(after)}` : ''}`;
+    const json = await resendFetch(`/audiences/${config.resendAudienceId}/contacts${qs}`);
+    const data = json.data || [];
+    count += data.filter((c) => !c.unsubscribed).length;
+    if (!json.has_more || data.length === 0) break;
+    after = data[data.length - 1].id;
+  }
+  return count;
 }
 
 // Crea y envía un broadcast a la Audiencia General. Resend inyecta el link de

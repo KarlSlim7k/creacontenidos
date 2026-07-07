@@ -50,6 +50,7 @@ function injectMeta(html, article, siteUrl) {
   const url = siteUrl.replace(/\/$/, '') + '/nota.html?slug=' + encodeURIComponent(article.slug);
   let image = article.cover_image_url || '';
   if (image && image.startsWith('/')) image = siteUrl.replace(/\/$/, '') + image;
+  if (!image) image = siteUrl.replace(/\/$/, '') + '/assets/img/og-default.png'; // nota sin portada
 
   let out = html.replace(/<title>[^<]*<\/title>/i, '<title>' + esc(title) + '</title>');
   out = setMeta(out, 'name', 'description', desc);
