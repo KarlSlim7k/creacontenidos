@@ -1,8 +1,17 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 
 const router = express.Router();
+
+// Este router se monta en /api (server.js), fuera del rate limiter de /api/public.
+// Limitar las rutas públicas aquí: cada /embed anónimo puede disparar un refetch.
+const socialPublicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false });
+
+// Refrescar metadata de oEmbed solo si está vieja: evita un UPDATE por cada visita
+// anónima a producciones/portada/tercer-tiempo (3 páginas × N posts × cada visitante).
+const OEMBED_TTL_MS = 6 * 60 * 60 * 1000;
 
 // --- oEmbed: por red -> endpoint público, sin token. ---
 // TikTok: https://www.tiktok.com/oembed?url=<encoded>
@@ -138,7 +147,7 @@ const POST_FIELDS = 'id, network, external_url, title, author_name, thumbnail_ur
 // Solo posts publicados, ordenados por position asc y luego recientes.
 // NO devuelve embed_html para no inflar el payload: el frontend hace
 // GET /api/public/social/:id/embed cuando renderiza el iframe.
-router.get('/public/social', async (req, res, next) => {
+router.get('/public/social', socialPublicLimiter, async (req, res, next) => {
   try {
     const network = req.query.network;
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 12, 1), 50);
@@ -161,10 +170,10 @@ router.get('/public/social', async (req, res, next) => {
 // Devuelve el iframe HTML construido a partir de la URL. Si la red no expone
 // oEmbed, igual servimos el iframe nativo (TikTok /embed/v2/:id, YouTube /embed/:id)
 // sin necesidad del script embed.js.
-router.get('/public/social/:id/embed', async (req, res, next) => {
+router.get('/public/social/:id/embed', socialPublicLimiter, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT network, external_url, title, author_name, thumbnail_url
+      `SELECT network, external_url, title, author_name, thumbnail_url, fetched_at
        FROM social_posts WHERE id = $1 AND is_published = true`,
       [req.params.id]
     );
@@ -174,17 +183,20 @@ router.get('/public/social/:id/embed', async (req, res, next) => {
     // El iframe nativo siempre se puede construir mientras la URL sea válida.
     const iframe = buildEmbedHtml(post.network, post.external_url, post.title);
 
-    // Refrescar metadata de oEmbed en background (no bloquea la respuesta).
-    // Esto mantiene thumbnails y títulos frescos sin depender de refetch manual.
-    fetchOembed(post.network, post.external_url)
-      .then(async (fresh) => {
-        await pool.query(
-          `UPDATE social_posts SET title = COALESCE($1, title), author_name = COALESCE($2, author_name),
-            thumbnail_url = COALESCE($3, thumbnail_url), fetched_at = now(), updated_at = now() WHERE id = $4`,
-          [fresh.title, fresh.author_name, fresh.thumbnail_url, req.params.id]
-        );
-      })
-      .catch(() => { /* oEmbed falló; la metadata existente se conserva */ });
+    // Refrescar metadata de oEmbed en background solo si está vieja (>6h): sin esto,
+    // cada visita anónima escribía la BD. No bloquea la respuesta.
+    const stale = !post.fetched_at || (Date.now() - new Date(post.fetched_at).getTime() > OEMBED_TTL_MS);
+    if (stale) {
+      fetchOembed(post.network, post.external_url)
+        .then(async (fresh) => {
+          await pool.query(
+            `UPDATE social_posts SET title = COALESCE($1, title), author_name = COALESCE($2, author_name),
+              thumbnail_url = COALESCE($3, thumbnail_url), fetched_at = now(), updated_at = now() WHERE id = $4`,
+            [fresh.title, fresh.author_name, fresh.thumbnail_url, req.params.id]
+          );
+        })
+        .catch(() => { /* oEmbed falló; la metadata existente se conserva */ });
+    }
 
     if (iframe) {
       return res.json({ embed_html: iframe, title: post.title, author_name: post.author_name });

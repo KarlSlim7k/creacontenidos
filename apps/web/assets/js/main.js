@@ -712,14 +712,15 @@ function initIdeaForm() {
 }
 
 function initNewsletterForm() {
-  var form = document.querySelector('form[data-newsletter-form]');
-  if (!form) return;
-  var details = form.closest('details');
-  submitForm(form, '/api/public/newsletter/subscribe', function () {
-    return { email: form.elements.email.value.trim(), website: form.elements.website.value };
-  }, function (setNote) {
-    form.reset();
-    setNote('¡Listo! Ya estás suscrito a "Buenos días, Perote".', 'ok');
-    if (details) setTimeout(function () { details.open = false; }, 2500);
+  // Puede haber varios en la misma página (topbar desktop, menú móvil, pie de nota).
+  document.querySelectorAll('form[data-newsletter-form]').forEach(function (form) {
+    var details = form.closest('details');
+    submitForm(form, '/api/public/newsletter/subscribe', function () {
+      return { email: form.elements.email.value.trim(), website: form.elements.website.value };
+    }, function (setNote) {
+      form.reset();
+      setNote('Te enviamos un correo para confirmar tu suscripción. Revisa tu bandeja.', 'ok');
+      if (details) setTimeout(function () { details.open = false; }, 3500);
+    });
   });
 }

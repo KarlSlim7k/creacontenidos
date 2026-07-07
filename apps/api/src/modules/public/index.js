@@ -1,7 +1,9 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const pool = require('../../db/pool');
-const { addContact } = require('../../lib/resend-client');
+const config = require('../../config');
+const { addContact, updateContact, sendEmail } = require('../../lib/resend-client');
+const { makeToken, readToken, confirmEmailHtml, confirmPage } = require('../../lib/newsletter-optin');
 
 const router = express.Router();
 
@@ -60,16 +62,35 @@ router.get('/articles/:slug', async (req, res, next) => {
   }
 });
 
+// Dedupe de vistas: misma IP + slug cuenta una sola vez por hora. En memoria,
+// igual que el lock del cron. ponytail: single instance; si se escala a N
+// réplicas, mover a tabla o Redis con TTL.
+const VIEW_TTL_MS = 60 * 60 * 1000;
+const viewSeen = new Map(); // "ip|slug" -> expiry ms
+function alreadyViewed(ip, slug) {
+  const now = Date.now();
+  const key = ip + '|' + slug;
+  const exp = viewSeen.get(key);
+  if (exp && exp > now) return true;
+  viewSeen.set(key, now + VIEW_TTL_MS);
+  if (viewSeen.size > 5000) { // purga perezosa de vencidos
+    for (const [k, e] of viewSeen) if (e <= now) viewSeen.delete(k);
+  }
+  return false;
+}
+
 // POST /api/public/articles/:slug/view — un clic en nota.html = una vista.
 // Sin body ni respuesta útil para el cliente; solo incrementa el contador.
 router.post('/articles/:slug/view', async (req, res, next) => {
   try {
-    await pool.query(
-      `UPDATE content_proposals SET view_count = view_count + 1
-       WHERE slug = $1 AND status = 'published'`,
-      [req.params.slug]
-    );
-    res.status(204).end();
+    if (!alreadyViewed(req.ip, req.params.slug)) {
+      await pool.query(
+        `UPDATE content_proposals SET view_count = view_count + 1
+         WHERE slug = $1 AND status = 'published'`,
+        [req.params.slug]
+      );
+    }
+    res.status(204).end(); // 204 siempre: el cliente no distingue si contó o no
   } catch (err) {
     next(err);
   }
@@ -92,7 +113,12 @@ router.get('/services', async (req, res, next) => {
 // en el panel admin (Configuración → Métricas del sitio). Fila única.
 router.get('/site-metrics', async (req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM site_metrics WHERE id = 1');
+    const { rows } = await pool.query(
+      `SELECT monthly_reach_label, municipalities_count, tercer_tiempo_listeners_label,
+              audience_age_18_24_pct, audience_age_25_44_pct, audience_age_45_plus_pct,
+              updated_at
+       FROM site_metrics WHERE id = 1`
+    );
     res.json(rows[0]);
   } catch (err) {
     next(err);
@@ -219,8 +245,32 @@ router.post('/newsletter/subscribe', newsletterLimiter, async (req, res, next) =
     if (!email || email.length > 320 || !EMAIL_RE_NEWS.test(email)) {
       return res.status(400).json({ error: 'Datos inválidos', fields: { email: 'Formato de email inválido' } });
     }
-    await addContact(email);
+    // Doble opt-in: alta pendiente (unsubscribed) + correo de confirmación con
+    // token firmado. Evita suscribir el correo de un tercero sin su consentimiento.
+    await addContact(email, true);
+    const confirmUrl = `${config.publicSiteUrl}/api/public/newsletter/confirm?token=${makeToken(email)}`;
+    await sendEmail({
+      to: email,
+      subject: 'Confirma tu suscripción a "Buenos días, Perote"',
+      html: confirmEmailHtml(confirmUrl),
+      text: `Confirma tu suscripción a "Buenos días, Perote": ${confirmUrl}`,
+    });
     res.status(201).json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/public/newsletter/confirm?token= — abierto desde el correo. Verifica
+// el token y pasa el contacto a activo en Resend. Idempotente.
+router.get('/newsletter/confirm', async (req, res, next) => {
+  try {
+    const email = readToken(req.query.token);
+    if (!email) {
+      return res.status(400).type('html').send(confirmPage('Enlace inválido', 'El enlace de confirmación no es válido o está incompleto. Suscríbete de nuevo desde el sitio.'));
+    }
+    await updateContact(email, false);
+    res.type('html').send(confirmPage('¡Suscripción confirmada!', 'Ya recibirás "Buenos días, Perote" cada mañana. Gracias por leernos.'));
   } catch (err) {
     next(err);
   }
@@ -232,9 +282,14 @@ router.post('/newsletter/subscribe', newsletterLimiter, async (req, res, next) =
 router.get('/images/:id', async (req, res, next) => {
   try {
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).json({ error: 'Imagen no encontrada' });
+    const etag = `"${req.params.id}"`;
+    // Contenido inmutable por UUID: si el cliente/proxy ya lo tiene, 304 sin leer
+    // el BYTEA de Postgres (ahorra la lectura completa ante revalidaciones).
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
     const { rows } = await pool.query('SELECT mime_type, data FROM generated_images WHERE id = $1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Imagen no encontrada' });
     res.set('Content-Type', rows[0].mime_type);
+    res.set('ETag', etag);
     // Inmutable: cada generación crea una fila nueva con UUID nuevo, nunca se reescribe.
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
     res.send(rows[0].data);

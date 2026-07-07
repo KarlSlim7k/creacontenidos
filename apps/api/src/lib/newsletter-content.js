@@ -29,8 +29,12 @@ async function pickNextSponsor() {
   );
   if (!rows.length) return null;
   const sponsor = rows[0];
+  // Link con esquema válido o nada: un typo en website_url (ej. "www.x.com" sin
+  // http) produce un enlace roto en el correo ante 1K+ lectores. Mejor sin link.
+  const link = /^https?:\/\//i.test(sponsor.website_url) ? sponsor.website_url : null;
+  if (!link) return null;
   await pool.query('UPDATE clients SET last_sponsored_at = now() WHERE id = $1', [sponsor.id]);
-  return { nombre: sponsor.nombre, copy: sponsor.sponsor_copy, link: sponsor.website_url };
+  return { nombre: sponsor.nombre, copy: sponsor.sponsor_copy, link };
 }
 
 // agenda sí tiene fuente real (newsletter_events, cargados a mano en el panel);

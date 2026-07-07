@@ -18,6 +18,14 @@ const aiLimiter = rateLimit({
   message: { error: 'Demasiadas generaciones con IA. Espera unos minutos.' },
 });
 
+// ElevenLabs cuesta más y se agota rápido: tope más estricto para /audio, por si
+// una cuenta de staff se ve comprometida. 5/15min alcanza para pruebas legítimas.
+const audioLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => req.user.id,
+  message: { error: 'Demasiadas generaciones de audio. Espera unos minutos.' },
+});
+
 function buildContent(body) {
   const { weekday, date, clima, notaDelDia, enBreve, datoDelDia, agenda, patrocinador } = body || {};
   if (!weekday || !date || !clima || !notaDelDia || !notaDelDia.titulo || !notaDelDia.cuerpo) {
@@ -77,15 +85,35 @@ router.post('/send', requireAuth, requireRole('director'), async (req, res, next
   try {
     const content = buildContent(req.body);
     const subject = `Buenos días, Perote — ${content.weekday} ${content.date}`;
-    const broadcast = await sendBroadcast({
-      subject,
-      html: renderNewsletterHtml(content),
-      text: renderNewsletterText(content),
-    });
-    await pool.query(
-      `UPDATE newsletter_editions SET status = 'enviado', sent_at = now(), sent_by = $1 WHERE edition_date = CURRENT_DATE`,
+    // Guard atómico contra doble envío (doble clic o dos directores a la vez):
+    // solo la request que logra pasar la edición de hoy a 'enviado' dispara el
+    // broadcast. Si ya estaba enviada (o no existe la edición), rowCount=0 → 409.
+    const claim = await pool.query(
+      `UPDATE newsletter_editions SET status = 'enviado', sent_at = now(), sent_by = $1
+       WHERE edition_date = CURRENT_DATE AND status <> 'enviado'`,
       [req.user.id]
     );
+    if (claim.rowCount === 0) {
+      return res.status(409).json({ error: 'La edición de hoy ya fue enviada (o no existe). Genera el contenido antes de enviar.' });
+    }
+    let broadcast;
+    try {
+      broadcast = await sendBroadcast({
+        subject,
+        html: renderNewsletterHtml(content),
+        text: renderNewsletterText(content),
+      });
+    } catch (sendErr) {
+      // El broadcast no salió: liberar el claim para que el director pueda reintentar.
+      // ponytail: si sendBroadcast falló DESPUÉS del /send de Resend (timeout de red),
+      // reintentar podría duplicar. Mitigar registrando broadcast.id antes del send
+      // en resend-client si eso llega a pasar en la práctica.
+      await pool.query(
+        `UPDATE newsletter_editions SET status = 'pendiente', sent_at = NULL, sent_by = NULL
+         WHERE edition_date = CURRENT_DATE AND status = 'enviado'`
+      );
+      throw sendErr;
+    }
     await logActivity(pool, 'newsletter_send', `Newsletter enviado: ${subject}`, req.user.id, 'exito', { broadcastId: broadcast.id });
     res.json({ ok: true, broadcastId: broadcast.id });
   } catch (err) {
@@ -96,7 +124,7 @@ router.post('/send', requireAuth, requireRole('director'), async (req, res, next
 
 // POST /api/newsletter/audio — TTS de prueba (ElevenLabs). NO VERIFICADO en vivo:
 // la cuenta free bloquea voces vía API (402). Devuelve el MP3 directo.
-router.post('/audio', requireAuth, aiLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
+router.post('/audio', requireAuth, audioLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const content = buildContent(req.body);
     const script = renderPodcastScript(content);

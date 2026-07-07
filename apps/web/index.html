@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CREA Contenidos · Medio digital de Perote, Veracruz</title>
 <meta name="description" content="Noticias y contenido local del corredor Perote–Xalapa–Puebla.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CREA Contenidos">
+<meta property="og:title" content="CREA Contenidos · Perote, Veracruz">
+<meta property="og:description" content="Noticias y contenido local del corredor Perote–Xalapa–Puebla.">
+<meta property="og:url" content="https://crea-contenidos.com/">
+<meta property="og:image" content="https://crea-contenidos.com/assets/img/logo-crea.png">
 <meta name="crea-api-base" content="http://localhost:3000">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,6 +19,7 @@
 <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body class="theme-editorial">
+<noscript><div style="background:#2F5233;color:#fff;text-align:center;padding:12px;font:14px/1.5 Arial,sans-serif;">CREA Contenidos necesita JavaScript para mostrar el contenido. Actívalo para leer las notas.</div></noscript>
 
 <header class="container">
   <div class="ed-topbar">
@@ -76,6 +83,20 @@
   <a href="comunidad.html" style="color:var(--accent-text);">Comunidad</a>
   <a href="producciones.html" style="color:var(--brand);">Producciones CREA</a>
   <a href="estudio/index.html" style="color:var(--brand);">Visitar Estudio &rarr;</a>
+
+  <form data-newsletter-form class="nl-cta">
+    <p class="nl-title">Recibe cada mañana "Buenos días, Perote"</p>
+    <div class="field">
+      <label for="nl-email-m">Correo</label>
+      <input id="nl-email-m" name="email" type="email" placeholder="tu@correo.com" required maxlength="320" autocomplete="email">
+    </div>
+    <div class="field visually-hidden" aria-hidden="true">
+      <label for="nl-website-m">Sitio web (no llenar)</label>
+      <input id="nl-website-m" name="website" type="text" tabindex="-1" autocomplete="off">
+    </div>
+    <button type="submit" class="btn btn-brand">Suscribirme</button>
+    <p data-form-note role="status" aria-live="polite" tabindex="-1" style="font-size:12px;color:var(--brand);margin-top:12px;outline:none;"></p>
+  </form>
 </div>
 
 <main class="container">
@@ -175,22 +196,6 @@
 </div>
 
 <script src="assets/js/main.js"></script>
-<script>
-(function () {
-  var preview = document.getElementById('prod-preview');
-  if (!preview) return;
-  fetch(window.CREA_API_BASE + '/api/public/social?network=tiktok&limit=3')
-    .then(function (r) { return r.json(); })
-    .then(function (posts) {
-      if (!posts.length) { preview.style.display = 'none'; return; }
-      preview.innerHTML = posts.map(function (p) {
-        return '<a href="producciones.html" style="display:block;width:100px;height:140px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#000;">' +
-          (p.thumbnail_url ? '<img src="' + p.thumbnail_url + '" alt="" style="width:100%;height:100%;object-fit:cover;">' : '<div style="width:100%;height:100%;background:#2F5233;"></div>') +
-        '</a>';
-      }).join('');
-    })
-    .catch(function () { preview.style.display = 'none'; });
-})();
-</script>
+<script src="assets/js/home-preview.js"></script>
 </body>
 </html>

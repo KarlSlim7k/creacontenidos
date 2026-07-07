@@ -1,9 +1,9 @@
 require('dotenv').config();
 
-// Fail-loud: en producción, CORS_ORIGIN vacío hace que cors() refleje CUALQUIER
-// origen (cors(undefined) = abierto). No callar ese error al boot.
+// Fail-hard: en producción, CORS_ORIGIN vacío hace que cors() refleje CUALQUIER
+// origen (cors(undefined) = abierto). Abortar el boot en vez de callarlo.
 if ((process.env.NODE_ENV || 'development') === 'production' && !process.env.CORS_ORIGIN) {
-  console.warn('\n⚠️  CORS_ORIGIN vacío en producción: la API acepta peticiones de CUALQUIER origen. Define CORS_ORIGIN (lista separada por comas) en el entorno.\n');
+  throw new Error('CORS_ORIGIN vacío en producción: la API aceptaría peticiones de CUALQUIER origen. Define CORS_ORIGIN (lista separada por comas) en el entorno.');
 }
 
 module.exports = {

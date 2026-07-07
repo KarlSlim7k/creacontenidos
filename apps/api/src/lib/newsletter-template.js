@@ -37,6 +37,9 @@ function renderNewsletterHtml(data) {
 <html lang="es">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:${COLORS.paper};font-family:Georgia,'Roboto Slab',serif;color:${COLORS.ink};">
+  <!-- Preheader: resumen que el cliente muestra en la vista previa de la bandeja,
+       oculto en el cuerpo. Sin esto el preview arranca con "Buenos días, Perote. Hoy es…". -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:${COLORS.paper};opacity:0;">${esc(data.notaDelDia.titulo)}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${COLORS.paper};padding:24px 0;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:8px;overflow:hidden;">

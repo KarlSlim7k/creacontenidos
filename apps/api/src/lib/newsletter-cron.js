@@ -30,8 +30,12 @@ async function tick() {
   const settings = rows[0];
   if (!settings || !settings.enabled) return;
 
+  // Autocorrectivo: dispara si YA PASÓ la hora configurada y aún no hay edición
+  // de hoy. Antes exigía el minuto exacto: si la IA fallaba o el proceso reiniciaba
+  // justo en ese minuto, no había edición ese día. Ahora el "no existe edición hoy"
+  // (abajo) es lo que evita que se regenere cada minuto tras la hora objetivo.
   const { hour, minute } = currentHourMinute();
-  if (hour !== settings.send_hour || minute !== settings.send_minute) return;
+  if (hour * 60 + minute < settings.send_hour * 60 + settings.send_minute) return;
 
   const { rows: existing } = await pool.query('SELECT id FROM newsletter_editions WHERE edition_date = CURRENT_DATE');
   if (existing.length) return; // ya generado (manual o cron) hoy — no duplicar

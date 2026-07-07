@@ -22,10 +22,19 @@ async function resendFetch(path, opts) {
   return json;
 }
 
-async function addContact(email) {
+// unsubscribed=true al alta pendiente (doble opt-in): no cuenta ni recibe hasta
+// que confirma. updateContact lo pasa a false cuando el enlace del correo se abre.
+async function addContact(email, unsubscribed = false) {
   return resendFetch(`/audiences/${config.resendAudienceId}/contacts`, {
     method: 'POST',
-    body: { email, unsubscribed: false },
+    body: { email, unsubscribed },
+  });
+}
+
+async function updateContact(email, unsubscribed) {
+  return resendFetch(`/audiences/${config.resendAudienceId}/contacts/${encodeURIComponent(email)}`, {
+    method: 'PATCH',
+    body: { unsubscribed },
   });
 }
 
@@ -35,7 +44,18 @@ async function removeContact(email) {
   });
 }
 
+// Correo transaccional (confirmación de doble opt-in). Mismo remitente que el broadcast.
+async function sendEmail({ to, subject, html, text }) {
+  return resendFetch('/emails', {
+    method: 'POST',
+    body: { from: config.resendFrom, to, subject, html, text },
+  });
+}
+
 async function countActiveSubscribers() {
+  // ponytail: la API de contactos de Resend no expone cursor de paginación hoy
+  // (devuelve la lista completa en `data`). Si Resend agrega paginación, iterar
+  // aquí con el cursor — hasta entonces esto es lo correcto, no una sola página de N.
   const json = await resendFetch(`/audiences/${config.resendAudienceId}/contacts`);
   const contacts = json.data || [];
   return contacts.filter((c) => !c.unsubscribed).length;
@@ -58,4 +78,4 @@ async function sendBroadcast({ subject, html, text }) {
   return broadcast;
 }
 
-module.exports = { addContact, removeContact, countActiveSubscribers, sendBroadcast };
+module.exports = { addContact, updateContact, removeContact, countActiveSubscribers, sendBroadcast, sendEmail };

@@ -19,6 +19,30 @@ function setMeta(html, attr, key, value) {
   return html.replace(re, '$1' + esc(value) + '$2');
 }
 
+// JSON-LD NewsArticle: rich results de Google / Google News. Se serializa con
+// JSON.stringify y se neutraliza "<" para que un dato con "</script>" no rompa el tag.
+function newsArticleJsonLd(article, siteUrl, url, image) {
+  const base = siteUrl.replace(/\/$/, '');
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: article.title,
+    description: article.dek || '',
+    mainEntityOfPage: url,
+    author: { '@type': 'Person', name: article.author_name || 'Redacción CREA Contenidos' },
+    publisher: {
+      '@type': 'Organization',
+      name: 'CREA Contenidos',
+      logo: { '@type': 'ImageObject', url: base + '/assets/img/logo-crea.png' },
+    },
+  };
+  if (image) data.image = [image];
+  if (article.published_at) data.datePublished = new Date(article.published_at).toISOString();
+  if (article.section) data.articleSection = article.section;
+  const json = JSON.stringify(data).replace(/</g, '\\u003c');
+  return '<script type="application/ld+json">' + json + '</script>';
+}
+
 // Pura y testeable: toma el HTML base + el artículo y devuelve el HTML con OG real.
 function injectMeta(html, article, siteUrl) {
   const title = article.title + ' · CREA Contenidos';
@@ -33,6 +57,7 @@ function injectMeta(html, article, siteUrl) {
   out = setMeta(out, 'property', 'og:description', desc);
   out = setMeta(out, 'property', 'og:url', url);
   out = setMeta(out, 'property', 'og:image', image);
+  out = out.replace('</head>', newsArticleJsonLd(article, siteUrl, url, image) + '</head>');
   return out;
 }
 
@@ -46,7 +71,7 @@ function notaSsr(webDir, pool, siteUrl) {
     try {
       if (baseHtml == null) baseHtml = fs.readFileSync(notaPath, 'utf8');
       const { rows } = await pool.query(
-        "SELECT slug, title, dek, cover_image_url FROM content_proposals WHERE slug = $1 AND status = 'published'",
+        "SELECT slug, title, dek, cover_image_url, author_name, published_at, section FROM content_proposals WHERE slug = $1 AND status = 'published'",
         [slug]
       );
       if (!rows[0]) return next(); // no publicada → static sirve el genérico (y el JS mostrará el 404)
