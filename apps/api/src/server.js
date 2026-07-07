@@ -16,6 +16,8 @@ const commercialRouter = require('./modules/commercial');
 const socialRouter = require('./modules/social');
 const newsletterRouter = require('./modules/newsletter');
 const { startNewsletterCron } = require('./lib/newsletter-cron');
+const { notaSsr } = require('./lib/nota-ssr');
+const pool = require('./db/pool');
 
 const app = express();
 
@@ -28,8 +30,13 @@ app.use(helmet());
 app.use(cors(config.corsOrigin ? { origin: config.corsOrigin.split(',') } : undefined));
 app.use(express.json());
 
+// SSR de nota.html: inyecta OG tags reales antes que el static la sirva estática.
+// Sin slug, o si falla, cae a next() y el static entrega el HTML genérico.
+const webDir = path.join(__dirname, '../../web');
+app.get('/nota.html', notaSsr(webDir, pool, config.publicSiteUrl));
+
 // Servir archivos estáticos del frontend (apps/web/) y del panel admin (apps/admin/)
-app.use(express.static(path.join(__dirname, '../../web')));
+app.use(express.static(webDir));
 app.use('/admin', express.static(path.join(__dirname, '../../admin')));
 
 app.get('/health', (req, res) => {

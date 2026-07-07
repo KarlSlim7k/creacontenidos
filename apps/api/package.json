@@ -14,7 +14,10 @@
     "check:e2e": "node scripts/verify-e2e.js",
     "check:admin": "node scripts/check-admin-api.js",
     "check:social": "node scripts/check-social.js",
-    "check": "npm run check:api && npm run check:leads && npm run check:e2e && npm run check:admin && npm run check:social"
+    "check:content": "node scripts/check-content-engine.js",
+    "check:newsletter": "node scripts/check-newsletter.js",
+    "check:nota-ssr": "node scripts/check-nota-ssr.js",
+    "check": "npm run check:api && npm run check:leads && npm run check:e2e && npm run check:admin && npm run check:social && npm run check:content && npm run check:newsletter && npm run check:nota-ssr"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

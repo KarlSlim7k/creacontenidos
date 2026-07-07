@@ -56,6 +56,13 @@ services:
     ports:
       # Host 3001: el 3000 lo ocupa el dashboard de Dokploy en el VPS.
       - "${API_HOST_PORT:-3001}:3000"
+    healthcheck:
+      # node:22 trae fetch global; el puerto interno siempre es 3000.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       db:
         condition: service_healthy

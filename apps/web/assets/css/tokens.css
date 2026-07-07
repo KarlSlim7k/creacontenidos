@@ -11,7 +11,7 @@ body.theme-editorial {
   --bg-2: #E2DFD3;     /* Paper 2 */
   --bg-3: #DCE6D6;     /* Pine light */
   --text: #1F2A22;     /* Ink */
-  --text-mute: #6B6A60;/* Stone */
+  --text-mute: #59584F;/* Stone — oscurecido de #6B6A60 para AA 4.5:1 sobre --bg/--bg-2/--bg-3 */
   --line: #C9C6B8;     /* Stone line */
   --brand: #2F5233;    /* Pine */
   --accent: #C77D2E;   /* Ochre */

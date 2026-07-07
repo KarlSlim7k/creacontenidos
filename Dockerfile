@@ -15,5 +15,10 @@ COPY apps/admin /app/apps/admin
 
 EXPOSE 3000
 
+# Correr sin privilegios: node:*-slim ya trae el usuario `node` (uid 1000). Los
+# archivos copiados son world-readable y el proceso no escribe a disco, así que
+# basta con cambiar de usuario — no hace falta chown.
+USER node
+
 # Migrar antes de arrancar. La DB ya está healthy vía depends_on en compose.
 CMD ["sh", "-c", "npm run migrate && node src/server.js"]
