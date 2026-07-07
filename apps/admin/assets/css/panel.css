@@ -181,11 +181,20 @@
 .padmin-cols-competencia { grid-template-columns: 140px 2fr 90px 110px 90px 140px; min-width: 760px; }
 
 /* ---------- editor ---------- */
-.padmin-editor-wrap { max-width: 760px; }
+.padmin-editor-wrap { max-width: 1200px; }
 .padmin-editor-card { background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 8px; padding: 24px; margin-bottom: 20px; }
+/* Dos columnas: izquierda título+cuerpo (~66%), derecha panel de metadatos (~33%).
+   align-items:start para que el panel no se estire y el sticky funcione. */
+.padmin-editor-cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.padmin-editor-main .padmin-body-textarea { min-height: 380px; margin-bottom: 0; }
+.padmin-editor-meta { background: #FBFBF9; box-shadow: 0 1px 3px rgba(0,0,0,0.06); position: sticky; top: 0; }
+.padmin-editor-meta-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin: 0 0 14px; }
+.padmin-ia-image { border-top: 0.5px solid var(--line-soft); padding-top: 16px; margin-bottom: 16px; }
+.padmin-ia-image-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin: 0 0 10px; }
 .padmin-title-input { font-family: var(--font-display); font-size: 22px; color: var(--text); border: 0.5px solid var(--line-soft); border-radius: 6px; padding: 12px 14px; margin-bottom: 18px; background: var(--bg-admin); width: 100%; }
 .padmin-body-textarea { min-height: 140px; border: 0.5px solid var(--line-soft); border-radius: 6px; background: var(--bg-admin); margin-bottom: 18px; padding: 12px 14px; font-size: 13px; color: var(--text); line-height: 1.5; width: 100%; font-family: inherit; resize: vertical; }
 .padmin-editor-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; margin-bottom: 18px; }
+@media (max-width: 900px) { .padmin-editor-cols { grid-template-columns: 1fr; } .padmin-editor-meta { position: static; } }
 .padmin-preview-frame { width: 100%; height: clamp(320px, 70vh, 640px); border: 0.5px solid var(--line-soft); border-radius: 6px; background: #fff; }
 
 @media (max-width: 640px) {

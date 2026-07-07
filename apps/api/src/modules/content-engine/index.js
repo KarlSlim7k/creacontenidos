@@ -1,7 +1,7 @@
 const express = require('express');
 const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateProposal, generateDraft, qaCheck, logActivity } = require('../../lib/ai-client');
+const { generateProposal, generateDraft, qaCheck, generateImage, logActivity } = require('../../lib/ai-client');
 
 const router = express.Router();
 
@@ -40,6 +40,38 @@ router.post('/generate-draft', requireAuth, async (req, res, next) => {
     await pool.query('UPDATE content_proposals SET body = $1, updated_at = now() WHERE id = $2', [body, proposal_id]);
     await logActivity(pool, 'generate_draft', `Borrador generado para propuesta ${proposal_id}`, req.user.id, 'exito', { proposal_id });
     res.json({ body });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/content/generate-image — genera imagen de portada con IA para una propuesta
+// en borrador. El prompt viaja desde el cliente (refleja el título/dek en pantalla aunque
+// no estén guardados). La imagen queda en generated_images y cover_image_url apunta a
+// /api/public/images/:id (ruta relativa: web y admin se sirven desde el mismo origen).
+router.post('/generate-image', requireAuth, async (req, res, next) => {
+  try {
+    const { proposal_id, prompt } = req.body || {};
+    if (!proposal_id) return res.status(400).json({ error: 'Datos inválidos', fields: { proposal_id: 'Requerido' } });
+    if (!prompt || !String(prompt).trim()) return res.status(400).json({ error: 'Datos inválidos', fields: { prompt: 'Requerido' } });
+    const { rows } = await pool.query('SELECT id, status FROM content_proposals WHERE id = $1', [proposal_id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Propuesta no encontrada' });
+    if (rows[0].status !== 'borrador') {
+      return res.status(409).json({ error: `Solo se puede generar imagen cuando el estado es 'borrador' (actual: '${rows[0].status}')` });
+    }
+    const cleanPrompt = String(prompt).trim();
+    const image = await generateImage(cleanPrompt);
+    const { rows: imgRows } = await pool.query(
+      'INSERT INTO generated_images (proposal_id, prompt, mime_type, data) VALUES ($1, $2, $3, $4) RETURNING id',
+      [proposal_id, cleanPrompt, image.mimeType, image.buffer]
+    );
+    const coverUrl = `/api/public/images/${imgRows[0].id}`;
+    await pool.query(
+      'UPDATE content_proposals SET cover_image_url = $1, image_prompt = $2, updated_at = now() WHERE id = $3',
+      [coverUrl, cleanPrompt, proposal_id]
+    );
+    await logActivity(pool, 'generate_image', `Imagen de portada generada para propuesta ${proposal_id}`, req.user.id, 'exito', { proposal_id, model: 'openrouter' });
+    res.json({ cover_image_url: coverUrl });
   } catch (err) {
     next(err);
   }

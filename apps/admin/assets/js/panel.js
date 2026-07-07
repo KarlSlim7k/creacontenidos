@@ -330,10 +330,11 @@
       loadProposals('borrador', 'status=borrador');
       if (id) {
         adminApi('/api/editorial/proposals/' + id).then(function (p) {
-          setState({ editorProposalId: id, notaPreviewHtml: null, editorDraft: {
+          setState({ editorProposalId: id, notaPreviewHtml: null, editorImagePrompt: null, editorDraft: {
             title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || '',
             cover_image_url: p.cover_image_url || '', author_name: p.author_name || state.user.name,
-            is_sponsored: Boolean(p.is_sponsored), sponsor_name: p.sponsor_name || ''
+            is_sponsored: Boolean(p.is_sponsored), sponsor_name: p.sponsor_name || '',
+            image_prompt: p.image_prompt || ''
           } });
         });
       }
@@ -648,15 +649,24 @@
     '</div>';
   }
 
+  // Prompt sugerido para la imagen de portada: se arma con lo que hay en el borrador
+  // (título/dek/sección) + el estilo editorial fijo de CREA. Editable en el textarea.
+  function defaultImagePrompt(d) {
+    var tema = d.title ? '"' + d.title + '"' + (d.dek ? '. ' + d.dek : '') : 'la nota';
+    return 'Imagen realista y profesional para ilustrar ' + tema + '. Contexto: sección ' + (d.section || 'Local') + ' de un medio digital en Perote, Veracruz. Estilo fotográfico documental, tonos cálidos y neutros, alta resolución, sin texto sobre la imagen.';
+  }
+
   function renderEditor() {
     if (!state.editorProposalId) return renderEditorPicker();
     if (!state.editorDraft) return loadingCard();
     var d = state.editorDraft;
+    var imagePrompt = state.editorImagePrompt != null ? state.editorImagePrompt : (d.image_prompt || defaultImagePrompt(d));
     return '<div class="padmin-editor-wrap">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">' +
         '<h1 style="font-weight:600;font-size:20px;color:var(--text);margin:0;">Editor de nota</h1>' + badge('borrador') +
       '</div>' +
-      '<div class="padmin-editor-card">' +
+      '<div class="padmin-editor-cols">' +
+      '<div class="padmin-editor-card padmin-editor-main">' +
         '<label style="font-size:11px;color:var(--text-mute);display:block;margin-bottom:8px;">Título</label>' +
         '<input id="editor-title" class="padmin-title-input" value="' + esc(d.title) + '" style="width:100%;box-sizing:border-box;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:12px;">' +
@@ -664,20 +674,23 @@
           '<button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-draft" ' + (state.generatingDraft ? 'disabled' : '') + '>' + (state.generatingDraft ? 'Generando…' : 'Generar borrador con IA') + '</button>' +
         '</div>' +
         '<textarea id="editor-body" class="padmin-body-textarea">' + esc(d.body) + '</textarea>' +
-        '<div class="padmin-editor-grid2">' +
-          '<div class="padmin-field" style="margin:0;"><label>Sección editorial</label><select id="editor-section">' + ['Local', 'Cultura', 'Economía', 'Entretenimiento', 'Deportes', 'Opinión'].map(function (s) { return '<option' + (d.section === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>' +
-          '<div class="padmin-field" style="margin:0;"><label>Dek / bajada</label><input id="editor-dek" type="text" value="' + esc(d.dek) + '"></div>' +
-        '</div>' +
-        '<div class="padmin-editor-grid2">' +
-          '<div class="padmin-field" style="margin:0;"><label>Slug</label><input id="editor-slug" type="text" value="' + esc(d.slug) + '" placeholder="mi-nota-slug"></div>' +
-          '<div class="padmin-field" style="margin:0;"><label>Autor / firma</label><input id="editor-author" type="text" value="' + esc(d.author_name) + '"></div>' +
-        '</div>' +
+      '</div>' +
+      '<aside class="padmin-editor-card padmin-editor-meta">' +
+        '<p class="padmin-editor-meta-title">Metadatos de la nota</p>' +
+        '<div class="padmin-field"><label>Sección editorial</label><select id="editor-section">' + ['Local', 'Cultura', 'Economía', 'Entretenimiento', 'Deportes', 'Opinión'].map(function (s) { return '<option' + (d.section === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>' +
+        '<div class="padmin-field"><label>Dek / bajada</label><input id="editor-dek" type="text" value="' + esc(d.dek) + '"></div>' +
+        '<div class="padmin-field"><label>Slug</label><input id="editor-slug" type="text" value="' + esc(d.slug) + '" placeholder="mi-nota-slug"></div>' +
+        '<div class="padmin-field"><label>Autor / firma</label><input id="editor-author" type="text" value="' + esc(d.author_name) + '"></div>' +
         '<div class="padmin-field"><label>Imagen de portada (URL)</label><input id="editor-cover" type="text" value="' + esc(d.cover_image_url) + '" placeholder="https://..." onchange="document.getElementById(\'editor-cover-thumb\').src=this.value;document.getElementById(\'editor-cover-thumb\').style.display=this.value?\'block\':\'none\';"></div>' +
-        (d.cover_image_url ? '<img id="editor-cover-thumb" src="' + esc(d.cover_image_url) + '" alt="" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 18px;" onerror="this.style.display=\'none\';">' : '<img id="editor-cover-thumb" style="display:none;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 18px;" onerror="this.style.display=\'none\';">') +
-        '<div class="padmin-editor-grid2">' +
-          '<div class="padmin-field-inline padmin-field" style="margin:0;"><input id="editor-sponsored" type="checkbox" ' + (d.is_sponsored ? 'checked' : '') + ' onchange="document.getElementById(\'editor-sponsor-name-field\').style.display=this.checked?\'\':\'none\';"><label for="editor-sponsored" style="font-size:13px;color:var(--text);">Nota patrocinada (publicidad)</label></div>' +
-          '<div class="padmin-field" id="editor-sponsor-name-field" style="margin:0;display:' + (d.is_sponsored ? '' : 'none') + ';"><label>Patrocinado por</label><input id="editor-sponsor-name" type="text" value="' + esc(d.sponsor_name) + '" placeholder="Nombre del negocio"></div>' +
+        (d.cover_image_url ? '<img id="editor-cover-thumb" src="' + esc(d.cover_image_url) + '" alt="" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" onerror="this.style.display=\'none\';">' : '<img id="editor-cover-thumb" style="display:none;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" onerror="this.style.display=\'none\';">') +
+        '<div class="padmin-ia-image">' +
+          '<p class="padmin-ia-image-title">Generación de imagen de portada con IA</p>' +
+          '<button type="button" class="padmin-btn" data-action="generate-image" style="width:100%;margin-bottom:12px;" ' + (state.generatingImage ? 'disabled' : '') + '>' + (state.generatingImage ? 'Generando imagen…' : 'Generar imagen con IA') + '</button>' +
+          '<div class="padmin-field"><label>Prompt sugerido (editable)</label><textarea id="editor-image-prompt" style="min-height:110px;font-size:12px;">' + esc(imagePrompt) + '</textarea></div>' +
         '</div>' +
+        '<div class="padmin-field-inline padmin-field"><input id="editor-sponsored" type="checkbox" ' + (d.is_sponsored ? 'checked' : '') + ' onchange="document.getElementById(\'editor-sponsor-name-field\').style.display=this.checked?\'\':\'none\';"><label for="editor-sponsored" style="font-size:13px;color:var(--text);">Nota patrocinada (publicidad)</label></div>' +
+        '<div class="padmin-field" id="editor-sponsor-name-field" style="margin-bottom:0;display:' + (d.is_sponsored ? '' : 'none') + ';"><label>Patrocinado por</label><input id="editor-sponsor-name" type="text" value="' + esc(d.sponsor_name) + '" placeholder="Nombre del negocio"></div>' +
+      '</aside>' +
       '</div>' +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
         '<button type="button" class="padmin-btn padmin-btn-brand" data-action="submit-review" data-id="' + state.editorProposalId + '">Enviar a revisión</button>' +
@@ -1641,6 +1654,9 @@
       case 'delete-service': submitDeleteService(Number(el.getAttribute('data-id'))); break;
       case 'generate-draft':
         if (!state.editorProposalId) break;
+        // Snapshot del form antes del re-render: sin esto las ediciones sin guardar
+        // (dek, slug, etc.) se pierden al volver a pintar la pantalla.
+        state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm());
         setState({ generatingDraft: true });
         adminApi('/api/content/generate-draft', { method: 'POST', body: { proposal_id: state.editorProposalId } })
           .then(function (res) {
@@ -1648,6 +1664,19 @@
             setState({ generatingDraft: false });
           })
           .catch(function (err) { setState({ generatingDraft: false, errorMsg: err.message }); });
+        break;
+      case 'generate-image':
+        if (!state.editorProposalId) break;
+        state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm());
+        var imgPrompt = document.getElementById('editor-image-prompt').value;
+        if (!imgPrompt.trim()) { setState({ errorMsg: 'Escribe un prompt para generar la imagen.' }); break; }
+        setState({ generatingImage: true, editorImagePrompt: imgPrompt });
+        adminApi('/api/content/generate-image', { method: 'POST', body: { proposal_id: state.editorProposalId, prompt: imgPrompt } })
+          .then(function (res) {
+            if (state.editorDraft) state.editorDraft.cover_image_url = res.cover_image_url;
+            setState({ generatingImage: false, successMsg: 'Imagen de portada generada.' });
+          })
+          .catch(function (err) { setState({ generatingImage: false, errorMsg: err.message }); });
         break;
       case 'run-qa':
         if (!state.editorProposalId) break;

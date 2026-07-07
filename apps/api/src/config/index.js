@@ -10,6 +10,9 @@ module.exports = {
   aiModelDefault: process.env.AI_MODEL_DEFAULT || 'deepseek/deepseek-v4-flash',
   aiModelComplex: process.env.AI_MODEL_COMPLEX || 'minimax/minimax-m3',
   aiModelQa: process.env.AI_MODEL_QA || 'openai/gpt-5-nano',
+  // Imagen vía OpenRouter (docs/ia/generacion-imagenes.md): Nano Banana Pro para portadas.
+  openrouterKey: process.env.OPENROUTER_API_KEY,
+  aiModelImage: process.env.AI_MODEL_IMAGE || 'google/gemini-3-pro-image',
   publicSiteUrl: process.env.PUBLIC_SITE_URL || 'https://crea-contenidos.com',
   facebookPageId: process.env.FACEBOOK_PAGE_ID,
   facebookPageToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN,

@@ -2,6 +2,7 @@ const config = require('../config');
 
 const NOUS_BASE = 'https://inference-api.nousresearch.com/v1';
 const PERPLEXITY_BASE = 'https://api.perplexity.ai';
+const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
 const MODELS = {
   default: config.aiModelDefault,
@@ -125,6 +126,36 @@ async function generateNewsletterEditorial(topics, weekday, date) {
   return parseJson(content);
 }
 
+// Imagen de portada vía OpenRouter (docs/ia/generacion-imagenes.md): mismo formato
+// chat/completions que chatComplete, solo cambia base/model y pide modalities de imagen.
+// Devuelve buffer + mime porque OpenRouter responde data-URL base64, no URL pública.
+async function generateImage(prompt) {
+  const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.openrouterKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: config.aiModelImage,
+      messages: [{ role: 'user', content: prompt }],
+      modalities: ['image', 'text'],
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`OpenRouter respondió ${res.status}: ${text.slice(0, 300)}`);
+  }
+  const json = await res.json();
+  const images = json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.images;
+  if (!images || !images[0] || !images[0].image_url || !images[0].image_url.url) {
+    throw new Error('OpenRouter no devolvió imagen');
+  }
+  const match = images[0].image_url.url.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw new Error('OpenRouter devolvió un formato de imagen inesperado (se esperaba data-URL base64)');
+  return { mimeType: match[1], buffer: Buffer.from(match[2], 'base64') };
+}
+
 async function logActivity(pool, action, detail, userId, status, metadata) {
   await pool.query(
     'INSERT INTO activity_log (action, detail, user_id, status, metadata) VALUES ($1, $2, $3, $4, $5)',
@@ -132,4 +163,4 @@ async function logActivity(pool, action, detail, userId, status, metadata) {
   );
 }
 
-module.exports = { chatComplete, detectTopics, detectCompetitorPosts, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, logActivity };
+module.exports = { chatComplete, detectTopics, detectCompetitorPosts, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity };

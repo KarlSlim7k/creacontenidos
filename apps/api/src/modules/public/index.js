@@ -226,4 +226,21 @@ router.post('/newsletter/subscribe', newsletterLimiter, async (req, res, next) =
   }
 });
 
+// GET /api/public/images/:id — sirve imágenes de portada generadas con IA
+// (generated_images, migración 029). Público sin auth: el portal las renderiza
+// en <img src>. UUID inválido = 404, no 500 (el cast a uuid lo valida Postgres).
+router.get('/images/:id', async (req, res, next) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).json({ error: 'Imagen no encontrada' });
+    const { rows } = await pool.query('SELECT mime_type, data FROM generated_images WHERE id = $1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Imagen no encontrada' });
+    res.set('Content-Type', rows[0].mime_type);
+    // Inmutable: cada generación crea una fila nueva con UUID nuevo, nunca se reescribe.
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(rows[0].data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

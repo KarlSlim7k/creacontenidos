@@ -81,7 +81,7 @@ router.delete('/ideas/:id', requireAuth, requireRole('director'), async (req, re
 // Pipeline: 'propuesta' → 'borrador' → 'en_revision' → 'published' (gate) | 'rechazada'.
 
 const PROPOSAL_FIELDS = `id, topic_id, format, title, body, dek, section, slug, cover_image_url,
-  author_name, is_sponsored, sponsor_name,
+  author_name, is_sponsored, sponsor_name, image_prompt,
   angulo, sensibilidad, origin, status, author_id, review_comment, published_at, created_at, updated_at`;
 
 // GET /api/editorial/proposals?status=a,b&author_id=
