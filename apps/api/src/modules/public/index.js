@@ -4,11 +4,13 @@ const pool = require('../../db/pool');
 const config = require('../../config');
 const { addContact, updateContact, sendEmail } = require('../../lib/resend-client');
 const { makeToken, readToken, confirmEmailHtml, confirmPage } = require('../../lib/newsletter-optin');
+const { rateLimitKey } = require('../../lib/client-ip');
 
 const router = express.Router();
 
-// Rate limit sobre toda la superficie /api/public: 300 req / 15 min por IP.
-router.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false }));
+// Rate limit sobre toda la superficie /api/public: 300 req / 15 min por IP real
+// (CF-Connecting-IP, ver client-ip.js).
+router.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false, keyGenerator: rateLimitKey }));
 
 // Solo campos públicos: nunca exponer image_prompt/topic_id ni borradores.
 const ARTICLE_FIELDS = 'slug, title, dek, section, author_name, cover_image_url, published_at, is_sponsored, sponsor_name';
@@ -83,7 +85,7 @@ function alreadyViewed(ip, slug) {
 // Sin body ni respuesta útil para el cliente; solo incrementa el contador.
 router.post('/articles/:slug/view', async (req, res, next) => {
   try {
-    if (!alreadyViewed(req.ip, req.params.slug)) {
+    if (!alreadyViewed(rateLimitKey(req), req.params.slug)) {
       await pool.query(
         `UPDATE content_proposals SET view_count = view_count + 1
          WHERE slug = $1 AND status = 'published'`,
@@ -164,7 +166,7 @@ router.get('/authors/:name/articles', async (req, res, next) => {
 
 // Rate limit estricto adicional SOLO para el POST de leads: 5 req / 15 min por IP,
 // encima del límite general del router (300/15min).
-const leadsLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false });
+const leadsLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, keyGenerator: rateLimitKey });
 
 // Campo: [requerido, longitud máxima]. Validación en la frontera antes de tocar Postgres.
 const LEAD_FIELDS = {
@@ -233,7 +235,7 @@ router.post('/leads', leadsLimiter, async (req, res, next) => {
 // Fuente de verdad de suscriptores: Audiencia "General" en Resend (sin tabla propia).
 
 const EMAIL_RE_NEWS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const newsletterLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false });
+const newsletterLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, keyGenerator: rateLimitKey });
 
 // POST /api/public/newsletter/subscribe
 router.post('/newsletter/subscribe', newsletterLimiter, async (req, res, next) => {

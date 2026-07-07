@@ -2,12 +2,13 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
+const { rateLimitKey } = require('../../lib/client-ip');
 
 const router = express.Router();
 
 // Este router se monta en /api (server.js), fuera del rate limiter de /api/public.
 // Limitar las rutas públicas aquí: cada /embed anónimo puede disparar un refetch.
-const socialPublicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false });
+const socialPublicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false, keyGenerator: rateLimitKey });
 
 // Refrescar metadata de oEmbed solo si está vieja: evita un UPDATE por cada visita
 // anónima a producciones/portada/tercer-tiempo (3 páginas × N posts × cada visitante).

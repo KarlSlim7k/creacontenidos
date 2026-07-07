@@ -21,9 +21,11 @@ const pool = require('./db/pool');
 
 const app = express();
 
-// Detrás del proxy de Dokploy/Traefik (un hop). Sin esto req.ip es la IP del
-// proxy y los rate limiters por IP se vuelven contadores globales (DoS trivial).
-// Exacto 1, no `true`: evita que un X-Forwarded-For falso suplante la IP real.
+// Un hop de proxy (Traefik de Dokploy). OJO: en prod hay Cloudflare DELANTE de
+// Traefik y Traefik NO preserva el XFF del cliente (verificado: el X-Forwarded-For
+// que llega es la IP del edge de CF, no el visitante). Por eso los rate limiters
+// NO se fían de req.ip: keyean por CF-Connecting-IP (ver lib/client-ip.js). Este
+// trust proxy solo fija req.ip como fallback razonable en dev/sin CF.
 app.set('trust proxy', 1);
 
 // helmet/cors ANTES de los estáticos: express.static termina la respuesta al
