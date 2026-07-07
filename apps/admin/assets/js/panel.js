@@ -286,7 +286,7 @@
       setState({ screen: 'denegado', deniedTarget: id, showNotifications: false });
       return;
     }
-    var patch = { screen: id, deniedTarget: null, showNotifications: false };
+    var patch = { screen: id, deniedTarget: null, showNotifications: false, mobileNavOpen: false };
     if (id === 'editor') patch.editorProposalId = (extra != null ? extra : null);
     setState(patch);
     loadScreenData(id, extra);
@@ -328,6 +328,7 @@
     } else if (screen === 'editor') {
       var id = extra != null ? extra : state.editorProposalId;
       loadProposals('borrador', 'status=borrador');
+      loadProposals('en_revision', 'status=en_revision');
       if (id) {
         adminApi('/api/editorial/proposals/' + id).then(function (p) {
           setState({ editorProposalId: id, notaPreviewHtml: null, editorImagePrompt: null, editorDraft: {
@@ -439,8 +440,15 @@
   }
 
   function renderSidebar() {
-    return '<div class="padmin-sidebar">' +
-      '<div class="padmin-sidebar-brand"><img src="assets/img/logo-crea.png" alt=""><span class="name">CREA</span><span class="badge">PANEL</span></div>' +
+    // Hamburguesa solo móvil (≤640px, CSS): el sidebar colapsa a barra superior y
+    // nav+cuenta se despliegan al tocar el botón. En desktop el botón no existe visualmente.
+    var toggleIcon = state.mobileNavOpen
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    return '<div class="padmin-sidebar' + (state.mobileNavOpen ? ' nav-open' : '') + '">' +
+      '<div class="padmin-sidebar-brand"><img src="assets/img/logo-crea.png" alt=""><span class="name">CREA</span><span class="badge">PANEL</span>' +
+        '<button type="button" class="padmin-menu-toggle" data-action="toggle-mobile-nav" aria-label="Menú" aria-expanded="' + (state.mobileNavOpen ? 'true' : 'false') + '">' + toggleIcon + '</button>' +
+      '</div>' +
       '<div class="padmin-nav">' + renderNav() + '</div>' +
       '<div class="padmin-account">' +
         '<div class="padmin-account-row">' +
@@ -501,7 +509,7 @@
 
     return '<div>' +
       '<p style="font-size:13px;color:var(--text-mute);margin:0 0 4px;">Buenos días</p>' +
-      '<h1 class="padmin-h1" style="font-size:24px;margin-bottom:24px;">' + esc(state.user.name) + '</h1>' +
+      '<h1 class="padmin-h1" style="margin-bottom:22px;">' + esc(state.user.name) + '</h1>' +
       '<div class="padmin-grid2" style="margin-bottom:28px;">' +
         statCard('IDEAS PENDIENTES', ideasNueva.length) +
         statCard('PIEZAS EN REVISIÓN', piecesInReview.length) +
@@ -551,7 +559,7 @@
 
     return '<div>' +
       '<p style="font-size:13px;color:var(--text-mute);margin:0 0 4px;">Tus tareas</p>' +
-      '<h1 class="padmin-h1" style="font-size:24px;margin-bottom:24px;">' + esc(state.user.name) + '</h1>' +
+      '<h1 class="padmin-h1" style="margin-bottom:22px;">' + esc(state.user.name) + '</h1>' +
       '<div class="padmin-grid4" style="margin-bottom:28px;">' +
         statCard('PIEZAS ASIGNADAS', myPieces.length) +
         statCard('EN BORRADOR', myDraftCount) +
@@ -611,7 +619,7 @@
     if (!ideas) return loadingCard();
     var demoNote = state.demoNote === 'idea' ? '<p class="padmin-demo-hint">Idea enviada.</p>' : '';
     return '<div style="max-width:640px;">' +
-      '<h1 class="padmin-h1" style="font-size:22px;">Tus ideas</h1>' +
+      '<h1 class="padmin-h1">Tus ideas</h1>' +
       '<p class="padmin-lede">Envía una idea de nota y da seguimiento a su estado.</p>' +
       '<div class="padmin-card" style="padding:20px;margin-bottom:24px;">' +
         '<p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 14px;">Nueva idea</p>' +
@@ -636,16 +644,60 @@
 
   // ---------- editor ----------
 
+  // Fila del picker: thumb de portada + título/dek + sección/fecha + estado + acciones
+  // rápidas (vista previa siempre; eliminar solo director y solo borradores).
+  function pickerRow(p, editable) {
+    var fecha = p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '';
+    var thumb = p.cover_image_url
+      ? '<img src="' + esc(p.cover_image_url) + '" alt="" class="padmin-picker-thumb" onerror="this.style.visibility=\'hidden\';">'
+      : '<div class="padmin-picker-thumb padmin-picker-thumb-empty">Sin<br>imagen</div>';
+    var meta = [p.section || '', fecha, p.author_name || ''].filter(Boolean).join(' · ');
+    return '<div class="padmin-row' + (editable ? ' clickable" data-action="open-editor" data-id="' + p.id + '"' : '"') + ' style="gap:12px;">' +
+      thumb +
+      '<div style="flex:1;min-width:0;">' +
+        '<p class="padmin-row-title">' + esc(p.title) + '</p>' +
+        '<p class="padmin-row-meta">' + esc(meta) + (p.dek ? ' — ' + esc(String(p.dek).slice(0, 90)) : '') + '</p>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">' +
+        badge(p.status) +
+        '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="preview-piece" data-id="' + p.id + '">Vista previa</button>' +
+        (editable && state.user.role === 'director' ? '<button type="button" class="padmin-btn-sm padmin-btn-danger-outline" data-action="delete-borrador" data-id="' + p.id + '">Eliminar</button>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  // Modal de vista previa desde el picker: reusa buildNotaPreviewDoc (mismo render
+  // que la vista previa dentro del editor) sin abrir la pieza.
+  function renderPickerPreview() {
+    if (!state.pickerPreview) return '';
+    var p = state.pickerPreview;
+    return '<div class="padmin-overlay">' +
+      '<div class="padmin-overlay-bg" data-action="close-picker-preview"></div>' +
+      '<div class="padmin-modal" style="width:720px;padding:18px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+          '<p style="font-size:11px;font-weight:600;color:var(--text-mute);letter-spacing:0.06em;margin:0;">VISTA PREVIA — ' + esc(p.title || '') + '</p>' +
+          '<span class="padmin-drawer-close" data-action="close-picker-preview">Cerrar &times;</span>' +
+        '</div>' +
+        '<iframe srcdoc="' + esc(buildNotaPreviewDoc(p)) + '" class="padmin-preview-frame"></iframe>' +
+      '</div>' +
+    '</div>';
+  }
+
   function renderEditorPicker() {
     var list = state.data.proposalsByKey.borrador;
     if (!list) return loadingCard();
     var mine = state.user.role === 'produccion' ? list.filter(function (p) { return p.author_id === state.user.id; }) : list;
+    var inReview = state.data.proposalsByKey.en_revision || [];
     return '<div>' +
-      '<h1 style="font-weight:600;font-size:20px;color:var(--text);margin:0 0 16px;">Editor de nota</h1>' +
+      '<h1 class="padmin-h1">Editor de nota</h1>' +
       '<p class="padmin-lede">Elige una pieza en borrador para editar.</p>' +
-      '<div class="padmin-card">' + (mine.length ? mine.map(function (p) {
-        return '<div class="padmin-row clickable" data-action="open-editor" data-id="' + p.id + '"><div><p class="padmin-row-title">' + esc(p.title) + '</p><p class="padmin-row-meta">' + esc(p.section || '') + '</p></div>' + badge(p.status) + '</div>';
-      }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">No hay piezas en borrador. Aprueba una propuesta desde "Propuestas IA".</p></div>') + '</div>' +
+      '<div class="padmin-card">' + (mine.length ? mine.map(function (p) { return pickerRow(p, true); }).join('') :
+        '<div class="padmin-row"><p class="padmin-row-meta">No hay piezas en borrador. Aprueba una propuesta desde "Propuestas IA".</p></div>') + '</div>' +
+      (inReview.length ?
+        '<p style="font-size:11px;font-weight:600;color:var(--text-mute);letter-spacing:0.06em;margin:22px 0 10px;">EN REVISIÓN (solo lectura — se editan devolviéndolas desde Aprobación)</p>' +
+        '<div class="padmin-card">' + inReview.map(function (p) { return pickerRow(p, false); }).join('') + '</div>'
+      : '') +
+      renderPickerPreview() +
     '</div>';
   }
 
@@ -662,8 +714,8 @@
     var d = state.editorDraft;
     var imagePrompt = state.editorImagePrompt != null ? state.editorImagePrompt : (d.image_prompt || defaultImagePrompt(d));
     return '<div class="padmin-editor-wrap">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">' +
-        '<h1 style="font-weight:600;font-size:20px;color:var(--text);margin:0;">Editor de nota</h1>' + badge('borrador') +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;">' +
+        '<h1 class="padmin-h1" style="margin:0;">Editor de nota</h1>' + badge('borrador') +
       '</div>' +
       '<div class="padmin-editor-cols">' +
       '<div class="padmin-editor-card padmin-editor-main">' +
@@ -866,7 +918,7 @@
     var piecesInReview = state.data.proposalsByKey.en_revision;
     if (!piecesInReview) return loadingCard();
     return '<div>' +
-      '<h1 class="padmin-h1" style="font-size:22px;margin:0 0 6px;">Aprobación</h1>' +
+      '<h1 class="padmin-h1">Aprobación</h1>' +
       '<p class="padmin-lede">Piezas pendientes de revisión editorial.</p>' +
       (piecesInReview.length ? renderAprobacionDesktop(piecesInReview) : loadingCard('Nada en revisión.')) +
       renderDistribucion() +
@@ -1000,7 +1052,7 @@
     var authors = m.authors || [];
 
     return '<div style="max-width:820px;">' +
-      '<h1 class="padmin-h1" style="font-size:22px;margin-bottom:22px;">Panel de métricas</h1>' +
+      '<h1 class="padmin-h1" style="margin-bottom:22px;">Panel de métricas</h1>' +
       '<div class="padmin-grid2" style="gap:16px;margin-bottom:24px;">' +
         '<div class="padmin-card" style="padding:20px;"><p class="padmin-stat-label">PIEZAS PUBLICADAS ESTA SEMANA VS. OBJETIVO</p><p style="font-weight:700;font-size:24px;color:var(--text);margin:0 0 10px;">' + m.piecesPublished + ' / ' + m.weeklyGoal + '</p><div style="width:100%;height:8px;background:var(--bg-soft);border-radius:4px;overflow:hidden;"><div style="height:100%;background:var(--brand);width:' + weeklyPct + ';"></div></div></div>' +
         '<div class="padmin-card" style="padding:20px;"><p class="padmin-stat-label">ALCANCE TOTAL</p>' +
@@ -1234,7 +1286,7 @@
     if (!steps) return loadingCard();
     return '<div>' +
       '<h1 class="padmin-h1">Pipeline &middot; Buenos días, Perote</h1>' +
-      '<p class="padmin-lede" style="margin-bottom:26px;">Estado del boletín matutino, derivado de la pieza editorial más reciente.</p>' +
+      '<p class="padmin-lede">Estado del boletín matutino, derivado de la pieza editorial más reciente.</p>' +
       '<div style="max-width:640px;">' + steps.map(function (st) {
         var sty = pipelineStepStyle(st);
         return '<div class="padmin-pipeline-step">' +
@@ -1376,7 +1428,7 @@
     var label = state.deniedTarget ? (deniedLabelMap[state.deniedTarget] || state.deniedTarget) : '';
     return '<div class="padmin-denied-wrap"><div style="max-width:380px;text-align:center;">' +
       '<div class="padmin-denied-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>' +
-      '<h1 style="font-weight:600;font-size:22px;color:var(--text);margin:0 0 8px;">Sin acceso</h1>' +
+      '<h1 class="padmin-h1">Sin acceso</h1>' +
       '<p style="font-size:13px;color:var(--text-mute);margin:0 0 24px;line-height:1.5;">Tu rol (' + esc(roleLabels[state.user.role] || state.user.role) + ') no tiene permiso para ver «' + esc(label) + '». Si crees que esto es un error, contacta a tu Director editorial.</p>' +
       '<button type="button" class="padmin-btn" data-action="goto" data-id="' + landingFor(state.user.role) + '">Volver a Inicio</button>' +
     '</div></div>';
@@ -1665,6 +1717,16 @@
           })
           .catch(function (err) { setState({ generatingDraft: false, errorMsg: err.message }); });
         break;
+      case 'preview-piece': {
+        var ppid = Number(el.getAttribute('data-id'));
+        var ppLists = (state.data.proposalsByKey.borrador || []).concat(state.data.proposalsByKey.en_revision || []);
+        var pp = ppLists.filter(function (p) { return p.id === ppid; })[0];
+        if (pp) setState({ pickerPreview: pp });
+        break;
+      }
+      case 'close-picker-preview': setState({ pickerPreview: null }); break;
+      case 'toggle-mobile-nav': setState({ mobileNavOpen: !state.mobileNavOpen }); break;
+      case 'delete-borrador': submitDeleteBorrador(Number(el.getAttribute('data-id'))); break;
       case 'generate-image':
         if (!state.editorProposalId) break;
         state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm());
@@ -2014,6 +2076,16 @@
         var topics = (state.data.topics || []).filter(function (t) { return t.id !== id; });
         setData({ topics: topics });
         if (state.selectedRadarId === id) setState({ selectedRadarId: null });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeleteBorrador(id) {
+    if (!confirm('¿Eliminar este borrador? Se borra también su imagen generada. No se puede deshacer.')) return;
+    adminApi('/api/editorial/proposals/' + id, { method: 'DELETE' })
+      .then(function () {
+        setProposalsKey('borrador', (state.data.proposalsByKey.borrador || []).filter(function (p) { return p.id !== id; }));
+        setState({ successMsg: 'Borrador eliminado.' });
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });
   }

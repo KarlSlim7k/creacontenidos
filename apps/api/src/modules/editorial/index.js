@@ -120,13 +120,14 @@ router.get('/proposals/:id', requireAuth, async (req, res, next) => {
 });
 
 async function requireStatus(id, expected, res) {
+  const allowed = Array.isArray(expected) ? expected : [expected];
   const { rows } = await pool.query('SELECT status FROM content_proposals WHERE id = $1', [id]);
   if (!rows[0]) {
     res.status(404).json({ error: 'No encontrada' });
     return false;
   }
-  if (rows[0].status !== expected) {
-    res.status(409).json({ error: `Solo aplica cuando el estado es '${expected}' (actual: '${rows[0].status}')` });
+  if (!allowed.includes(rows[0].status)) {
+    res.status(409).json({ error: `Solo aplica cuando el estado es ${allowed.map((s) => `'${s}'`).join(' o ')} (actual: '${rows[0].status}')` });
     return false;
   }
   return true;
@@ -259,10 +260,14 @@ router.patch('/proposals/:id/return', requireAuth, requireRole('director'), asyn
   }
 });
 
-// DELETE /api/editorial/proposals/:id — solo propuestas rechazadas, solo director.
+// DELETE /api/editorial/proposals/:id — solo director; rechazadas y borradores
+// (limpieza rápida desde el picker del editor). Publicadas/en revisión nunca:
+// el gate editorial exige devolverlas primero.
 router.delete('/proposals/:id', requireAuth, requireRole('director'), async (req, res, next) => {
   try {
-    if (!(await requireStatus(req.params.id, 'rechazada', res))) return;
+    if (!(await requireStatus(req.params.id, ['rechazada', 'borrador'], res))) return;
+    // Sin esto las imágenes IA quedarían huérfanas (FK es ON DELETE SET NULL).
+    await pool.query('DELETE FROM generated_images WHERE proposal_id = $1', [req.params.id]);
     await pool.query('DELETE FROM content_proposals WHERE id = $1', [req.params.id]);
     res.status(204).end();
   } catch (err) {

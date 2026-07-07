@@ -180,6 +180,14 @@
 .padmin-cols-leads { grid-template-columns: 80px 1fr 110px 2fr 100px 170px; min-width: 760px; }
 .padmin-cols-competencia { grid-template-columns: 140px 2fr 90px 110px 90px 140px; min-width: 760px; }
 
+/* ---------- editor picker ---------- */
+.padmin-picker-thumb { width: 56px; height: 40px; object-fit: cover; border-radius: 5px; flex-shrink: 0; border: 0.5px solid var(--line-soft); }
+.padmin-picker-thumb-empty { display: flex; align-items: center; justify-content: center; text-align: center; font-size: 8px; line-height: 1.2; color: var(--mute-2); background: var(--bg-soft); }
+@media (max-width: 640px) {
+  .padmin-picker-thumb { display: none; }
+  .padmin-row { flex-wrap: wrap; }
+}
+
 /* ---------- editor ---------- */
 .padmin-editor-wrap { max-width: 1200px; }
 .padmin-editor-card { background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 8px; padding: 24px; margin-bottom: 20px; }
@@ -197,12 +205,19 @@
 @media (max-width: 900px) { .padmin-editor-cols { grid-template-columns: 1fr; } .padmin-editor-meta { position: static; } }
 .padmin-preview-frame { width: 100%; height: clamp(320px, 70vh, 640px); border: 0.5px solid var(--line-soft); border-radius: 6px; background: #fff; }
 
+/* Botón hamburguesa: solo existe en móvil. */
+.padmin-menu-toggle { display: none; background: none; border: none; cursor: pointer; color: var(--text-2); padding: 6px; border-radius: 6px; margin-left: auto; }
+.padmin-menu-toggle:hover { background: var(--bg-soft); }
+
 @media (max-width: 640px) {
   .padmin-shell { flex-direction: column; }
-  .padmin-sidebar { width: 100%; flex-direction: row; align-items: center; padding: 10px 12px; overflow-x: auto; }
-  .padmin-sidebar-brand { padding: 0 12px 0 0; }
-  .padmin-nav { flex-direction: row; padding: 0; }
-  .padmin-account { border-top: none; border-left: 0.5px solid var(--line-soft); margin-top: 0; padding: 0 0 0 12px; }
+  /* Barra superior: marca + hamburguesa. Nav y cuenta ocultos hasta abrir el menú. */
+  .padmin-sidebar { width: 100%; padding: 10px 12px; }
+  .padmin-sidebar-brand { padding: 0; }
+  .padmin-menu-toggle { display: flex; align-items: center; }
+  .padmin-nav, .padmin-account { display: none; }
+  .padmin-sidebar.nav-open .padmin-nav { display: flex; flex-direction: column; padding: 10px 0 4px; }
+  .padmin-sidebar.nav-open .padmin-account { display: block; border-top: 0.5px solid var(--line-soft); margin-top: 8px; padding: 12px 4px 0; }
   .padmin-editor-grid2 { grid-template-columns: 1fr; }
 }
 
