@@ -1,16 +1,25 @@
 require('dotenv').config();
 
-// Fail-hard: en producción, CORS_ORIGIN vacío hace que cors() refleje CUALQUIER
-// origen (cors(undefined) = abierto). Abortar el boot en vez de callarlo.
-if ((process.env.NODE_ENV || 'development') === 'production' && !process.env.CORS_ORIGIN) {
-  throw new Error('CORS_ORIGIN vacío en producción: la API aceptaría peticiones de CUALQUIER origen. Define CORS_ORIGIN (lista separada por comas) en el entorno.');
+// En producción CORS_ORIGIN vacío haría que cors() refleje CUALQUIER origen
+// (cors(undefined) = abierto). En vez de abrir o de tumbar el boot, caemos al
+// origen del propio sitio (PUBLIC_SITE_URL): el default seguro correcto, porque
+// web y API se sirven en el mismo origen. Solo si tampoco hay PUBLIC_SITE_URL
+// abortamos, porque entonces no hay ningún origen conocido al que restringir.
+let resolvedCorsOrigin = process.env.CORS_ORIGIN;
+if ((process.env.NODE_ENV || 'development') === 'production' && !resolvedCorsOrigin) {
+  if (process.env.PUBLIC_SITE_URL) {
+    resolvedCorsOrigin = process.env.PUBLIC_SITE_URL;
+    console.warn(`⚠️  CORS_ORIGIN vacío en producción: restringiendo a PUBLIC_SITE_URL (${resolvedCorsOrigin}). Define CORS_ORIGIN si necesitas más orígenes.`);
+  } else {
+    throw new Error('CORS_ORIGIN y PUBLIC_SITE_URL vacíos en producción: la API aceptaría CUALQUIER origen. Define al menos uno.');
+  }
 }
 
 module.exports = {
   port: process.env.PORT || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
   databaseUrl: process.env.DATABASE_URL,
-  corsOrigin: process.env.CORS_ORIGIN,
+  corsOrigin: resolvedCorsOrigin,
   jwtSecret: process.env.JWT_SECRET,
   nousPortalKey: process.env.NOUS_PORTAL_API_KEY,
   aiModelDefault: process.env.AI_MODEL_DEFAULT || 'deepseek/deepseek-v4-flash',
