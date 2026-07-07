@@ -1,12 +1,22 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { generateProposal, generateDraft, qaCheck, generateImage, logActivity } = require('../../lib/ai-client');
 
 const router = express.Router();
 
+// Cada endpoint pega a APIs de pago (OpenRouter/Claude/Perplexity). Tope por
+// usuario para que una cuenta comprometida no queme el presupuesto. Va DESPUÉS
+// de requireAuth en cada ruta, así req.user.id ya existe como clave.
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => req.user.id,
+  message: { error: 'Demasiadas generaciones con IA. Espera unos minutos.' },
+});
+
 // POST /api/content/generate-proposal — genera una propuesta de contenido a partir de un topic de RADAR.
-router.post('/generate-proposal', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const { topic_id, format, angle } = req.body || {};
     if (!topic_id) return res.status(400).json({ error: 'Datos inválidos', fields: { topic_id: 'Requerido' } });
@@ -27,7 +37,7 @@ router.post('/generate-proposal', requireAuth, requireRole('director', 'producci
 });
 
 // POST /api/content/generate-draft — genera el borrador extendido de una propuesta (solo en estado 'borrador').
-router.post('/generate-draft', requireAuth, async (req, res, next) => {
+router.post('/generate-draft', requireAuth, aiLimiter, async (req, res, next) => {
   try {
     const { proposal_id, instructions } = req.body || {};
     if (!proposal_id) return res.status(400).json({ error: 'Datos inválidos', fields: { proposal_id: 'Requerido' } });
@@ -49,7 +59,7 @@ router.post('/generate-draft', requireAuth, async (req, res, next) => {
 // en borrador. El prompt viaja desde el cliente (refleja el título/dek en pantalla aunque
 // no estén guardados). La imagen queda en generated_images y cover_image_url apunta a
 // /api/public/images/:id (ruta relativa: web y admin se sirven desde el mismo origen).
-router.post('/generate-image', requireAuth, async (req, res, next) => {
+router.post('/generate-image', requireAuth, aiLimiter, async (req, res, next) => {
   try {
     const { proposal_id, prompt } = req.body || {};
     if (!proposal_id) return res.status(400).json({ error: 'Datos inválidos', fields: { proposal_id: 'Requerido' } });
@@ -61,6 +71,9 @@ router.post('/generate-image', requireAuth, async (req, res, next) => {
     }
     const cleanPrompt = String(prompt).trim();
     const image = await generateImage(cleanPrompt);
+    // Borrar portadas previas de esta propuesta: cover_image_url solo apunta a la
+    // última, las anteriores quedaban huérfanas (BYTEA) acumulando espacio en cada regen.
+    await pool.query('DELETE FROM generated_images WHERE proposal_id = $1', [proposal_id]);
     const { rows: imgRows } = await pool.query(
       'INSERT INTO generated_images (proposal_id, prompt, mime_type, data) VALUES ($1, $2, $3, $4) RETURNING id',
       [proposal_id, cleanPrompt, image.mimeType, image.buffer]
@@ -78,7 +91,7 @@ router.post('/generate-image', requireAuth, async (req, res, next) => {
 });
 
 // POST /api/content/qa-check — verifica calidad de texto (ortografía, símbolos, coherencia).
-router.post('/qa-check', requireAuth, async (req, res, next) => {
+router.post('/qa-check', requireAuth, aiLimiter, async (req, res, next) => {
   try {
     const { proposal_id } = req.body || {};
     if (!proposal_id) return res.status(400).json({ error: 'Datos inválidos', fields: { proposal_id: 'Requerido' } });

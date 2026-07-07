@@ -17,7 +17,15 @@ function currentHourMinute() {
   };
 }
 
+// Lock en memoria: generateContent() (Perplexity+Claude) puede tardar >60s y el
+// cron corre cada minuto. Sin esto, dos ticks pasan el SELECT antes de que
+// cualquiera inserte → doble generación (doble costo de API). Basta para una
+// instancia, que es el diseño actual. ponytail: si escalamos a N réplicas, mover
+// a un advisory lock de Postgres.
+let running = false;
+
 async function tick() {
+  if (running) return;
   const { rows } = await pool.query('SELECT enabled, send_hour, send_minute FROM newsletter_settings WHERE id = 1');
   const settings = rows[0];
   if (!settings || !settings.enabled) return;
@@ -28,6 +36,7 @@ async function tick() {
   const { rows: existing } = await pool.query('SELECT id FROM newsletter_editions WHERE edition_date = CURRENT_DATE');
   if (existing.length) return; // ya generado (manual o cron) hoy — no duplicar
 
+  running = true;
   try {
     const content = await generateContent();
     await pool.query(
@@ -39,6 +48,8 @@ async function tick() {
     await logActivity(pool, 'newsletter_auto_generate', `Newsletter generado automáticamente (${content.weekday} ${content.date}) — pendiente de aprobación`, null, 'exito', { topicsUsed: content.topicsUsed });
   } catch (err) {
     await logActivity(pool, 'newsletter_auto_generate', err.message, null, 'fallo', null);
+  } finally {
+    running = false;
   }
 }
 

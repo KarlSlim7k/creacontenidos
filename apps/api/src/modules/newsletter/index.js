@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { renderNewsletterHtml, renderNewsletterText, renderPodcastScript } = require('../../lib/newsletter-template');
@@ -8,6 +9,14 @@ const { logActivity } = require('../../lib/ai-client');
 const { generateContent } = require('../../lib/newsletter-content');
 
 const router = express.Router();
+
+// Tope por usuario para /generate (Perplexity+Claude) y /audio (ElevenLabs) —
+// ambos pegan a APIs de pago. Va después de requireAuth: req.user.id es la clave.
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => req.user.id,
+  message: { error: 'Demasiadas generaciones con IA. Espera unos minutos.' },
+});
 
 function buildContent(body) {
   const { weekday, date, clima, notaDelDia, enBreve, datoDelDia, agenda, patrocinador } = body || {};
@@ -22,7 +31,7 @@ function buildContent(body) {
 // POST /api/newsletter/generate — arma el contenido del día y lo deja guardado
 // como edición 'pendiente' (para que sobreviva aunque el cron lo genere sin
 // que nadie tenga el panel abierto). Nunca envía nada.
-router.post('/generate', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+router.post('/generate', requireAuth, aiLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const content = await generateContent();
     await pool.query(
@@ -87,7 +96,7 @@ router.post('/send', requireAuth, requireRole('director'), async (req, res, next
 
 // POST /api/newsletter/audio — TTS de prueba (ElevenLabs). NO VERIFICADO en vivo:
 // la cuenta free bloquea voces vía API (402). Devuelve el MP3 directo.
-router.post('/audio', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+router.post('/audio', requireAuth, aiLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const content = buildContent(req.body);
     const script = renderPodcastScript(content);
