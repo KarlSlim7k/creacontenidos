@@ -1447,7 +1447,7 @@
     var editing = state.editingUserId != null ? users.find(function (u) { return u.id === state.editingUserId; }) : null;
     var errorHtml = state.newUserError ? '<p class="padmin-lede" style="color:var(--danger);">' + esc(state.newUserError) + '</p>' : '';
     var formHtml = state.newUserOpen ? (
-      '<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">' +
+      '<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:760px;">' +
         errorHtml +
         '<form data-action="submit-new-user" class="padmin-grid2" style="gap:10px;">' +
           '<div class="padmin-field" style="margin:0;"><label>Nombre</label><input id="nu-name" type="text" required value="' + esc(editing ? editing.name : '') + '"></div>' +
@@ -1459,7 +1459,7 @@
       '</div>'
     ) : '<button type="button" class="padmin-btn padmin-btn-sm" style="margin-bottom:16px;" data-action="open-new-user">+ Nuevo usuario</button>';
 
-    return formHtml + '<div class="padmin-card" style="max-width:640px;">' +
+    return formHtml + '<div class="padmin-card" style="max-width:760px;">' +
       '<div class="padmin-table-head padmin-cols-users"><span>NOMBRE</span><span>ROL</span><span>ESTADO</span><span></span></div>' +
       users.map(function (u) {
         var st = u.active ? { label: 'Activo', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Inactivo', bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
@@ -1587,7 +1587,7 @@
     var editing = state.editingFbAccountId != null ? accounts.find(function (a) { return a.id === state.editingFbAccountId; }) : null;
     var errorHtml = state.fbAccountFormError ? '<p class="padmin-lede" style="color:var(--danger);">' + esc(state.fbAccountFormError) + '</p>' : '';
     var formHtml = state.fbAccountFormOpen ? (
-      '<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">' +
+      '<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:760px;">' +
         errorHtml +
         '<form data-action="submit-fb-account" class="padmin-grid2" style="gap:10px;">' +
           '<div class="padmin-field" style="margin:0;"><label>Nombre del medio</label><input id="fba-label" type="text" required value="' + esc(editing ? editing.label : '') + '"></div>' +
@@ -1599,7 +1599,7 @@
     ) : '<button type="button" class="padmin-btn padmin-btn-sm" style="margin-bottom:16px;" data-action="open-new-fb-account">+ Nueva cuenta</button>';
 
     return '<p class="padmin-lede">Cuentas de Facebook que usa "Escanear Facebook" en RADAR → Competencia cuando no se especifican otras. Solo las activas se scrapean.</p>' +
-      formHtml + '<div class="padmin-card" style="max-width:640px;">' +
+      formHtml + '<div class="padmin-card" style="max-width:760px;">' +
       '<div class="padmin-table-head padmin-cols-services"><span>MEDIO</span><span>CUENTA</span><span>ESTADO</span><span></span></div>' +
       (accounts.length ? accounts.map(function (a) {
         var st = a.active ? { label: 'Activa', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Inactiva', bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
