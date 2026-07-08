@@ -174,7 +174,7 @@
    dentro de .padmin-card (overflow-x:auto) en móvil en vez de aplastar las columnas. */
 .padmin-cols-radar { grid-template-columns: 1fr 100px 90px 90px 90px 110px; min-width: 620px; }
 .padmin-cols-social { grid-template-columns: 50px 100px 1fr 90px 90px 130px; min-width: 640px; }
-.padmin-cols-users { grid-template-columns: 1fr 1fr 90px 90px; min-width: 480px; }
+.padmin-cols-users { grid-template-columns: 1fr 1fr 90px 160px; min-width: 540px; }
 .padmin-cols-permisos { grid-template-columns: 2fr 70px 90px 80px 90px; min-width: 560px; }
 .padmin-cols-services { grid-template-columns: 2fr 1fr 90px 130px; min-width: 540px; }
 .padmin-cols-leads { grid-template-columns: 80px 1fr 110px 2fr 100px 170px; min-width: 760px; }

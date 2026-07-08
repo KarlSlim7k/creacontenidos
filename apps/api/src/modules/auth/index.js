@@ -92,18 +92,35 @@ router.post('/users', requireAuth, requireRole('director'), async (req, res, nex
 
 router.patch('/users/:id', requireAuth, requireRole('director'), async (req, res, next) => {
   try {
-    const { active, role } = req.body || {};
-    if (active === undefined && role === undefined) return res.status(400).json({ error: 'Nada que actualizar' });
-    if (role !== undefined && !VALID_ROLES.includes(role)) return res.status(400).json({ error: 'Datos inválidos', fields: { role: 'Rol inválido' } });
+    const { active, role, name, email, password } = req.body || {};
+    if ([active, role, name, email, password].every((v) => v === undefined)) {
+      return res.status(400).json({ error: 'Nada que actualizar' });
+    }
+    const errors = {};
+    if (role !== undefined && !VALID_ROLES.includes(role)) errors.role = 'Rol inválido';
+    if (name !== undefined && (typeof name !== 'string' || !name.trim())) errors.name = 'Campo requerido';
+    if (email !== undefined && (typeof email !== 'string' || !EMAIL_RE.test(email.trim()))) errors.email = 'Formato de email inválido';
+    if (password !== undefined && (typeof password !== 'string' || password.length < 8)) errors.password = 'Mínimo 8 caracteres';
+    if (Object.keys(errors).length) return res.status(400).json({ error: 'Datos inválidos', fields: errors });
 
+    const passwordHash = password === undefined ? null : await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
-      `UPDATE users SET active = COALESCE($1, active), role = COALESCE($2, role) WHERE id = $3
+      `UPDATE users SET
+         active = COALESCE($1, active),
+         role = COALESCE($2, role),
+         name = COALESCE($3, name),
+         email = COALESCE($4, email),
+         password_hash = COALESCE($5, password_hash)
+       WHERE id = $6
        RETURNING id, name, email, role, active, created_at`,
-      [active === undefined ? null : Boolean(active), role === undefined ? null : role, req.params.id]
+      [active === undefined ? null : Boolean(active), role === undefined ? null : role,
+        name === undefined ? null : name.trim(), email === undefined ? null : email.trim().toLowerCase(),
+        passwordHash, req.params.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(rows[0]);
   } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'Datos inválidos', fields: { email: 'Ya existe un usuario con ese correo' } });
     next(err);
   }
 });

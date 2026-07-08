@@ -82,7 +82,7 @@
   var state = {
     token: null, user: null, allowedModules: [],
     screen: 'login', loginError: null,
-    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null, distLog: null, distChannels: null, competitors: null, siteMetrics: null },
+    data: { ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null, socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null, newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null, distLog: null, distChannels: null, competitors: null, siteMetrics: null, fbAccounts: null },
     distBusy: null,
     radarSource: 'Todas', radarStatus: 'Todos', radarBusy: false,
     radarTab: 'temas', competitorsBusy: false,
@@ -93,8 +93,9 @@
     transparency: {}, comentarioPieceId: null, comentarioText: '',
     selectedRadarId: null,
     configTab: 'usuarios', showNotifications: false,
-    newUserOpen: false, newUserError: null,
+    newUserOpen: false, newUserError: null, editingUserId: null,
     serviceFormOpen: false, serviceFormError: null, editingServiceId: null,
+    fbAccountFormOpen: false, fbAccountFormError: null, editingFbAccountId: null,
     socialFormOpen: false, socialFormError: null, socialBusy: false,
     clientFormOpen: false, clientFormError: null,
     newsletterContent: null, newsletterBusy: false, newsletterSending: false,
@@ -369,6 +370,7 @@
         adminApi('/api/newsletter/events').then(function (r) { setData({ newsletterEvents: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
       }
       if (state.configTab === 'servicios') adminApi('/api/commercial/services').then(function (r) { setData({ services: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+      if (state.configTab === 'cuentas-fb') adminApi('/api/listening/competitors/accounts').then(function (r) { setData({ fbAccounts: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
       if (state.configTab === 'metricas-sitio') adminApi('/api/admin/site-metrics').then(function (r) { setData({ siteMetrics: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
     } else if (screen === 'hermes') {
       adminApi('/api/admin/activity?limit=20').then(function (r) { setData({ activity: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
@@ -1138,7 +1140,10 @@
     if (!posts) return loadingCard();
     var canManage = state.user.role === 'director' || state.user.role === 'produccion';
     var detectBtn = canManage
-      ? '<div style="display:flex;justify-content:flex-end;margin-bottom:16px;"><button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-competitors" ' + (state.competitorsBusy ? 'disabled' : '') + '>' + (state.competitorsBusy ? 'Explorando…' : '🔎 Explorar competencia') + '</button></div>'
+      ? '<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px;">' +
+          '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" data-action="detect-competitors-fb" ' + (state.competitorsBusy ? 'disabled' : '') + '>' + (state.competitorsBusy ? 'Escaneando…' : '📘 Escanear Facebook') + '</button>' +
+          '<button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-competitors" ' + (state.competitorsBusy ? 'disabled' : '') + '>' + (state.competitorsBusy ? 'Explorando…' : '🔎 Explorar competencia') + '</button>' +
+        '</div>'
       : '';
     return detectBtn +
       '<div class="padmin-card">' +
@@ -1439,16 +1444,17 @@
   function renderConfigUsuarios() {
     var users = state.data.users;
     if (!users) return loadingCard();
+    var editing = state.editingUserId != null ? users.find(function (u) { return u.id === state.editingUserId; }) : null;
     var errorHtml = state.newUserError ? '<p class="padmin-lede" style="color:var(--danger);">' + esc(state.newUserError) + '</p>' : '';
     var formHtml = state.newUserOpen ? (
       '<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">' +
         errorHtml +
         '<form data-action="submit-new-user" class="padmin-grid2" style="gap:10px;">' +
-          '<div class="padmin-field" style="margin:0;"><label>Nombre</label><input id="nu-name" type="text" required></div>' +
-          '<div class="padmin-field" style="margin:0;"><label>Correo</label><input id="nu-email" type="email" required></div>' +
-          '<div class="padmin-field" style="margin:0;"><label>Contraseña</label><input id="nu-password" type="password" required></div>' +
-          '<div class="padmin-field" style="margin:0;"><label>Rol</label><select id="nu-role">' + Object.keys(roleLabels).map(function (r) { return '<option value="' + r + '">' + esc(roleLabels[r]) + '</option>'; }).join('') + '</select></div>' +
-          '<div style="grid-column:1 / -1;display:flex;gap:8px;"><button type="submit" class="padmin-btn padmin-btn-sm">Crear usuario</button><button type="button" class="padmin-btn-outline" data-action="close-new-user">Cancelar</button></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Nombre</label><input id="nu-name" type="text" required value="' + esc(editing ? editing.name : '') + '"></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Correo</label><input id="nu-email" type="email" required value="' + esc(editing ? editing.email : '') + '"></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>' + (editing ? 'Nueva contraseña (opcional)' : 'Contraseña') + '</label><input id="nu-password" type="password"' + (editing ? '' : ' required') + '></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Rol</label><select id="nu-role">' + Object.keys(roleLabels).map(function (r) { return '<option value="' + r + '"' + (editing && editing.role === r ? ' selected' : '') + '>' + esc(roleLabels[r]) + '</option>'; }).join('') + '</select></div>' +
+          '<div style="grid-column:1 / -1;display:flex;gap:8px;"><button type="submit" class="padmin-btn padmin-btn-sm">' + (editing ? 'Guardar cambios' : 'Crear usuario') + '</button><button type="button" class="padmin-btn-outline" data-action="close-new-user">Cancelar</button></div>' +
         '</form>' +
       '</div>'
     ) : '<button type="button" class="padmin-btn padmin-btn-sm" style="margin-bottom:16px;" data-action="open-new-user">+ Nuevo usuario</button>';
@@ -1461,7 +1467,10 @@
           '<span style="font-size:13px;color:var(--text);">' + esc(u.name) + '</span>' +
           '<span style="font-size:12px;color:var(--text-mute);">' + esc(roleLabels[u.role] || u.role) + '</span>' +
           '<span class="padmin-badge" style="background:' + st.bg + ';color:' + st.color + ';width:fit-content;">' + st.label + '</span>' +
-          '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="toggle-user-active" data-id="' + u.id + '" data-active="' + (!u.active) + '">' + (u.active ? 'Desactivar' : 'Activar') + '</button>' +
+          '<span style="display:flex;gap:4px;flex-wrap:wrap;">' +
+            '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="open-edit-user" data-id="' + u.id + '">Editar</button>' +
+            '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="toggle-user-active" data-id="' + u.id + '" data-active="' + (!u.active) + '">' + (u.active ? 'Desactivar' : 'Activar') + '</button>' +
+          '</span>' +
         '</div>';
       }).join('') + '</div>';
   }
@@ -1572,6 +1581,41 @@
     '</div>';
   }
 
+  function renderConfigCuentasFb() {
+    var accounts = state.data.fbAccounts;
+    if (!accounts) return loadingCard();
+    var editing = state.editingFbAccountId != null ? accounts.find(function (a) { return a.id === state.editingFbAccountId; }) : null;
+    var errorHtml = state.fbAccountFormError ? '<p class="padmin-lede" style="color:var(--danger);">' + esc(state.fbAccountFormError) + '</p>' : '';
+    var formHtml = state.fbAccountFormOpen ? (
+      '<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">' +
+        errorHtml +
+        '<form data-action="submit-fb-account" class="padmin-grid2" style="gap:10px;">' +
+          '<div class="padmin-field" style="margin:0;"><label>Nombre del medio</label><input id="fba-label" type="text" required value="' + esc(editing ? editing.label : '') + '"></div>' +
+          '<div class="padmin-field" style="margin:0;"><label>Handle o URL de Facebook</label><input id="fba-handle" type="text" placeholder="NombreDeLaPagina o https://facebook.com/..." required value="' + esc(editing ? editing.handle_or_url : '') + '"></div>' +
+          '<div class="padmin-field padmin-field-inline" style="margin:0;padding-top:18px;"><input id="fba-active" type="checkbox"' + (editing ? (editing.active ? ' checked' : '') : ' checked') + '><label>Activa (se usa al escanear Facebook)</label></div>' +
+          '<div style="grid-column:1 / -1;display:flex;gap:8px;"><button type="submit" class="padmin-btn padmin-btn-sm">' + (editing ? 'Guardar cambios' : 'Agregar cuenta') + '</button><button type="button" class="padmin-btn-outline" data-action="close-fb-account-form">Cancelar</button></div>' +
+        '</form>' +
+      '</div>'
+    ) : '<button type="button" class="padmin-btn padmin-btn-sm" style="margin-bottom:16px;" data-action="open-new-fb-account">+ Nueva cuenta</button>';
+
+    return '<p class="padmin-lede">Cuentas de Facebook que usa "Escanear Facebook" en RADAR → Competencia cuando no se especifican otras. Solo las activas se scrapean.</p>' +
+      formHtml + '<div class="padmin-card" style="max-width:640px;">' +
+      '<div class="padmin-table-head padmin-cols-services"><span>MEDIO</span><span>CUENTA</span><span>ESTADO</span><span></span></div>' +
+      (accounts.length ? accounts.map(function (a) {
+        var st = a.active ? { label: 'Activa', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Inactiva', bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
+        return '<div class="padmin-table-row padmin-cols-services">' +
+          '<span style="font-size:13px;color:var(--text);">' + esc(a.label) + '</span>' +
+          '<span style="font-size:12px;color:var(--text-mute);">' + esc(a.handle_or_url) + '</span>' +
+          '<span class="padmin-badge" style="background:' + st.bg + ';color:' + st.color + ';width:fit-content;">' + st.label + '</span>' +
+          '<span style="display:flex;gap:6px;">' +
+            '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="edit-fb-account" data-id="' + a.id + '">Editar</button>' +
+            '<button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-fb-account" data-id="' + a.id + '">Borrar</button>' +
+          '</span>' +
+        '</div>';
+      }).join('') : '<p class="padmin-lede" style="padding:16px;">Sin cuentas cargadas. "Escanear Facebook" fallará hasta que agregues al menos una.</p>') +
+    '</div>';
+  }
+
   // Estadísticas de audiencia mostradas en estudio/index.html, media-kit.html y
   // tercer-tiempo.html — antes copiadas a mano en los 3 archivos, ahora una sola fuente.
   function renderConfigMetricas() {
@@ -1596,7 +1640,7 @@
 
   function renderConfiguracion() {
     var tab = state.configTab;
-    var body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : (tab === 'metricas-sitio' ? renderConfigMetricas() : renderConfigUsuarios()))));
+    var body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : (tab === 'metricas-sitio' ? renderConfigMetricas() : (tab === 'cuentas-fb' ? renderConfigCuentasFb() : renderConfigUsuarios())))));
     function tabBtn(id, label) {
       var active = tab === id;
       return '<button type="button" class="padmin-tab' + (active ? ' active' : '') + '" data-action="set-config-tab" data-tab="' + id + '">' + label + '</button>';
@@ -1604,7 +1648,7 @@
     return '<div>' +
       '<h1 class="padmin-h1">Configuración</h1>' +
       '<p class="padmin-lede">Usuarios, permisos e integraciones del panel. Solo visible para Director.</p>' +
-      '<div class="padmin-tabs">' + tabBtn('usuarios', 'Usuarios') + tabBtn('permisos', 'Permisos') + tabBtn('integraciones', 'Integraciones') + tabBtn('newsletter', 'Newsletter') + tabBtn('servicios', 'Servicios') + tabBtn('metricas-sitio', 'Métricas del sitio') + '</div>' +
+      '<div class="padmin-tabs">' + tabBtn('usuarios', 'Usuarios') + tabBtn('permisos', 'Permisos') + tabBtn('integraciones', 'Integraciones') + tabBtn('newsletter', 'Newsletter') + tabBtn('servicios', 'Servicios') + tabBtn('cuentas-fb', 'Cuentas FB') + tabBtn('metricas-sitio', 'Métricas del sitio') + '</div>' +
       body +
     '</div>';
   }
@@ -1668,6 +1712,17 @@
           })
           .catch(function (err) { setState({ competitorsBusy: false, errorMsg: err.message }); });
         break;
+      case 'detect-competitors-fb':
+        setState({ competitorsBusy: true });
+        adminApi('/api/listening/competitors/detect', { method: 'POST', body: { source: 'facebook' } })
+          .then(function () { return Promise.all([adminApi('/api/listening/competitors'), adminApi('/api/listening/topics')]); })
+          .then(function (results) {
+            state.data.competitors = results[0];
+            state.data.topics = results[1];
+            setState({ competitorsBusy: false, successMsg: 'Escaneo de Facebook completado.' });
+          })
+          .catch(function (err) { setState({ competitorsBusy: false, errorMsg: err.message }); });
+        break;
       case 'analyze-competitor': submitAnalyzeCompetitor(Number(el.getAttribute('data-id'))); break;
       case 'delete-competitor': submitDeleteCompetitor(Number(el.getAttribute('data-id'))); break;
       case 'competitor-to-idea': submitCompetitorToIdea(Number(el.getAttribute('data-id'))); break;
@@ -1697,13 +1752,18 @@
       case 'delete-propuesta': submitDeleteProposal(Number(el.getAttribute('data-id'))); break;
       case 'save-draft': submitDraft(Number(el.getAttribute('data-id')), false); break;
       case 'submit-review': submitDraft(Number(el.getAttribute('data-id')), true); break;
-      case 'open-new-user': setState({ newUserOpen: true, newUserError: null }); break;
-      case 'close-new-user': setState({ newUserOpen: false, newUserError: null }); break;
+      case 'open-new-user': setState({ newUserOpen: true, newUserError: null, editingUserId: null }); break;
+      case 'open-edit-user': setState({ newUserOpen: true, newUserError: null, editingUserId: Number(el.getAttribute('data-id')) }); break;
+      case 'close-new-user': setState({ newUserOpen: false, newUserError: null, editingUserId: null }); break;
       case 'toggle-user-active': submitToggleUser(Number(el.getAttribute('data-id')), el.getAttribute('data-active') === 'true'); break;
       case 'open-new-service': setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: null }); break;
       case 'edit-service': setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: Number(el.getAttribute('data-id')) }); break;
       case 'close-service-form': setState({ serviceFormOpen: false, serviceFormError: null, editingServiceId: null }); break;
       case 'delete-service': submitDeleteService(Number(el.getAttribute('data-id'))); break;
+      case 'open-new-fb-account': setState({ fbAccountFormOpen: true, fbAccountFormError: null, editingFbAccountId: null }); break;
+      case 'edit-fb-account': setState({ fbAccountFormOpen: true, fbAccountFormError: null, editingFbAccountId: Number(el.getAttribute('data-id')) }); break;
+      case 'close-fb-account-form': setState({ fbAccountFormOpen: false, fbAccountFormError: null, editingFbAccountId: null }); break;
+      case 'delete-fb-account': submitDeleteFbAccount(Number(el.getAttribute('data-id'))); break;
       case 'generate-draft':
         if (!state.editorProposalId) break;
         // Snapshot del form antes del re-render: sin esto las ediciones sin guardar
@@ -1934,6 +1994,15 @@
       .catch(function (err) { setState({ errorMsg: err.message }); });
   }
 
+  function submitDeleteFbAccount(id) {
+    if (!confirm('¿Eliminar esta cuenta de Facebook? Ya no se usará al escanear.')) return;
+    adminApi('/api/listening/competitors/accounts/' + id, { method: 'DELETE' })
+      .then(function () {
+        setData({ fbAccounts: (state.data.fbAccounts || []).filter(function (a) { return a.id !== id; }) });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
   function submitToggleUser(id, active) {
     adminApi('/api/auth/users/' + id, { method: 'PATCH', body: { active: active } })
       .then(function (updated) {
@@ -2131,14 +2200,23 @@
       }).catch(function (err) { setState({ errorMsg: err.message }); });
     } else if (action === 'submit-new-user') {
       e.preventDefault();
-      adminApi('/api/auth/users', { method: 'POST', body: {
+      var nuPassword = form.querySelector('#nu-password').value;
+      var nuId = state.editingUserId;
+      var nuBody = {
         name: form.querySelector('#nu-name').value.trim(),
         email: form.querySelector('#nu-email').value.trim(),
-        password: form.querySelector('#nu-password').value,
         role: form.querySelector('#nu-role').value,
-      } }).then(function (created) {
-        setState({ newUserOpen: false, newUserError: null });
-        setData({ users: (state.data.users || []).concat([created]) });
+      };
+      if (!nuId || nuPassword) nuBody.password = nuPassword;
+      var nuReq = nuId
+        ? adminApi('/api/auth/users/' + nuId, { method: 'PATCH', body: nuBody })
+        : adminApi('/api/auth/users', { method: 'POST', body: nuBody });
+      nuReq.then(function (saved) {
+        setState({ newUserOpen: false, newUserError: null, editingUserId: null });
+        var list = nuId
+          ? (state.data.users || []).map(function (u) { return u.id === nuId ? saved : u; })
+          : (state.data.users || []).concat([saved]);
+        setData({ users: list });
       }).catch(function (err) {
         setState({ newUserError: (err.fields && Object.values(err.fields)[0]) || err.message });
       });
@@ -2165,6 +2243,26 @@
         setData({ services: list });
       }).catch(function (err) {
         setState({ serviceFormError: (err.fields && Object.values(err.fields)[0]) || err.message });
+      });
+    } else if (action === 'submit-fb-account') {
+      e.preventDefault();
+      var fbaBody = {
+        label: form.querySelector('#fba-label').value.trim(),
+        handle_or_url: form.querySelector('#fba-handle').value.trim(),
+        active: form.querySelector('#fba-active').checked,
+      };
+      var fbaId = state.editingFbAccountId;
+      var fbaReq = fbaId
+        ? adminApi('/api/listening/competitors/accounts/' + fbaId, { method: 'PATCH', body: fbaBody })
+        : adminApi('/api/listening/competitors/accounts', { method: 'POST', body: fbaBody });
+      fbaReq.then(function (saved) {
+        setState({ fbAccountFormOpen: false, fbAccountFormError: null, editingFbAccountId: null });
+        var list = fbaId
+          ? (state.data.fbAccounts || []).map(function (a) { return a.id === fbaId ? saved : a; })
+          : (state.data.fbAccounts || []).concat([saved]);
+        setData({ fbAccounts: list });
+      }).catch(function (err) {
+        setState({ fbAccountFormError: (err.fields && Object.values(err.fields)[0]) || err.message });
       });
     } else if (action === 'submit-newsletter-settings') {
       e.preventDefault();

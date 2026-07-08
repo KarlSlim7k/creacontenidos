@@ -90,6 +90,19 @@ async function detectCompetitorPosts(competitors) {
   return parseJson(content);
 }
 
+// Genera temas de RADAR a partir de publicaciones YA scrapeadas de Facebook
+// (competitor_posts, source_platform='facebook'). A diferencia de detectTopics/
+// detectCompetitorPosts, acá NO se busca en la web — el texto ya viene dado por
+// el scraper — así que basta chatComplete (Nous) en vez de Perplexity.
+async function enrichFacebookTopics(posts) {
+  const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  const system = `Eres un analista de tendencias para un medio editorial en Perote, Veracruz, México. Hoy es ${fecha}. Vas a recibir publicaciones YA recopiladas de páginas de Facebook de medios competidores — no busques nada, solo analiza el texto dado.`;
+  const postsJson = JSON.stringify(posts.map((p) => ({ source_account: p.source_account, post_text: p.post_text, post_date: p.post_date })));
+  const user = `Publicaciones (array de longitud ${posts.length}):\n${postsJson}\n\nPara CADA publicación, en el mismo orden, devuelve un objeto con: title (tema editorial breve derivado del post, no copies el texto literal), sentiment (positivo/negativo/neutral), antecedentes (qué pasó y cuándo, según post_date — si no hay fecha dilo explícitamente), actores, angulos (ángulos de cobertura sugeridos para CREA Contenidos), audiencia (potencial de audiencia local). Devuelve SOLO un JSON array de longitud ${posts.length}, mismo orden que la entrada, sin texto adicional.`;
+  const content = await chatComplete(system, user, 'default');
+  return parseJson(content);
+}
+
 async function generateProposal(context, format, angle) {
   const modelKey = format === 'guion_audio' || format === 'guion_video' ? 'complex' : 'default';
   const system = 'Eres un editor asistente para CREA Contenidos, un medio digital en Perote, Veracruz. Generas propuestas de contenido en español mexicano profesional.';
@@ -163,4 +176,4 @@ async function logActivity(pool, action, detail, userId, status, metadata) {
   );
 }
 
-module.exports = { chatComplete, detectTopics, detectCompetitorPosts, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity };
+module.exports = { chatComplete, detectTopics, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity };
