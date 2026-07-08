@@ -102,9 +102,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    # 768m se quedaba corto: un solo Chromium headless scrapeando una cuenta
-    # ya usa ~700 MB en la práctica (91% del límite anterior, casi sin margen).
-    mem_limit: 1024m
+    # El pico real está al lanzar Chromium, no en steady-state: se midió un
+    # pico de ~1010 MB (con 1024m de límite, dejaba solo 14 MB de margen —
+    # riesgo real de OOM-kill del kernel, no solo el warning de Crawlee).
+    mem_limit: 1536m
 
 volumes:
   crea_db_data:
