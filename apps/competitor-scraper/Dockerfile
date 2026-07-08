@@ -22,7 +22,9 @@ COPY src ./src
 RUN npx playwright install --with-deps chromium
 
 # node:22-slim trae el usuario `node` (uid 1000). Los archivos copiados son
-# world-readable y el proceso no escribe a disco fuera de stdout.
+# world-readable pero /app es root-owned — Crawlee necesita crear su propio
+# storage dir en runtime, así que lo mandamos a /tmp (writable por cualquier user).
+ENV CRAWLEE_STORAGE_DIR=/tmp/crawlee-storage
 USER node
 
 EXPOSE 3015
