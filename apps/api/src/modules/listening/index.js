@@ -1,13 +1,47 @@
 const express = require('express');
 const pool = require('../../db/pool');
+const config = require('../../config');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { detectTopics, detectCompetitorPosts, logActivity } = require('../../lib/ai-client');
+const { scrapeCompetitorPosts } = require('../../lib/competitor-scraper-client');
 
 const router = express.Router();
 
 // Ajustar a los competidores reales del territorio; el body de /competitors/detect
 // puede sobrescribirlos por request ({ competitors: [...] }).
 const DEFAULT_COMPETITORS = ['Diario de Xalapa', 'AVC Noticias', 'El Dictamen'];
+
+// Insert a batch of competitor posts into competitor_posts with URL-based
+// dedupe. Shared by both the Perplexity and the Facebook scraper code paths
+// so the contract with the table is defined once.
+async function insertCompetitorPosts(posts) {
+  const inserted = [];
+  for (const post of posts) {
+    if (post.post_url) {
+      const { rows: dupes } = await pool.query('SELECT id FROM competitor_posts WHERE post_url = $1', [post.post_url]);
+      if (dupes.length) continue;
+    }
+    const postDate = post.post_date && !Number.isNaN(Date.parse(post.post_date)) ? post.post_date : null;
+    const { rows } = await pool.query(
+      `INSERT INTO competitor_posts (source_platform, source_account, post_url, post_text, post_date, reactions, comments, shares, views, media_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [
+        post.source_platform || 'web',
+        post.source_account || null,
+        post.post_url || null,
+        post.post_text || null,
+        postDate,
+        Number(post.reactions) || 0,
+        Number(post.comments) || 0,
+        Number(post.shares) || 0,
+        Number(post.views) || 0,
+        post.media_type || null,
+      ],
+    );
+    inserted.push(rows[0]);
+  }
+  return inserted;
+}
 
 // POST /api/listening/topics/detect — detección de tendencias vía IA (Nous Portal).
 router.post('/topics/detect', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
@@ -91,35 +125,78 @@ router.delete('/topics/:id', requireAuth, requireRole('director', 'produccion'),
 
 // --- Radar de competencia (competitor_posts, migración 008) ---
 
-// POST /api/listening/competitors/detect — escaneo de publicaciones de competidores vía IA.
+// POST /api/listening/competitors/detect — escaneo de publicaciones.
+//
+// Acepta `source` en el body para elegir el origen de los datos:
+//
+//   - "facebook" (opt-in): delega al microservicio apps/competitor-scraper
+//     (Playwright + cookies de sesión). Solo funciona si COMPETITOR_SCRAPER_URL
+//     está configurado en el entorno del API. El body debe traer `accounts`
+//     (handles o URLs de Facebook). El scraper devuelve items ya con
+//     source_platform='facebook'. Inserta en competitor_posts con dedupe por
+//     post_url. Log a activity_log con action='competitors_scrape_fb'.
+//
+//   - "perplexity" (default si se omite): usa detectCompetitorPosts (Perplexity
+//     Sonar Pro). El body trae `competitors` (nombres legibles, p. ej.
+//     "Diario de Xalapa"). Inserta en competitor_posts igual.
+//
+// Cualquier valor distinto de "facebook"/"perplexity" → 400.
 router.post('/competitors/detect', requireAuth, requireRole('director', 'produccion'), async (req, res) => {
-  const bodyList = (req.body && req.body.competitors) || null;
-  const competitors = Array.isArray(bodyList) && bodyList.length
-    ? bodyList.map(String).map((s) => s.trim()).filter(Boolean)
-    : DEFAULT_COMPETITORS;
-  try {
-    const detected = await detectCompetitorPosts(competitors);
-    const inserted = [];
-    for (const post of detected) {
-      if (post.post_url) {
-        const { rows: dupes } = await pool.query('SELECT id FROM competitor_posts WHERE post_url = $1', [post.post_url]);
-        if (dupes.length) continue;
-      }
-      const postDate = post.post_date && !Number.isNaN(Date.parse(post.post_date)) ? post.post_date : null;
-      const { rows } = await pool.query(
-        `INSERT INTO competitor_posts (source_platform, source_account, post_url, post_text, post_date, reactions, comments, shares, media_type)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-        [post.source_platform || 'web', post.source_account || null, post.post_url || null, post.post_text || null,
-          postDate, Number(post.reactions) || 0, Number(post.comments) || 0, Number(post.shares) || 0, post.media_type || null]
-      );
-      inserted.push(rows[0]);
+  const source = String((req.body && req.body.source) || 'perplexity').toLowerCase();
+
+  if (source === 'facebook') {
+    const accounts = Array.isArray(req.body && req.body.accounts) ? req.body.accounts.map(String).map((s) => s.trim()).filter(Boolean) : [];
+
+    if (accounts.length === 0) {
+      return res.status(400).json({ error: 'accounts must be a non-empty array of Facebook handles or URLs when source="facebook"' });
     }
-    await logActivity(pool, 'competitors_detect', `${inserted.length} publicaciones de competencia detectadas`, req.user.id, 'exito', { competitors, count: inserted.length });
-    res.json({ detected: inserted.length, posts: inserted });
-  } catch (err) {
-    await logActivity(pool, 'competitors_detect', err.message, req.user.id, 'fallo', { competitors });
-    res.status(500).json({ error: 'No se pudo escanear la competencia: ' + err.message });
+    if (!config.competitorScraperUrl) {
+      return res.status(503).json({ error: 'competitor_scraper_not_configured', detail: 'COMPETITOR_SCRAPER_URL no está configurado en el API. Define la env var o usa source: "perplexity".' });
+    }
+
+    try {
+      const items = await scrapeCompetitorPosts({
+        baseUrl: config.competitorScraperUrl,
+        accounts,
+        maxPostsPerAccount: req.body.maxPostsPerAccount,
+        sinceDate: req.body.sinceDate,
+        signal: req.signal,
+        logger: req.log,
+      });
+
+      const inserted = await insertCompetitorPosts(items);
+
+      // Log sin contenido de posts ni cookies — solo conteos.
+      await logActivity(pool, 'competitors_scrape_fb', `${inserted.length} publicaciones scrapeadas de Facebook`, req.user.id, 'exito', {
+        accounts_count: accounts.length,
+        returned: items.length,
+        inserted: inserted.length,
+      });
+
+      return res.json({ detected: inserted.length, source: 'facebook', posts: inserted });
+    } catch (err) {
+      await logActivity(pool, 'competitors_scrape_fb', err.message, req.user.id, 'fallo', { accounts_count: accounts.length });
+      return res.status(500).json({ error: 'No se pudo escanear Facebook: ' + err.message });
+    }
   }
+
+  if (source === 'perplexity') {
+    const bodyList = (req.body && req.body.competitors) || null;
+    const competitors = Array.isArray(bodyList) && bodyList.length
+      ? bodyList.map(String).map((s) => s.trim()).filter(Boolean)
+      : DEFAULT_COMPETITORS;
+    try {
+      const detected = await detectCompetitorPosts(competitors);
+      const inserted = await insertCompetitorPosts(detected);
+      await logActivity(pool, 'competitors_detect', `${inserted.length} publicaciones de competencia detectadas`, req.user.id, 'exito', { competitors, count: inserted.length });
+      return res.json({ detected: inserted.length, source: 'perplexity', posts: inserted });
+    } catch (err) {
+      await logActivity(pool, 'competitors_detect', err.message, req.user.id, 'fallo', { competitors });
+      return res.status(500).json({ error: 'No se pudo escanear la competencia: ' + err.message });
+    }
+  }
+
+  return res.status(400).json({ error: `unknown source "${source}". Use "perplexity" (default) or "facebook".` });
 });
 
 // GET /api/listening/competitors?analyzed=true|false — tab Competencia del RADAR.

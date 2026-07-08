@@ -33,8 +33,7 @@ Con esto ya se puede probar el pipeline completo (texto → imagen → audio) si
 - **Anthropic/OpenAI directo**: si Nous Portal no alcanza en calidad para piezas complejas
   (guiones largos), ya hay placeholders de key — activar sería solo cambiar `modelKey` en
   `ai-client.js`, sin cambio de arquitectura porque ya centralizamos en formato chat/completions.
-- **Apify** (`APIFY_API_TOKEN`): social listening automatizado, ya contemplado en `.env` para
-  fase posterior a RADAR manual/Perplexity.
+- **Competitor scraper** (`apps/competitor-scraper/`): microservicio self-hosted en el mismo VPS (Playwright + Chromium + cookies de sesión de Facebook). Alimenta la tabla `competitor_posts` desde el endpoint `POST /api/listening/competitors/detect` cuando el body trae `source: "facebook"`. Reemplaza a Apify Cloud (que se descartó: `APIFY_API_TOKEN` queda como placeholder histórico en `.env` para fase posterior, ya no usado). Costo: solo RAM del contenedor (250-400 MB bajo carga, `mem_limit: 768m` en compose). Sin fee por corrida. Detalle operativo: `apps/competitor-scraper/README.md`.
 
 ## Costos aproximados
 

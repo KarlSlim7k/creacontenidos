@@ -43,6 +43,12 @@ module.exports = {
   contactEmail: process.env.CONTACT_EMAIL || 'contacto@crea-contenidos.com',
   comunidadEmail: process.env.COMUNIDAD_EMAIL || 'comunidad@crea-contenidos.com',
   elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM',
+  // Microservicio de scraping de Facebook (apps/competitor-scraper). Si está
+  // configurado, el endpoint POST /api/listening/competitors/detect acepta
+  // {source: 'facebook'} y delega al scraper (sesión autenticada vía cookies
+  // montadas como secret). Si es null, el endpoint solo soporta Perplexity.
+  // Ver apps/api/src/modules/listening/README.md y el plan de integración.
+  competitorScraperUrl: process.env.COMPETITOR_SCRAPER_URL || null,
   apiKeys: {
     perplexity: process.env.PERPLEXITY_API_KEY,
     anthropic: process.env.ANTHROPIC_API_KEY,

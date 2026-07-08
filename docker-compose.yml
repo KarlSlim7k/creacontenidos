@@ -53,6 +53,9 @@ services:
       WORDPRESS_APP_PASSWORD: ${WORDPRESS_APP_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET (definila en .env)}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
+      # Microservicio de scraping de Facebook (apps/competitor-scraper/).
+      # Si está vacío, /api/listening/competitors/detect cae a Perplexity-only.
+      COMPETITOR_SCRAPER_URL: ${COMPETITOR_SCRAPER_URL:-}
     ports:
       # Host 3001: el 3000 lo ocupa el dashboard de Dokploy en el VPS.
       - "${API_HOST_PORT:-3001}:3000"
@@ -66,6 +69,38 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # Si el scraper está configurado, esperar a que esté healthy antes de
+      # levantar la API (evita race condition en el primer boot).
+      competitor-scraper:
+        condition: service_healthy
+        required: false
+
+  # Microservicio de scraping de Facebook con Playwright + Chromium.
+  # Self-hosted en la red interna de Dokploy (no expuesto al público).
+  # Detalle: apps/competitor-scraper/README.md
+  competitor-scraper:
+    build:
+      context: ./apps/competitor-scraper
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3015
+      FB_COOKIES_FILE: /secrets/fb_cookies.txt
+    volumes:
+      # El archivo de cookies se monta desde ./secrets/fb_cookies.txt (gitignored).
+      # Crear el directorio y copiar el archivo desde la sesión local — Dokploy
+      # también puede inyectarlo como file secret. Si no existe, el servicio
+      # arranca igual pero solo scrapea páginas 100% públicas.
+      - ./secrets/fb_cookies.txt:/secrets/fb_cookies.txt:ro
+    expose:
+      - "3015"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3015/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 768m
 
 volumes:
   crea_db_data:

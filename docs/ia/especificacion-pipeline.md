@@ -78,5 +78,8 @@ trabajo pendiente inmediato:
 
 - **Generación de imagen/audio real** (memes, infografías, cápsulas narradas): v1 usaba una cola (`assets_multimedia`) con `FOR UPDATE SKIP LOCKED` porque tenía workers separados. v2 no tiene esa tabla ni la necesita todavía — si se implementa, evaluar primero si una llamada síncrona dentro de `content-engine` alcanza antes de construir una cola.
 - **Newsletter diario "Buenos días, Perote"**: sin tabla ni módulo en v2. Spec completa en `crea_web/docs/updates/CREA_Newsletter_Podcast.md` si se retoma.
-- **`crea-competitor-watch`**: v2 **ya tiene la tabla** `competitor_posts` (migración `008`) pero ningún módulo la lee ni la escribe todavía — es el hueco natural para retomar esto cuando se decida scraping de competencia (Apify o similar, como en v1 Fase 6).
+- **`crea-competitor-watch`** (✅ integrado julio 2026): v2 ya tiene la tabla `competitor_posts` (migración 008) y dos fuentes que la alimentan vía `POST /api/listening/competitors/detect` con campo `source` en el body:
+  - `source: 'perplexity'` (default) — Perplexity Sonar busca publicaciones recientes de los medios configurados en `DEFAULT_COMPETITORS` o por body.
+  - `source: 'facebook'` — delega al microservicio self-hosted `apps/competitor-scraper/` (Playwright + cookies de sesión). Requiere `COMPETITOR_SCRAPER_URL` apuntando al servicio; sin él responde `503 competitor_scraper_not_configured`. Body trae `accounts` (handles/URLs de Facebook).
+  - El INSERT a `competitor_posts` con dedupe por `post_url` es compartido y vive en el handler de la API, no en el scraper. Detalle operativo: `apps/competitor-scraper/README.md` y `apps/api/src/modules/listening/README.md`.
 - **Enriquecimiento SEO (`search-intent`/`seo-review` de v1 Fase 8)**: opcional, post-lanzamiento, no bloquea nada del flujo principal.

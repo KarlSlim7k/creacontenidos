@@ -1,0 +1,10 @@
+node_modules/
+test-results/
+*.log
+.DS_Store
+
+# Credenciales — NUNCA commitear (ver apps/competitor-scraper/README.md).
+cookies.txt
+cookies.json
+fb_cookies*
+*.cookies

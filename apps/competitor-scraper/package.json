@@ -1,0 +1,23 @@
+{
+  "name": "@crea/competitor-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Microservicio HTTP que scrapea páginas de Facebook para alimentar la tabla competitor_posts de CREA Command Center.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "cli": "node src/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "crawlee": "^3.15.3",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

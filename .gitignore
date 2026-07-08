@@ -9,3 +9,12 @@ dist/
 .claude/
 .opencode/
 skills/
+# Secretos locales (cookies de Facebook para el scraper)
+secrets/
+*.cookies
+fb_cookies*
+
+
+# Local storage de crawlee (no commitear)
+apps/competitor-scraper/storage/
+

@@ -1,0 +1,9 @@
+node_modules
+test
+*.md
+.git
+.gitignore
+.dockerignore
+cookies*
+fb_cookies*
+.DS_Store
