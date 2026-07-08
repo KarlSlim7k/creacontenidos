@@ -1143,6 +1143,7 @@
       ? '<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px;">' +
           '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" data-action="detect-competitors-fb" ' + (state.competitorsBusy ? 'disabled' : '') + '>' + (state.competitorsBusy ? 'Escaneando…' : '📘 Escanear Facebook') + '</button>' +
           '<button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-competitors" ' + (state.competitorsBusy ? 'disabled' : '') + '>' + (state.competitorsBusy ? 'Explorando…' : '🔎 Explorar competencia') + '</button>' +
+          (posts.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-competitors">🗑 Limpiar todo</button>' : '') +
         '</div>'
       : '';
     return detectBtn +
@@ -1188,7 +1189,10 @@
 
     return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;">' + sourceChips + '<span style="width:1px;height:16px;background:var(--line-soft);margin:0 6px;"></span>' + statusChips +
         (state.user.role === 'director' || state.user.role === 'produccion' ?
-          '<button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ' + (state.radarBusy ? 'disabled' : '') + ' style="margin-left:auto;">' + (state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias') + '</button>' : '') +
+          '<span style="margin-left:auto;display:flex;gap:8px;">' +
+            (topics.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-topics">🗑 Limpiar todo</button>' : '') +
+            '<button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ' + (state.radarBusy ? 'disabled' : '') + '>' + (state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias') + '</button>' +
+          '</span>' : '') +
       '</div>' +
       '<div class="padmin-card">' +
         '<div class="padmin-table-head padmin-cols-radar"><span>TEMA</span><span>FUENTE</span><span>MENCIONES</span><span>SENTIMIENTO</span><span>ESTADO</span><span>ACCIONES</span></div>' +
@@ -1725,6 +1729,7 @@
         break;
       case 'analyze-competitor': submitAnalyzeCompetitor(Number(el.getAttribute('data-id'))); break;
       case 'delete-competitor': submitDeleteCompetitor(Number(el.getAttribute('data-id'))); break;
+      case 'clear-competitors': submitClearCompetitors(); break;
       case 'competitor-to-idea': submitCompetitorToIdea(Number(el.getAttribute('data-id'))); break;
       case 'set-leads-status': setState({ leadsStatus: el.getAttribute('data-value') }); break;
       case 'mark-lead': submitMarkLead(Number(el.getAttribute('data-id')), el.getAttribute('data-status')); break;
@@ -1734,6 +1739,7 @@
       case 'close-radar': setState({ selectedRadarId: null }); break;
       case 'approve-topic': submitApproveTopic(Number(el.getAttribute('data-id'))); break;
       case 'delete-topic': submitDeleteTopic(Number(el.getAttribute('data-id'))); break;
+      case 'clear-topics': submitClearTopics(); break;
       case 'open-comentario': setState({ comentarioPieceId: Number(el.getAttribute('data-id')), comentarioText: '' }); break;
       case 'close-comentario': setState({ comentarioPieceId: null, comentarioText: '' }); break;
       case 'confirm-comentario': submitReturn(Number(el.getAttribute('data-id'))); break;
@@ -2110,6 +2116,15 @@
       .catch(function (err) { setState({ errorMsg: err.message }); });
   }
 
+  function submitClearCompetitors() {
+    var posts = state.data.competitors || [];
+    if (!posts.length) return;
+    if (!confirm('¿Eliminar las ' + posts.length + ' publicaciones de competencia? No se puede deshacer.')) return;
+    Promise.all(posts.map(function (p) { return adminApi('/api/listening/competitors/' + p.id, { method: 'DELETE' }); }))
+      .then(function () { setData({ competitors: [] }); })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
   // Crea una idea en la bandeja a partir del post del competidor (reusa POST /ideas)
   // y lo marca analizado — no hace falta endpoint nuevo.
   function submitCompetitorToIdea(id) {
@@ -2146,6 +2161,15 @@
         setData({ topics: topics });
         if (state.selectedRadarId === id) setState({ selectedRadarId: null });
       })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitClearTopics() {
+    var topics = state.data.topics || [];
+    if (!topics.length) return;
+    if (!confirm('¿Eliminar los ' + topics.length + ' temas detectados? No se puede deshacer.')) return;
+    Promise.all(topics.map(function (t) { return adminApi('/api/listening/topics/' + t.id, { method: 'DELETE' }); }))
+      .then(function () { setData({ topics: [] }); setState({ selectedRadarId: null }); })
       .catch(function (err) { setState({ errorMsg: err.message }); });
   }
 
