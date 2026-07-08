@@ -82,7 +82,7 @@ router.delete('/ideas/:id', requireAuth, requireRole('director'), async (req, re
 
 const PROPOSAL_FIELDS = `id, topic_id, format, title, body, dek, section, slug, cover_image_url,
   author_name, is_sponsored, sponsor_name, image_prompt,
-  angulo, sensibilidad, origin, status, author_id, review_comment, published_at, created_at, updated_at`;
+  angulo, sensibilidad, origin, status, author_id, review_comment, published_at, created_at, updated_at, view_count`;
 
 // GET /api/editorial/proposals?status=a,b&author_id=
 router.get('/proposals', requireAuth, async (req, res, next) => {
@@ -260,14 +260,35 @@ router.patch('/proposals/:id/return', requireAuth, requireRole('director'), asyn
   }
 });
 
-// DELETE /api/editorial/proposals/:id — solo director; rechazadas y borradores
-// (limpieza rápida desde el picker del editor). Publicadas/en revisión nunca:
-// el gate editorial exige devolverlas primero.
+// Nota ya publicada: reabrir para corregir. A diferencia de /return (director
+// rechaza el trabajo de producción, exige motivo) esto no es un rechazo — director
+// o producción detectan un error y la reabren; vuelve a pasar por borrador →
+// en_revision → publish (gate completo, sin atajos) antes de verse otra vez en el sitio.
+router.patch('/proposals/:id/reopen', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    if (!(await requireStatus(req.params.id, 'published', res))) return;
+    const { rows } = await pool.query(
+      `UPDATE content_proposals SET status = 'borrador', updated_at = now() WHERE id = $1
+       RETURNING ${PROPOSAL_FIELDS}`,
+      [req.params.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/editorial/proposals/:id — solo director; rechazadas, borradores y
+// publicadas (limpieza rápida desde el picker del editor, o retirar una nota viva
+// del sitio). En_revision nunca: el gate editorial exige devolverla primero.
 router.delete('/proposals/:id', requireAuth, requireRole('director'), async (req, res, next) => {
   try {
-    if (!(await requireStatus(req.params.id, ['rechazada', 'borrador'], res))) return;
+    if (!(await requireStatus(req.params.id, ['rechazada', 'borrador', 'published'], res))) return;
     // Sin esto las imágenes IA quedarían huérfanas (FK es ON DELETE SET NULL).
     await pool.query('DELETE FROM generated_images WHERE proposal_id = $1', [req.params.id]);
+    // published_content (bitácora de distribución) referencia esta fila SIN ON DELETE:
+    // borrar una publicada con push previo a un canal fallaría por violación de FK.
+    await pool.query('DELETE FROM published_content WHERE proposal_id = $1', [req.params.id]);
     await pool.query('DELETE FROM content_proposals WHERE id = $1', [req.params.id]);
     res.status(204).end();
   } catch (err) {

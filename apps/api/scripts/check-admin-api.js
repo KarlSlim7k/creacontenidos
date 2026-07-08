@@ -4,6 +4,8 @@
 // Corre migrate + seed (idempotencia), levanta la API en :3997, verifica:
 // login + sesión por rol, 401/403, bandeja de ideas (alcance por colaborador),
 // pipeline completo propuesta→borrador→en_revision→published (gate editorial),
+// reopen de una publicada (permisos, se cae del sitio, se puede republicar) y
+// delete de una publicada (solo director, limpia published_content antes por la FK),
 // RADAR de solo lectura, kanban comercial. Revierte la fila de propuesta que usa
 // para dejar el check re-ejecutable. Mata el server al final.
 const assert = require('node:assert');
@@ -154,6 +156,35 @@ async function main() {
     const onSite = await fetch(`${BASE}/api/public/articles/check-e2e-admin-slug`);
     assert.strictEqual(onSite.status, 200, 'la pieza publicada debe verse en el sitio público de inmediato');
 
+    // 6b. Nota publicada: reopen para corregir. 403 para roles sin acceso, permitido a
+    // producción (no solo director — reabrir no es un rechazo), se cae del sitio, 409
+    // si ya no está en 'published', y puede volver a publicarse sin atajos.
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, { method: 'PATCH', headers: auth(colaboradorToken) })).status,
+      403, 'colaborador no debería poder reabrir una publicada'
+    );
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, { method: 'PATCH', headers: auth(comercialToken) })).status,
+      403, 'comercial no debería poder reabrir una publicada'
+    );
+    p = await (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, { method: 'PATCH', headers: auth(produccionToken) })).json();
+    assert.strictEqual(p.status, 'borrador', 'producción debe poder reabrir una publicada');
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/public/articles/check-e2e-admin-slug`)).status, 404,
+      'una nota reabierta debe desaparecer del sitio público de inmediato'
+    );
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, { method: 'PATCH', headers: auth(directorToken) })).status,
+      409, 'reopen solo aplica cuando el estado es published'
+    );
+    p = await (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/submit-review`, { method: 'PATCH', headers: auth(produccionToken) })).json();
+    assert.strictEqual(p.status, 'en_revision');
+    p = await (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/publish`, {
+      method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin: '100% humano' }),
+    })).json();
+    assert.strictEqual(p.status, 'published', 'debe poder republicarse tras reabrir y corregir');
+
     // 7. RADAR: solo lectura, filtro por fuente.
     const topics = await (await fetch(`${BASE}/api/listening/topics?source=TikTok`, { headers: auth(directorToken) })).json();
     assert.ok(topics.length >= 1 && topics.every((t) => t.source === 'TikTok'));
@@ -248,7 +279,30 @@ async function main() {
     assert.strictEqual(publicMetrics.monthly_reach_label, '[check] 99K', 'el cambio debe verse de inmediato en el endpoint público');
     await pool.query('UPDATE site_metrics SET monthly_reach_label = $1 WHERE id = 1', [metricsBefore.monthly_reach_label]);
 
-    console.log('OK: panel admin verificado (auth por rol, ideas por colaborador, pipeline propuesta→publicada, RADAR, comercial, permisos vivos, leads, distribución, competencia, métricas del sitio).');
+    // 14. Eliminar una nota publicada: solo director. published_content referencia
+    // content_proposals SIN ON DELETE — antes de la limpieza agregada, borrar una
+    // publicada con bitácora de distribución violaba la FK y el DELETE fallaba.
+    const { rows: [pubRow] } = await pool.query(
+      `INSERT INTO content_proposals (format, title, body, status, section, slug, origin, published_at)
+       VALUES ('nota', '[check] nota publicada a borrar', 'cuerpo de prueba', 'published', 'Local', 'check-delete-published', '100% humano', now())
+       RETURNING id`
+    );
+    await pool.query(
+      `INSERT INTO published_content (proposal_id, platform, published_at, status) VALUES ($1, 'whatsapp', now(), 'ok')`,
+      [pubRow.id]
+    );
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${pubRow.id}`, { method: 'DELETE', headers: auth(produccionToken) })).status,
+      403, 'producción no debería poder borrar una publicada'
+    );
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${pubRow.id}`, { method: 'DELETE', headers: auth(directorToken) })).status,
+      204, 'director debe poder borrar una publicada aunque tenga bitácora de distribución (FK published_content)'
+    );
+    const { rows: goneCheck } = await pool.query('SELECT id FROM content_proposals WHERE id = $1', [pubRow.id]);
+    assert.strictEqual(goneCheck.length, 0, 'la nota publicada debió quedar eliminada');
+
+    console.log('OK: panel admin verificado (auth por rol, ideas por colaborador, pipeline propuesta→publicada, reopen/delete de publicadas, RADAR, comercial, permisos vivos, leads, distribución, competencia, métricas del sitio).');
   } finally {
     server.kill();
     if (proposalId) {

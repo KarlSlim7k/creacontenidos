@@ -69,6 +69,7 @@
     { id: 'editor', label: 'Editor de nota' },
     { id: 'aprobacion', label: 'Aprobación' },
     { id: 'producciones', label: 'Producciones' },
+    { id: 'publicadas', label: 'Publicadas' },
     { id: 'comercial', label: 'Pipeline comercial' },
     { id: 'leads', label: 'Leads' },
     { id: 'metricas', label: 'Métricas' },
@@ -361,6 +362,8 @@
       loadProposals('rechazada', 'status=rechazada');
     } else if (screen === 'producciones') {
       adminApi('/api/admin/social').then(function (r) { setData({ socialPosts: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
+    } else if (screen === 'publicadas') {
+      loadProposals('published', 'status=published');
     } else if (screen === 'configuracion') {
       if (state.configTab === 'usuarios') adminApi('/api/auth/users').then(function (r) { setData({ users: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
       if (state.configTab === 'permisos' && !state.data.roleModules) adminApi('/api/auth/roles').then(function (r) { setData({ roleModules: r }); }).catch(function (err) { setState({ errorMsg: err.message }); });
@@ -1429,6 +1432,34 @@
     '</div>';
   }
 
+  // Notas ya publicadas: reabrir para corregir (vuelve a borrador y entra al
+  // pipeline de revisión de nuevo) o eliminar en definitiva (solo director).
+  function renderPublicadas() {
+    var published = state.data.proposalsByKey.published;
+    if (!published) return loadingCard();
+    var rows = published.map(function (p) {
+      return '<div class="padmin-row" style="flex-wrap:wrap;gap:8px;">' +
+        '<div style="min-width:0;">' +
+          '<p class="padmin-row-title">' + esc(p.title) + '</p>' +
+          '<p class="padmin-row-meta">' + esc(p.section || '') +
+            (p.published_at ? ' · publicada ' + esc(relativeTime(p.published_at)) : '') +
+            (p.author_name ? ' · ' + esc(p.author_name) : '') +
+            (p.view_count != null ? ' · ' + p.view_count + ' vistas' : '') +
+          '</p>' +
+        '</div>' +
+        '<span style="display:flex;gap:6px;flex-wrap:wrap;">' +
+          '<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="reopen-published" data-id="' + p.id + '">Editar</button>' +
+          (state.user.role === 'director' ? '<button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-published" data-id="' + p.id + '">Eliminar</button>' : '') +
+        '</span>' +
+      '</div>';
+    }).join('');
+    return '<div>' +
+      '<h1 class="padmin-h1">Publicadas</h1>' +
+      '<p class="padmin-lede">Notas visibles en el sitio. "Editar" la regresa a borrador y sale del sitio hasta que se vuelva a publicar tras pasar por revisión.</p>' +
+      '<div class="padmin-card">' + (rows || '<div class="padmin-row"><p class="padmin-row-meta">Todavía no hay notas publicadas.</p></div>') + '</div>' +
+    '</div>';
+  }
+
   // ---------- denegado ----------
 
   function renderDenegado() {
@@ -1662,7 +1693,7 @@
   var screenRenderers = {
     dashboard: renderDashboard, ideas: renderIdeas, editor: renderEditor, aprobacion: renderAprobacion,
     comercial: renderComercial, leads: renderLeads, metricas: renderMetricas, radar: renderRadar, propuestas: renderPropuestas,
-    producciones: renderProducciones,
+    producciones: renderProducciones, publicadas: renderPublicadas,
     hermes: renderHermes, pipeline: renderPipeline, denegado: renderDenegado, configuracion: renderConfiguracion
   };
 
@@ -1793,6 +1824,8 @@
       case 'close-picker-preview': setState({ pickerPreview: null }); break;
       case 'toggle-mobile-nav': setState({ mobileNavOpen: !state.mobileNavOpen }); break;
       case 'delete-borrador': submitDeleteBorrador(Number(el.getAttribute('data-id'))); break;
+      case 'reopen-published': submitReopenPublished(Number(el.getAttribute('data-id'))); break;
+      case 'delete-published': submitDeletePublished(Number(el.getAttribute('data-id'))); break;
       case 'generate-image':
         if (!state.editorProposalId) break;
         state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm());
@@ -2179,6 +2212,26 @@
       .then(function () {
         setProposalsKey('borrador', (state.data.proposalsByKey.borrador || []).filter(function (p) { return p.id !== id; }));
         setState({ successMsg: 'Borrador eliminado.' });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitReopenPublished(id) {
+    adminApi('/api/editorial/proposals/' + id + '/reopen', { method: 'PATCH' })
+      .then(function () {
+        state.data.proposalsByKey = {};
+        goTo('editor', id);
+        setState({ successMsg: 'Nota reabierta para edición.' });
+      })
+      .catch(function (err) { setState({ errorMsg: err.message }); });
+  }
+
+  function submitDeletePublished(id) {
+    if (!confirm('¿Eliminar esta nota publicada? Se quita del sitio de forma permanente y no se puede deshacer.')) return;
+    adminApi('/api/editorial/proposals/' + id, { method: 'DELETE' })
+      .then(function () {
+        setProposalsKey('published', (state.data.proposalsByKey.published || []).filter(function (p) { return p.id !== id; }));
+        setState({ successMsg: 'Nota publicada eliminada.' });
       })
       .catch(function (err) { setState({ errorMsg: err.message }); });
   }
