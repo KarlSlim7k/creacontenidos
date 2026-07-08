@@ -18,8 +18,14 @@ RUN npm ci --omit=dev
 
 COPY src ./src
 
+# Por defecto playwright instala en $HOME/.cache/ms-playwright. Como este RUN
+# corre como root, eso cae en /root/.cache — y /root no es atravesable por el
+# user node (permisos 700), así que en runtime no encuentra el browser.
+# Lo mandamos a una ruta fuera de /root, legible por cualquier user.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 # Instala Chromium y sus dependencias de sistema en un solo paso.
-RUN npx playwright install --with-deps chromium
+RUN npx playwright install --with-deps chromium && chmod -R o+rX /ms-playwright
 
 # node:22-slim trae el usuario `node` (uid 1000). Los archivos copiados son
 # world-readable pero /app es root-owned — Crawlee necesita crear su propio
