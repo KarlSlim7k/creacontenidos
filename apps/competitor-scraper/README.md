@@ -47,8 +47,9 @@ de Brave/Chrome) en el contenedor del scraper.
 2. Click en la extensión **"Get cookies.txt LOCALLY"** → filtra por
    `facebook.com` → exporta en formato **Netscape** → guarda como
    `cookies.txt`.
-3. En Dokploy, reemplaza el archivo `secrets/fb_cookies.txt` del servicio
-   `competitor-scraper` con el nuevo export.
+3. En el VPS, reemplaza el archivo en la ruta de `FB_COOKIES_PATH` (fuera del
+   árbol del compose — ver `docker-compose.yml` — para que sobreviva al git
+   clean de cada deploy de Dokploy) con el nuevo export.
 4. Reinicia el servicio: `docker compose restart competitor-scraper`.
 5. Llama al endpoint una vez y verifica en logs `Session check OK` — si
    dice `Session check FAILED` las cookies vencieron y hay que repetir.

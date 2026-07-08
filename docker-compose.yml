@@ -87,11 +87,13 @@ services:
       PORT: 3015
       FB_COOKIES_FILE: /secrets/fb_cookies.txt
     volumes:
-      # El archivo de cookies se monta desde ./secrets/fb_cookies.txt (gitignored).
-      # Crear el directorio y copiar el archivo desde la sesión local — Dokploy
-      # también puede inyectarlo como file secret. Si no existe, el servicio
-      # arranca igual pero solo scrapea páginas 100% públicas.
-      - ./secrets/fb_cookies.txt:/secrets/fb_cookies.txt:ro
+      # FB_COOKIES_PATH apunta fuera del árbol del compose (default: ./secrets/
+      # para dev local). En Dokploy, el deploy hace git clean de no-trackeados
+      # y se lleva ./secrets/ con él — por eso en prod FB_COOKIES_PATH debe
+      # apuntar a una ruta fuera del repo (ej. /home/karol/creacontenidos-work/
+      # secrets/fb_cookies.txt), seteada en el .env de Dokploy. Si el archivo
+      # no existe, el servicio arranca igual pero solo scrapea páginas públicas.
+      - ${FB_COOKIES_PATH:-./secrets/fb_cookies.txt}:/secrets/fb_cookies.txt:ro
     expose:
       - "3015"
     healthcheck:
