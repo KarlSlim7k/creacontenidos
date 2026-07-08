@@ -102,7 +102,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    mem_limit: 768m
+    # 768m se quedaba corto: un solo Chromium headless scrapeando una cuenta
+    # ya usa ~700 MB en la práctica (91% del límite anterior, casi sin margen).
+    mem_limit: 1024m
 
 volumes:
   crea_db_data:
