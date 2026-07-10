@@ -49,6 +49,12 @@ module.exports = {
   // montadas como secret). Si es null, el endpoint solo soporta Perplexity.
   // Ver apps/api/src/modules/listening/README.md y el plan de integración.
   competitorScraperUrl: process.env.COMPETITOR_SCRAPER_URL || null,
+  // Firecrawl — scrape web pública para RADAR (docs/ia/firecrawl-integracion.md).
+  // Vacío = detección de topics sigue solo con Perplexity. CSV de URLs en
+  // FIRECRAWL_SOURCE_URLS (no reutilizar DEFAULT_COMPETITORS: son nombres, no URLs).
+  firecrawlApiKey: process.env.FIRECRAWL_API_KEY || null,
+  firecrawlBaseUrl: process.env.FIRECRAWL_BASE_URL || 'https://api.firecrawl.dev/v1',
+  firecrawlSourceUrls: process.env.FIRECRAWL_SOURCE_URLS || '',
   apiKeys: {
     perplexity: process.env.PERPLEXITY_API_KEY,
     anthropic: process.env.ANTHROPIC_API_KEY,
