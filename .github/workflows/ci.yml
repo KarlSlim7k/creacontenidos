@@ -1,0 +1,47 @@
+# CI: corre la suite completa de checks (apps/api/scripts/run-checks.js all)
+# contra un Postgres efímero en cada push a master y en PRs. Dokploy despliega
+# cada push a master sin correr nada — este workflow es la única red de
+# seguridad antes de producción. Los checks no gastan en APIs de pago: los
+# happy-paths de IA están guardados y check-competitor-scraper arranca su
+# server con las keys vacías (ver cabeceras de cada script).
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: crea
+          POSTGRES_PASSWORD: crea_ci
+          POSTGRES_DB: crea_command_center
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crea"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://crea:crea_ci@localhost:5432/crea_command_center
+      JWT_SECRET: ci-secret
+      NODE_ENV: development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - name: Instalar dependencias
+        working-directory: apps/api
+        run: npm ci
+      - name: Suite completa de checks
+        working-directory: apps/api
+        run: npm run check
