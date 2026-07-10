@@ -1,4 +1,5 @@
 const config = require('../config');
+const { SECTIONS } = require('./sections');
 
 const NOUS_BASE = 'https://inference-api.nousresearch.com/v1';
 const PERPLEXITY_BASE = 'https://api.perplexity.ai';
@@ -35,7 +36,7 @@ async function chatComplete(systemPrompt, userMessage, modelKey) {
   const json = await res.json();
   const content = json.choices[0].message.content;
   if (!content) throw new Error('Nous Portal no devolvió contenido (posible límite de tokens de razonamiento agotado)');
-  return content;
+  return { content, usage: json.usage || null };
 }
 
 function parseJson(text) {
@@ -69,15 +70,15 @@ async function perplexitySearch(systemPrompt, userMessage) {
   const json = await res.json();
   const content = json.choices[0].message.content;
   if (!content) throw new Error('Perplexity no devolvió contenido');
-  return content;
+  return { content, usage: json.usage || null };
 }
 
 async function detectTopics(query) {
   const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
   const system = `Eres un analista de tendencias para un medio editorial en Perote, Veracruz, México. Detectas temas relevantes para audiencia local y regional. Hoy es ${fecha}. Busca en la web noticias y tendencias recientes (últimos días) — nunca reportes eventos de años anteriores como si fueran de hoy.`;
   const user = `Busca tendencias y noticias actuales relevantes para un medio de contenido en Perote, Veracruz sobre: "${query}". Para cada topic, devuelve un JSON array con objetos que tengan: title, source (Web Search), mentions (número estimado), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). En "antecedentes" siempre precisa cuándo ocurrió el hecho (fecha exacta o al menos día/semana aproximada según la fuente) — si la fuente no da fecha, dilo explícitamente ("fecha exacta no reportada por la fuente") en vez de omitirlo. Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
-  const content = await perplexitySearch(system, user);
-  return parseJson(content);
+  const { content, usage } = await perplexitySearch(system, user);
+  return { topics: parseJson(content), usage };
 }
 
 // Radar de competencia: publicaciones recientes de medios competidores de la región,
@@ -86,7 +87,7 @@ async function detectCompetitorPosts(competitors) {
   const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
   const system = `Eres un analista de competencia para CREA Contenidos, medio digital en Perote, Veracruz, México. Hoy es ${fecha}. Busca en la web publicaciones recientes (últimos días) de los medios competidores indicados — nunca reportes contenido de años anteriores como si fuera actual.`;
   const user = `Medios competidores a revisar: ${competitors.join(', ')}.\n\nBusca sus publicaciones más recientes o con más interacción (notas, posts en redes sociales). Devuelve SOLO un JSON array (máximo 10 objetos) con: source_platform (facebook/instagram/tiktok/web), source_account (nombre del medio o cuenta), post_url, post_text (texto o resumen del post), post_date (ISO 8601, o null si la fuente no da fecha — no la inventes), reactions, comments, shares (números; 0 si no hay dato), media_type (texto/foto/video o null).`;
-  const content = await perplexitySearch(system, user);
+  const { content } = await perplexitySearch(system, user);
   return parseJson(content);
 }
 
@@ -99,28 +100,35 @@ async function enrichFacebookTopics(posts) {
   const system = `Eres un analista de tendencias para un medio editorial en Perote, Veracruz, México. Hoy es ${fecha}. Vas a recibir publicaciones YA recopiladas de páginas de Facebook de medios competidores — no busques nada, solo analiza el texto dado.`;
   const postsJson = JSON.stringify(posts.map((p) => ({ source_account: p.source_account, post_text: p.post_text, post_date: p.post_date })));
   const user = `Publicaciones (array de longitud ${posts.length}):\n${postsJson}\n\nPara CADA publicación, en el mismo orden, devuelve un objeto con: title (tema editorial breve derivado del post, no copies el texto literal), sentiment (positivo/negativo/neutral), antecedentes (qué pasó y cuándo, según post_date — si no hay fecha dilo explícitamente), actores, angulos (ángulos de cobertura sugeridos para CREA Contenidos), audiencia (potencial de audiencia local). Devuelve SOLO un JSON array de longitud ${posts.length}, mismo orden que la entrada, sin texto adicional.`;
-  const content = await chatComplete(system, user, 'default');
+  const { content } = await chatComplete(system, user, 'default');
   return parseJson(content);
 }
 
-async function generateProposal(context, format, angle) {
+// competitorPosts (opcional): posts de competencia ya recuperados por
+// similarity() en content-engine/index.js — solo para que el modelo elija un
+// ángulo distinto, nunca para copiar/parafrasear su texto (se le dice explícito).
+async function generateProposal(context, format, angle, competitorPosts) {
   const modelKey = format === 'guion_audio' || format === 'guion_video' ? 'complex' : 'default';
   const system = 'Eres un editor asistente para CREA Contenidos, un medio digital en Perote, Veracruz. Generas propuestas de contenido en español mexicano profesional.';
-  const user = `Tema: ${context.title}\nDescripción: ${context.description || ''}\nAntecedentes: ${context.antecedentes || ''}\nActores: ${context.actores || ''}\nÁngulos sugeridos: ${context.angulos || ''}\nAudiencia: ${context.audiencia || ''}\nFormato pedido: ${format}\nÁngulo editorial: ${angle || 'libre'}\n\nGenera una propuesta de contenido. Devuelve SOLO un JSON con: title, body (resumen de 2-3 párrafos), dek (subtítulo de 1 línea), section, angulo, sensibilidad (verde/amarillo/rojo).`;
-  const content = await chatComplete(system, user, modelKey);
-  return parseJson(content);
+  const competitorBlock = competitorPosts && competitorPosts.length
+    ? `\n\nCobertura reciente de competencia sobre temas similares (SOLO para elegir un ángulo distinto — NO copies ni parafrasees su texto):\n${JSON.stringify(competitorPosts.map((p) => ({ medio: p.source_account, texto: String(p.post_text || '').slice(0, 300) })))}`
+    : '';
+  const user = `Tema: ${context.title}\nDescripción: ${context.description || ''}\nAntecedentes: ${context.antecedentes || ''}\nActores: ${context.actores || ''}\nÁngulos sugeridos: ${context.angulos || ''}\nAudiencia: ${context.audiencia || ''}\nFormato pedido: ${format}\nÁngulo editorial: ${angle || 'libre'}${competitorBlock}\n\nGenera una propuesta de contenido. Devuelve SOLO un JSON con: title, body (resumen de 2-3 párrafos), dek (subtítulo de 1 línea), section (una de: ${SECTIONS.join(', ')}), angulo, sensibilidad (verde/amarillo/rojo).`;
+  const { content, usage } = await chatComplete(system, user, modelKey);
+  return { proposal: parseJson(content), usage, model: MODELS[modelKey] };
 }
 
 async function generateDraft(proposal, instructions) {
   const system = 'Eres un redactor para CREA Contenidos, medio digital en Perote, Veracruz. Escribes artículos completos en español mexicano, tono profesional pero accesible. NO uses emojis. NO uses caracteres CJK o no latinos.';
   const user = `Título: ${proposal.title}\nDek: ${proposal.dek || ''}\nSección: ${proposal.section || ''}\nÁngulo: ${proposal.angulo || ''}\nCuerpo actual: ${proposal.body || ''}\nInstrucciones del editor: ${instructions || 'ninguna'}\n\nEscribe el cuerpo completo del artículo.`;
-  return chatComplete(system, user, 'default');
+  const { content } = await chatComplete(system, user, 'default');
+  return content;
 }
 
 async function qaCheck(title, body) {
   const system = "Eres un corrector de estilo para un medio editorial mexicano. Verificas: 1) Español correcto (gramática, ortografía), 2) Ausencia de caracteres no deseados (CJK, símbolos extraños, emojis colados), 3) Coherencia y fluidez. Devuelve un JSON con: score (0-100), issues (array de {type: 'symbol'|'grammar'|'coherence', line: número de línea, text: descripción}), summary (resumen en 1 línea). SOLO el JSON.";
   const user = `Título: ${title}\n\nCuerpo:\n${body}`;
-  const content = await chatComplete(system, user, 'qa');
+  const { content } = await chatComplete(system, user, 'qa');
   return parseJson(content);
 }
 
@@ -135,7 +143,7 @@ async function generateNewsletterEditorial(topics, weekday, date) {
     title: t.title, sentiment: t.sentiment, antecedentes: t.antecedentes, angulos: t.angulos,
   })));
   const user = `TEMAS DETECTADOS HOY (RADAR):\n${topicsJson}\n\nFECHA: ${date}\nDÍA DE LA SEMANA: ${weekday}\n\nGenera las secciones del newsletter. Devuelve SOLO un JSON con:\n- notaDelDia: {titulo, cuerpo} — la noticia más relevante de los temas, 3-4 oraciones con datos concretos, sin adjetivos ni juicios.\n- enBreve: array de 2-4 strings, notas secundarias en 1-2 oraciones cada una.\n- datoDelDia: un dato curioso, histórico o estadístico sobre Perote, Veracruz (educativo, compartible, real — no lo inventes si no lo sabes con certeza, usa historia conocida de la región).\n\nReglas: máximo 400 palabras en total entre las tres secciones. Sin emojis. Sin clickbait. Si los temas no alcanzan para "en breve", devuelve un array más corto.`;
-  const content = await chatComplete(system, user, 'default');
+  const { content } = await chatComplete(system, user, 'default');
   return parseJson(content);
 }
 

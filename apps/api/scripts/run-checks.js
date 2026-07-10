@@ -12,7 +12,7 @@ const ROOT = path.join(__dirname, '..');
 const GROUPS = {
   unit: ['check-nota-ssr.js'],
   public: ['check-public-api.js', 'check-leads.js'],
-  integration: ['check-newsletter.js', 'check-content-engine.js', 'check-social.js', 'check-competitor-scraper.js'],
+  integration: ['check-newsletter.js', 'check-content-engine.js', 'check-listening.js', 'check-social.js', 'check-competitor-scraper.js'],
   e2e: ['verify-e2e.js', 'check-admin-api.js'],
 };
 GROUPS.all = [...GROUPS.unit, ...GROUPS.public, ...GROUPS.integration, ...GROUPS.e2e];

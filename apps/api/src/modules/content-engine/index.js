@@ -16,21 +16,82 @@ const aiLimiter = rateLimit({
 });
 
 // POST /api/content/generate-proposal — genera una propuesta de contenido a partir de un topic de RADAR.
+//
+// Antes de gastar en IA: 1) canibalización — si ya hay una nota PUBLICADA con
+// título muy similar (similarity() vía pg_trgm, migración 032), corta con 409
+// en vez de generar contenido redundante; el caller puede forzar con
+// {force: true} (ej. seguimiento legítimo de una nota vieja). 2) contexto de
+// competencia — trae hasta 3 posts de competitor_posts parecidos al topic
+// (mismo similarity()) para que el modelo elija un ángulo distinto, sin copiar.
 router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
-    const { topic_id, format, angle } = req.body || {};
+    const { topic_id, format, angle, force } = req.body || {};
     if (!topic_id) return res.status(400).json({ error: 'Datos inválidos', fields: { topic_id: 'Requerido' } });
     const { rows: topics } = await pool.query('SELECT * FROM topics WHERE id = $1', [topic_id]);
     if (!topics[0]) return res.status(404).json({ error: 'Topic no encontrado' });
 
-    const proposal = await generateProposal(topics[0], format || 'nota', angle);
+    if (!force) {
+      const { rows: similar } = await pool.query(
+        `SELECT id, title, slug, similarity(title, $1) AS score FROM content_proposals
+         WHERE status = 'published' AND similarity(title, $1) > 0.35
+         ORDER BY score DESC LIMIT 3`,
+        [topics[0].title]
+      );
+      if (similar.length) {
+        return res.status(409).json({
+          error: 'Ya existe contenido publicado muy similar a este tema (posible canibalización). Manda "force": true en el body para generar de todas formas.',
+          similar,
+        });
+      }
+    }
+
+    const { rows: competitorContext } = await pool.query(
+      `SELECT source_account, post_text FROM competitor_posts
+       WHERE post_text IS NOT NULL AND similarity(post_text, $1) > 0.15
+       ORDER BY similarity(post_text, $1) DESC LIMIT 3`,
+      [topics[0].title]
+    );
+
+    const { proposal, usage, model } = await generateProposal(topics[0], format || 'nota', angle, competitorContext);
     const { rows } = await pool.query(
       `INSERT INTO content_proposals (topic_id, format, title, body, dek, section, angulo, sensibilidad, origin, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Generado con IA', 'propuesta') RETURNING *`,
       [topic_id, format || 'nota', proposal.title, proposal.body, proposal.dek, proposal.section, proposal.angulo, proposal.sensibilidad]
     );
-    await logActivity(pool, 'generate_proposal', `Propuesta creada: ${proposal.title}`, req.user.id, 'exito', { topic_id, format });
+    await logActivity(pool, 'generate_proposal', `Propuesta creada: ${proposal.title}`, req.user.id, 'exito', { topic_id, format, model, usage, competitor_matches: competitorContext.length });
     res.status(201).json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/content/ai-usage?days=30 — gasto real de IA agregado desde
+// activity_log.metadata (tokens reportados por la API en cada llamada, NO
+// estimados por caracteres). Cubre radar_detect(_auto) y generate_proposal —
+// las únicas rutas donde ai-client.js hoy bubblea `usage` hacia arriba.
+router.get('/ai-usage', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+    const { rows } = await pool.query(
+      `SELECT action, metadata->>'model' AS model, (metadata->'usage'->>'total_tokens')::int AS total_tokens
+       FROM activity_log
+       WHERE action IN ('radar_detect', 'radar_detect_auto', 'generate_proposal')
+         AND (metadata->'usage'->>'total_tokens') IS NOT NULL
+         AND created_at >= now() - ($1 || ' days')::interval`,
+      [days]
+    );
+    const byAction = {};
+    let totalTokens = 0;
+    for (const row of rows) {
+      totalTokens += row.total_tokens;
+      byAction[row.action] = byAction[row.action] || { calls: 0, tokens: 0, model: row.model };
+      byAction[row.action].calls += 1;
+      byAction[row.action].tokens += row.total_tokens;
+    }
+    res.json({
+      days, calls: rows.length, totalTokens, byAction,
+      note: 'Tokens reportados por la API (no estimados). Multiplica totalTokens / 1e6 por tu tarifa real de Nous Portal / Perplexity para calcular el costo en $.',
+    });
   } catch (err) {
     next(err);
   }

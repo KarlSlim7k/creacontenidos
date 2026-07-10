@@ -58,6 +58,7 @@ npm run check:e2e                      # flujo portada→sección→nota→perfi
 npm run check:admin                    # auth por rol, ideas, comercial, RADAR, leads, competencia, métricas
 npm run check:social                   # embed HTML, XSS, gate editorial
 npm run check:content                  # content-engine: auth, status, rate limit
+npm run check:listening                # RADAR: cron, canibalización, taxonomía de sección, ai-usage
 npm run check:newsletter               # newsletter: cron lock, doble opt-in, idempotencia
 npm run check:nota-ssr                 # SSR de nota.html con Open Graph
 npm run check:scraper                  # branch de Facebook en competitors/detect (requiere scraper-stub)

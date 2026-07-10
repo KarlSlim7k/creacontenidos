@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
+const { SECTIONS } = require('../../lib/sections');
 
 const router = express.Router();
 
@@ -178,6 +179,9 @@ router.patch('/proposals/:id/draft', requireAuth, async (req, res, next) => {
       if (req.body[field] === undefined) continue;
       const value = String(req.body[field]).trim();
       if (value.length > max) return res.status(400).json({ error: 'Datos inválidos', fields: { [field]: `Máximo ${max} caracteres` } });
+      if (field === 'section' && value && !SECTIONS.includes(value)) {
+        return res.status(400).json({ error: 'Datos inválidos', fields: { section: `Debe ser una de: ${SECTIONS.join(', ')}` } });
+      }
       params.push(value || null);
       sets.push(`${field} = $${params.length}`);
     }

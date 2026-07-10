@@ -16,7 +16,9 @@ const commercialRouter = require('./modules/commercial');
 const socialRouter = require('./modules/social');
 const newsletterRouter = require('./modules/newsletter');
 const { startNewsletterCron } = require('./lib/newsletter-cron');
+const { startListeningCron } = require('./lib/listening-cron');
 const { notaSsr } = require('./lib/nota-ssr');
+const { SECTIONS } = require('./lib/sections');
 const pool = require('./db/pool');
 
 const app = express();
@@ -57,7 +59,6 @@ app.get('/nota.html', notaSsr(webDir, pool, config.publicSiteUrl));
 
 // sitemap.xml generado desde la BD: portada, secciones y cada nota publicada.
 // robots.txt (estático en apps/web) apunta aquí.
-const SITEMAP_SECTIONS = ['Local', 'Cultura', 'Economía', 'Entretenimiento', 'Deportes', 'Opinión'];
 app.get('/sitemap.xml', async (req, res, next) => {
   try {
     const base = config.publicSiteUrl.replace(/\/$/, '');
@@ -66,7 +67,7 @@ app.get('/sitemap.xml', async (req, res, next) => {
       "SELECT slug, published_at FROM content_proposals WHERE status = 'published' ORDER BY published_at DESC LIMIT 5000"
     );
     const urls = ['/', '/comunidad.html', '/producciones.html']
-      .concat(SITEMAP_SECTIONS.map((s) => '/seccion.html?s=' + encodeURIComponent(s)))
+      .concat(SECTIONS.map((s) => '/seccion.html?s=' + encodeURIComponent(s)))
       .map((p) => `<url><loc>${xmlEsc(base + p)}</loc></url>`);
     for (const r of rows) {
       const loc = xmlEsc(base + '/nota.html?slug=' + encodeURIComponent(r.slug));
@@ -106,3 +107,4 @@ app.listen(config.port, () => {
 });
 
 startNewsletterCron();
+startListeningCron();

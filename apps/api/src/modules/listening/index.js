@@ -2,8 +2,9 @@ const express = require('express');
 const pool = require('../../db/pool');
 const config = require('../../config');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { detectTopics, detectCompetitorPosts, enrichFacebookTopics, logActivity } = require('../../lib/ai-client');
+const { detectCompetitorPosts, enrichFacebookTopics, logActivity } = require('../../lib/ai-client');
 const { scrapeCompetitorPosts } = require('../../lib/competitor-scraper-client');
+const { detectAndSaveTopics } = require('../../lib/topic-detection');
 
 const router = express.Router();
 
@@ -71,27 +72,14 @@ async function generateTopicsFromFacebookPosts(posts, userId) {
   return insertedTopics;
 }
 
-// POST /api/listening/topics/detect — detección de tendencias vía IA (Nous Portal).
-router.post('/topics/detect', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+// POST /api/listening/topics/detect — detección de tendencias vía IA (Perplexity).
+// Lógica compartida con el cron automático (listening-cron.js, cada 6h) en
+// lib/topic-detection.js — mismo dedupe, activity_log separa 'radar_detect'
+// (manual) de 'radar_detect_auto' (cron).
+router.post('/topics/detect', requireAuth, requireRole('director', 'produccion'), async (req, res) => {
   const query = (req.body && req.body.query) || 'tendencias y noticias relevantes en Perote, Veracruz, México';
   try {
-    const detected = await detectTopics(query);
-    const inserted = [];
-    for (const topic of detected) {
-      const { rows: dupes } = await pool.query(
-        `SELECT id FROM topics WHERE lower(title) = lower($1) AND detected_at >= now() - interval '24 hours'`,
-        [topic.title]
-      );
-      if (dupes.length) continue;
-      const { rows } = await pool.query(
-        `INSERT INTO topics (title, source, mentions, sentiment, antecedentes, actores, angulos, audiencia)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [topic.title, topic.source || 'Web Search', topic.mentions || 0, topic.sentiment || null,
-          topic.antecedentes || null, topic.actores || null, topic.angulos || null, topic.audiencia || null]
-      );
-      inserted.push(rows[0]);
-    }
-    await logActivity(pool, 'radar_detect', `${inserted.length} topics detectados`, req.user.id, 'exito', { query, count: inserted.length });
+    const inserted = await detectAndSaveTopics(query, req.user.id, 'manual');
     res.json({ detected: inserted.length, topics: inserted });
   } catch (err) {
     await logActivity(pool, 'radar_detect', err.message, req.user.id, 'fallo', { query });

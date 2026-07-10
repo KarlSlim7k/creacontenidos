@@ -15,6 +15,7 @@
     "check:admin": "node scripts/check-admin-api.js",
     "check:social": "node scripts/check-social.js",
     "check:content": "node scripts/check-content-engine.js",
+    "check:listening": "node scripts/check-listening.js",
     "check:newsletter": "node scripts/check-newsletter.js",
     "check:nota-ssr": "node scripts/check-nota-ssr.js",
     "check:scraper": "node scripts/check-competitor-scraper.js",
