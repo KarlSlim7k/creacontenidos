@@ -182,7 +182,7 @@ export function renderConfigMetricas() {
   return '<div class="padmin-card" style="max-width:480px;padding:20px;">' +
     '<form data-action="submit-site-metrics" class="padmin-grid2" style="gap:10px;">' +
       '<div class="padmin-field" style="margin:0;"><label>Alcance mensual</label><input id="sm-reach" type="text" value="' + esc(m.monthly_reach_label) + '" placeholder="42K"></div>' +
-      '<div class="padmin-field" style="margin:0;"><label>Municipios cubiertos</label><input id="sm-municipios" type="number" min="0" value="' + m.municipios_count + '"></div>' +
+      '<div class="padmin-field" style="margin:0;"><label>Municipios cubiertos</label><input id="sm-municipios" type="number" min="0" value="' + m.municipalities_count + '"></div>' +
       '<div class="padmin-field" style="margin:0;"><label>Oyentes Tercer Tiempo</label><input id="sm-listeners" type="text" value="' + esc(m.tercer_tiempo_listeners_label) + '" placeholder="+1K"></div>' +
       '<div></div>' +
       '<div class="padmin-field" style="margin:0;"><label>Edad 18-24 (%)</label><input id="sm-age-1" type="number" min="0" max="100" value="' + m.audience_age_18_24_pct + '"></div>' +

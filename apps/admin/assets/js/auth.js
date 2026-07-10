@@ -1,6 +1,9 @@
 // CREA Panel Admin — auth, login y navegación entre pantallas.
 import { state, setState, setData, adminApi, loadScreenData } from './store.js';
 import { landingFor, esc } from './util.js';
+// Import circular con router.js (router importa renderLogin de aquí): seguro porque
+// render es function declaration y solo se llama en runtime, nunca durante la carga.
+import { render } from './router.js';
 
 export function login(email, password) {
   setState({ loginError: null });

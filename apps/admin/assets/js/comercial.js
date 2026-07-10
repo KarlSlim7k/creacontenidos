@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantallas Comercial (pipeline de clientes) y Leads.
 import { state } from './store.js';
-import { esc, badge, loadingCard, STATUS_LABEL } from './util.js';
+import { esc, badge, loadingCard, STATUS_LABEL, relativeTime } from './util.js';
 
 var PIPELINE_STAGES_ORDER = ['identificado', 'contactado', 'propuesta_enviada', 'cerrado'];
 

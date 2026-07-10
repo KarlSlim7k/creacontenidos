@@ -13,6 +13,7 @@
     "check:leads": "node scripts/check-leads.js",
     "check:e2e": "node scripts/verify-e2e.js",
     "check:admin": "node scripts/check-admin-api.js",
+    "check:admin-panel": "node scripts/check-admin-panel.js",
     "check:social": "node scripts/check-social.js",
     "check:content": "node scripts/check-content-engine.js",
     "check:listening": "node scripts/check-listening.js",

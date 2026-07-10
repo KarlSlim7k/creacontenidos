@@ -10,6 +10,9 @@ proceso hijo, ejecuta asserts contra la API real y limpia sus datos en
 Grupos (ver `apps/api/scripts/run-checks.js`):
 
 - **unit** — `check-nota-ssr.js`: puro, sin servidor ni DB.
+  `check-admin-panel.js`: smoke del frontend del panel (apps/admin/assets/js) —
+  importa el grafo de módulos ES con stubs de DOM y renderiza todas las
+  pantallas con datos falsos; atrapa imports rotos y campos mal nombrados.
 - **public** — `check-public-api.js`, `check-leads.js`: endpoints públicos.
 - **integration** — `check-newsletter.js`, `check-content-engine.js`,
   `check-social.js`, `check-competitor-scraper.js`: módulos con guards de

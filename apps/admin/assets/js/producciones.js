@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantallas Producciones (social embeds) y Publicadas.
 import { state } from './store.js';
-import { esc, badge, loadingCard } from './util.js';
+import { esc, badge, loadingCard, relativeTime } from './util.js';
 
 export function renderProducciones() {
   var posts = state.data.socialPosts;

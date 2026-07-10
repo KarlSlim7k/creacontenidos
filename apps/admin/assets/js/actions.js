@@ -2,7 +2,7 @@
 import { state, setState, setData, adminApi, adminApiBlob, loadScreenData, mergeKey, setProposalsKey, isSoundMuted } from './store.js';
 import { readEditorForm, buildNotaPreviewDoc } from './editor.js';
 import { readNewsletterForm } from './hermes.js';
-import { goTo, login } from './auth.js';
+import { goTo, login, logout } from './auth.js';
 
 // ---------- lectura de formularios inline ----------
 
