@@ -18,7 +18,13 @@
     "check:newsletter": "node scripts/check-newsletter.js",
     "check:nota-ssr": "node scripts/check-nota-ssr.js",
     "check:scraper": "node scripts/check-competitor-scraper.js",
-    "check": "npm run check:api && npm run check:leads && npm run check:e2e && npm run check:admin && npm run check:social && npm run check:content && npm run check:newsletter && npm run check:nota-ssr && npm run check:scraper"
+    "test": "node scripts/run-checks.js unit",
+    "test:unit": "node scripts/run-checks.js unit",
+    "test:public": "node scripts/run-checks.js public",
+    "test:integration": "node scripts/run-checks.js integration",
+    "test:e2e": "node scripts/run-checks.js e2e",
+    "test:all": "node scripts/run-checks.js all",
+    "check": "node scripts/run-checks.js all"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

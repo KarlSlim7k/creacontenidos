@@ -5,38 +5,21 @@
 // verifica los 3 endpoints, el gate editorial (pending nunca aparece),
 // el 404 de slug inexistente y el 429 bajo ráfaga. Mata el server al final.
 const assert = require('node:assert');
-const { execFileSync, spawn } = require('node:child_process');
 const path = require('node:path');
-const { Pool } = require('pg');
+const { runMigrate, runSeed, createPool, startApi, stopApi, waitForHealth, getJson } = require('./lib/check-helpers');
 
 const ROOT = path.join(__dirname, '..');
-const PORT = 3999;
+const PORT = Number(process.env.CHECK_PORT) || 3999;
 const BASE = `http://localhost:${PORT}`;
-const config = require(path.join(ROOT, 'src/config'));
-
-async function getJson(url) {
-  const res = await fetch(url);
-  return { status: res.status, body: res.status === 429 ? null : await res.json() };
-}
-
-async function waitForHealth() {
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(`${BASE}/health`)).ok) return;
-    } catch (_) { /* aún no arranca */ }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  throw new Error('La API no levantó en :' + PORT);
-}
 
 async function main() {
   // 0. migrate + seed re-ejecutables (seed dos veces = mismo resultado)
-  execFileSync('node', ['src/db/migrate.js'], { cwd: ROOT, stdio: 'inherit' });
-  execFileSync('node', ['src/db/seed.js'], { cwd: ROOT, stdio: 'inherit' });
-  execFileSync('node', ['src/db/seed.js'], { cwd: ROOT, stdio: 'inherit' });
+  runMigrate();
+  runSeed();
+  runSeed();
 
   // Fixture: un artículo pending CON slug — jamás debe salir por la API pública.
-  const pool = new Pool({ connectionString: config.databaseUrl });
+  const pool = createPool();
   await pool.query(`
     INSERT INTO content_proposals (format, status, title, slug, section, author_name, dek, body, published_at)
     VALUES ('nota', 'pending', '[check] nota pendiente oculta', 'check-pendiente-oculta', 'Local',
@@ -49,13 +32,9 @@ async function main() {
   assert.strictEqual(publishedCount, 30, `seed idempotente: esperaba 30 publicados (24 + 6 patrocinados), hay ${publishedCount}`);
   await pool.end();
 
-  const server = spawn('node', ['src/server.js'], {
-    cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT) },
-    stdio: 'ignore',
-  });
+  const server = startApi({ port: PORT });
   try {
-    await waitForHealth();
+    await waitForHealth(BASE);
 
     // 1. Listado general: 30 publicados (24 + 6 patrocinados), orden published_at DESC, sin pendientes.
     let { status, body: list } = await getJson(`${BASE}/api/public/articles?limit=50`);
@@ -111,7 +90,7 @@ async function main() {
 
     console.log('OK: API pública verificada (listado, sección, slug, autor, gate editorial, 404, 429).');
   } finally {
-    server.kill();
+    await stopApi(server);
   }
 }
 

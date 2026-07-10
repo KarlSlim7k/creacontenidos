@@ -6,49 +6,25 @@
 // devuelve artículos, el formulario de contacto responde y los campos se
 // corresponden) y limpia la fila de prueba de leads al terminar.
 const assert = require('node:assert');
-const { spawn } = require('node:child_process');
-const path = require('node:path');
-const { Pool } = require('pg');
+const { createPool, startApi, stopApi, waitForHealth, getJson: getJSON } = require('./lib/check-helpers');
 
-const ROOT = path.join(__dirname, '..');
-const PORT = process.env.PORT || 3996;
+const PORT = Number(process.env.CHECK_PORT || process.env.PORT) || 3996;
 const BASE = `http://localhost:${PORT}`;
-const config = require(path.join(ROOT, 'src/config'));
-
-async function getJSON(url) {
-  const res = await fetch(url);
-  const body = res.status === 429 ? null : await res.json();
-  return { status: res.status, body };
-}
-
-async function waitForHealth() {
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(`${BASE}/health`)).ok) return;
-    } catch (_) { /* aún no arranca */ }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  throw new Error('La API no levantó en :' + PORT);
-}
 
 async function main() {
-  const server = spawn('node', ['src/server.js'], {
-    cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT) },
-    stdio: 'ignore',
-  });
-  const pool = new Pool({ connectionString: config.databaseUrl });
+  const server = startApi({ port: PORT });
+  const pool = createPool();
   try {
     await flow();
   } finally {
-    server.kill();
+    await stopApi(server);
     await pool.query("DELETE FROM leads WHERE email = 'verify-e2e@test.crea'"); // limpia la fila del check
     await pool.end();
   }
 }
 
 async function flow() {
-  await waitForHealth();
+  await waitForHealth(BASE);
 
   // 1. Portada → listado completo.
   const { body: articles } = await getJSON(`${BASE}/api/public/articles?limit=50`);

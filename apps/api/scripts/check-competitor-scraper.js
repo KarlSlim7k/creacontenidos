@@ -15,20 +15,17 @@
 // usar: bash /home/karol/creacontenidos-work/run-check.sh
 
 const assert = require('node:assert');
-const { execFileSync, spawn } = require('node:child_process');
 const http = require('node:http');
-const path = require('node:path');
-const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
+const {
+  DEV_PASSWORD, runMigrate, createPool, startApi, stopApi, waitForHealth, login: loginAt, postJson, sleep,
+} = require('./lib/check-helpers');
 
-const ROOT = path.join(__dirname, '..');
-const PORT = 3998;
+const PORT = Number(process.env.CHECK_PORT) || 3998;
 const BASE = `http://localhost:${PORT}`;
-const STUB_PORT = 3999;
+const STUB_PORT = Number(process.env.CHECK_STUB_PORT) || 3999;
 const STUB_URL = `http://localhost:${STUB_PORT}`;
 
-const config = require(path.join(ROOT, 'src/config'));
-
-const DEV_PASSWORD = 'crea2026';
 const DIRECTOR = 'check-director@crearcontenidos.com';
 const PRODUCCION = 'check-produccion@crearcontenidos.com';
 const COLABORADOR = 'check-colaborador@crearcontenidos.com';
@@ -84,42 +81,16 @@ function startStubServer() {
   });
 }
 
-async function waitForHealth(base) {
-  for (let i = 0; i < 50; i++) {
-    try {
-      const r = await fetch(`${base}/health`);
-      if (r.ok) return;
-    } catch (err) {
-      if (i === 49) throw new Error(`Server no levantó en ${base}: ${err.message}`);
-    }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  throw new Error('Server no levantó en ' + base);
-}
-
-async function login(email) {
-  const res = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: DEV_PASSWORD }),
-  });
-  assert.strictEqual(res.status, 200, 'login falló para ' + email);
-  return (await res.json()).token;
+function login(email) {
+  return loginAt(BASE, email);
 }
 
 function post(pathname, token, body) {
-  return fetch(BASE + pathname, {
-    method: 'POST',
-    headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}),
-    body: JSON.stringify(body || {}),
-  });
+  return postJson(BASE, pathname, token, body);
 }
 
-function startApi(env) {
-  const proc = spawn('node', ['src/server.js'], {
-    cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT), ...env },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+function startApiWithLogs(env) {
+  const proc = startApi({ port: PORT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   proc.stdout.on('data', (d) => process.stdout.write(`[api] ${d}`));
   proc.stderr.on('data', (d) => process.stderr.write(`[api] ${d}`));
   proc.on('error', (err) => console.error('[api error]', err));
@@ -127,35 +98,25 @@ function startApi(env) {
   return proc;
 }
 
-function kill(server) {
-  return new Promise((resolve) => {
-    if (!server || server.killed) return resolve();
-    server.on('exit', () => resolve());
-    server.kill('SIGTERM');
-    setTimeout(() => { try { server.kill('SIGKILL'); } catch (_) {} resolve(); }, 2000);
-  });
-}
-
 async function restartApi(server, env) {
-  await kill(server);
-  await new Promise((r) => setTimeout(r, 300));
-  const next = startApi(env);
+  await stopApi(server);
+  await sleep(300);
+  const next = startApiWithLogs(env);
   await waitForHealth(BASE);
   return next;
 }
 
 async function main() {
-  execFileSync('node', ['src/db/migrate.js'], { cwd: ROOT, stdio: 'inherit' });
+  runMigrate();
 
-  const pool = new Pool({ connectionString: config.databaseUrl });
+  const pool = createPool();
   await pool.query(`DELETE FROM competitor_posts WHERE post_url LIKE 'https://www.facebook.com/check-fb-%'`);
 
   // Los seeds no son idempotentes, así que la DB de producción ya está poblada
   // con usuarios reales (no los del seed). Para poder hacer login, creamos
   // tres usuarios de check con password conocido. Si ya existen, los
   // actualizamos para que el password sea el esperado. Se eliminan al final.
-  const bcrypt = require('bcrypt');
-  const checkPasswordHash = await bcrypt.hash('crea2026', 10);
+  const checkPasswordHash = await bcrypt.hash(DEV_PASSWORD, 10);
   for (const u of [
     { email: 'check-director@crearcontenidos.com', role: 'director', name: '[check] director' },
     { email: 'check-produccion@crearcontenidos.com', role: 'produccion', name: '[check] produccion' },
@@ -172,7 +133,7 @@ async function main() {
   const stub = await startStubServer();
   const stubItems = stub.getItems();
 
-  let api = startApi({ COMPETITOR_SCRAPER_URL: STUB_URL });
+  let api = startApiWithLogs({ COMPETITOR_SCRAPER_URL: STUB_URL });
   try {
     await waitForHealth(BASE);
 
@@ -269,7 +230,7 @@ async function main() {
 
     console.log(`OK: branch de Facebook en competitors/detect verificado (${n} checks, auth/rol, source param, 503 fallback, dedupe, stub idempotencia, ambos roles válidos).`);
   } finally {
-    await kill(api);
+    await stopApi(api);
     await new Promise((r) => stub.server.close(r));
     await pool.query(`DELETE FROM competitor_posts WHERE post_url LIKE 'https://www.facebook.com/check-fb-%'`);
     // Limpiar activity_log antes de borrar los users (FK constraint).

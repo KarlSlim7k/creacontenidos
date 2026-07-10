@@ -48,11 +48,10 @@ npm run migrate            # crea tablas
 npm run seed               # datos de prueba
 npm run dev                # :3000
 
-# Verificación
-npm run check              # corre los 3 checks (API, leads, e2e)
-npm run check:api          # solo API pública
-npm run check:leads        # solo POST /leads
-npm run check:e2e          # solo flujo end-to-end
+# Verificación (ver docs/implementaciones/testing-api.md)
+npm test                   # checks unitarios rápidos
+npm run test:all           # toda la suite, por grupos
+npm run check              # alias de test:all
 ```
 
 ## Módulos (4 capas)

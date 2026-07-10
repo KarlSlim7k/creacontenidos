@@ -8,14 +8,10 @@
 // El límite es en memoria por proceso: el server se reinicia entre la fase
 // funcional y la fase de ráfaga para no contaminar los conteos.
 const assert = require('node:assert');
-const { execFileSync, spawn } = require('node:child_process');
-const path = require('node:path');
-const { Pool } = require('pg');
+const { runMigrate, createPool, startApi, stopApi, waitForHealth, sleep } = require('./lib/check-helpers');
 
-const ROOT = path.join(__dirname, '..');
-const PORT = 3998;
+const PORT = Number(process.env.CHECK_PORT) || 3998;
 const BASE = `http://localhost:${PORT}`;
-const config = require(path.join(ROOT, 'src/config'));
 
 const VALID = {
   name: 'Lead de Prueba',
@@ -35,36 +31,22 @@ function postLead(body) {
 }
 
 function startServer() {
-  return spawn('node', ['src/server.js'], {
-    cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT) },
-    stdio: 'ignore',
-  });
-}
-
-async function waitForHealth() {
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(`${BASE}/health`)).ok) return;
-    } catch (_) { /* aún no arranca */ }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  throw new Error('La API no levantó en :' + PORT);
+  return startApi({ port: PORT });
 }
 
 async function main() {
   // 0. migrate re-ejecutable.
-  execFileSync('node', ['src/db/migrate.js'], { cwd: ROOT, stdio: 'inherit' });
-  execFileSync('node', ['src/db/migrate.js'], { cwd: ROOT, stdio: 'inherit' });
+  runMigrate();
+  runMigrate();
 
-  const pool = new Pool({ connectionString: config.databaseUrl });
+  const pool = createPool();
   const leadCount = async () =>
     (await pool.query('SELECT count(*)::int AS n FROM leads')).rows[0].n;
 
   // Fase A: validación + inserción (5 requests exactos, bajo el límite de 5/15min).
   let server = startServer();
   try {
-    await waitForHealth();
+    await waitForHealth(BASE);
     const before = await leadCount();
 
     // 1. Inválidos → 400 con detalle por campo, sin insertar.
@@ -95,14 +77,14 @@ async function main() {
     );
     assert.deepStrictEqual(row, VALID, 'la fila insertada no coincide con el payload');
   } finally {
-    server.kill();
+    await stopApi(server);
   }
-  await new Promise((r) => setTimeout(r, 300));
+  await sleep(300);
 
   // Fase B: honeypot + ráfaga (server nuevo = contador de rate limit en cero).
   server = startServer();
   try {
-    await waitForHealth();
+    await waitForHealth(BASE);
     const before = await leadCount();
 
     // 3. Honeypot lleno → respuesta idéntica al éxito, CERO filas nuevas.
@@ -117,7 +99,7 @@ async function main() {
     assert.ok(statuses.includes(429), `la ráfaga nunca recibió 429 (statuses: ${statuses})`);
     assert.ok(statuses.filter((s) => s === 201).length <= 4, 'el límite estricto dejó pasar más de 5 requests');
   } finally {
-    server.kill();
+    await stopApi(server);
     await pool.query("DELETE FROM leads WHERE email = 'lead@example.com'"); // limpia filas del check
     await pool.end();
   }

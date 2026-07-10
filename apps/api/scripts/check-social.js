@@ -6,46 +6,25 @@
 // de embed responde (no exige 200 de TikTok, sólo que el endpoint no truene).
 // Limpia las filas creadas por el check para dejar el estado como estaba.
 const assert = require('node:assert');
-const { execFileSync, spawn } = require('node:child_process');
-const path = require('node:path');
-const { Pool } = require('pg');
+const { runMigrate, runSeed, createPool, startApi, stopApi, waitForHealth, login: loginAt } = require('./lib/check-helpers');
 
-const ROOT = path.join(__dirname, '..');
-const PORT = 3999;
+const PORT = Number(process.env.CHECK_PORT) || 3999;
 const BASE = `http://localhost:${PORT}`;
-const config = require(path.join(ROOT, 'src/config'));
-
-const DEV_PASSWORD = 'crea2026';
 const SAMPLE_URL = 'https://www.tiktok.com/@scout2015/video/6718335390845095173';
 
-async function waitForHealth() {
-  for (let i = 0; i < 50; i++) {
-    try { if ((await fetch(`${BASE}/health`)).ok) return; } catch (_) { /* aún no arranca */ }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  throw new Error('La API no levantó en :' + PORT);
-}
-
-async function login(email) {
-  const res = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: DEV_PASSWORD }),
-  });
-  assert.strictEqual(res.status, 200, 'login falló para ' + email);
-  return (await res.json()).token;
+function login(email) {
+  return loginAt(BASE, email);
 }
 
 async function main() {
-  execFileSync('node', ['src/db/migrate.js'], { cwd: ROOT, stdio: 'inherit' });
-  execFileSync('node', ['src/db/seed.js'], { cwd: ROOT, stdio: 'inherit' });
+  runMigrate();
+  runSeed();
 
-  const pool = new Pool({ connectionString: config.databaseUrl });
-  const server = spawn('node', ['src/server.js'], {
-    cwd: ROOT, env: { ...process.env, PORT: String(PORT) }, stdio: 'inherit',
-  });
+  const pool = createPool();
+  const server = startApi({ port: PORT, stdio: 'inherit' });
 
   try {
-    await waitForHealth();
+    await waitForHealth(BASE);
     const directorToken = await login('director@crearcontenidos.com');
 
     // 1) GET público: el feed trae los 4 seeds (oEmbed puede o no estar resuelto).
@@ -126,7 +105,7 @@ async function main() {
 
     console.log('\n✔ check-social pasó (10/10).');
   } finally {
-    server.kill('SIGTERM');
+    await stopApi(server);
     await pool.end();
   }
 }

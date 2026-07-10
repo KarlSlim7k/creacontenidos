@@ -9,55 +9,27 @@
 // RADAR de solo lectura, kanban comercial. Revierte la fila de propuesta que usa
 // para dejar el check re-ejecutable. Mata el server al final.
 const assert = require('node:assert');
-const { execFileSync, spawn } = require('node:child_process');
-const path = require('node:path');
-const { Pool } = require('pg');
+const {
+  DEV_PASSWORD, runMigrate, runSeed, createPool, startApi, stopApi, waitForHealth, login: loginAt, auth,
+} = require('./lib/check-helpers');
 
-const ROOT = path.join(__dirname, '..');
-const PORT = 3997;
+const PORT = Number(process.env.CHECK_PORT) || 3997;
 const BASE = `http://localhost:${PORT}`;
-const config = require(path.join(ROOT, 'src/config'));
 
-const DEV_PASSWORD = 'crea2026';
-
-async function waitForHealth() {
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(`${BASE}/health`)).ok) return;
-    } catch (_) { /* aún no arranca */ }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  throw new Error('La API no levantó en :' + PORT);
-}
-
-async function login(email) {
-  const res = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: DEV_PASSWORD }),
-  });
-  assert.strictEqual(res.status, 200, `login falló para ${email}`);
-  return (await res.json()).token;
-}
-
-function auth(token) {
-  return { Authorization: `Bearer ${token}` };
+function login(email) {
+  return loginAt(BASE, email, DEV_PASSWORD);
 }
 
 async function main() {
-  execFileSync('node', ['src/db/migrate.js'], { cwd: ROOT, stdio: 'inherit' });
-  execFileSync('node', ['src/db/seed.js'], { cwd: ROOT, stdio: 'inherit' });
+  runMigrate();
+  runSeed();
 
-  const pool = new Pool({ connectionString: config.databaseUrl });
-  const server = spawn('node', ['src/server.js'], {
-    cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT) },
-    stdio: 'ignore',
-  });
+  const pool = createPool();
+  const server = startApi({ port: PORT });
 
   let proposalId;
   try {
-    await waitForHealth();
+    await waitForHealth(BASE);
 
     // 1. Login + sesión por rol: allowedModules coincide con role-modules.js.
     const directorToken = await login('director@crearcontenidos.com');
@@ -304,7 +276,7 @@ async function main() {
 
     console.log('OK: panel admin verificado (auth por rol, ideas por colaborador, pipeline propuesta→publicada, reopen/delete de publicadas, RADAR, comercial, permisos vivos, leads, distribución, competencia, métricas del sitio).');
   } finally {
-    server.kill();
+    await stopApi(server);
     if (proposalId) {
       // Deja el check re-ejecutable: revierte la fila usada de vuelta a 'propuesta'.
       await pool.query(

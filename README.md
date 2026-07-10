@@ -48,8 +48,10 @@ vía `POST /api/listening/competitors/detect` cuando el body trae `source: 'face
 
 ### Checks
 
+Detalle de la suite (grupos, variables, cómo agregar uno nuevo): `docs/implementaciones/testing-api.md`.
+
 ```bash
-npm run check                          # los 9 checks secuenciales
+npm run check                          # los 9 checks secuenciales (alias de test:all)
 npm run check:api                      # listado, slug, autor, gate editorial, 429
 npm run check:leads                    # validación, inserción, honeypot, 429 estricto
 npm run check:e2e                      # flujo portada→sección→nota→perfil→contacto

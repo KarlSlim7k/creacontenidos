@@ -8,57 +8,32 @@
 // El happy-path de generación real (que sí cuesta) queda como brecha conocida:
 // requiere mockear fetch/ai-client y está fuera de alcance de este check barato.
 const assert = require('node:assert');
-const { execFileSync, spawn } = require('node:child_process');
-const path = require('node:path');
-const { Pool } = require('pg');
+const { runMigrate, runSeed, createPool, startApi, stopApi, waitForHealth, login: loginAt, postJson } = require('./lib/check-helpers');
 
-const ROOT = path.join(__dirname, '..');
-const PORT = 3997;
+const PORT = Number(process.env.CHECK_PORT) || 3997;
 const BASE = `http://localhost:${PORT}`;
-const config = require(path.join(ROOT, 'src/config'));
-
-const DEV_PASSWORD = 'crea2026';
 const DIRECTOR = 'director@crearcontenidos.com';
 const PRODUCCION = 'carlos.mendoza@crearcontenidos.com';
 const COLABORADOR = 'marisol.hidalgo@crearcontenidos.com';
 const RL_USER = 'ana.torres@crearcontenidos.com'; // produccion, aislado para el test de rate limit
 
-async function waitForHealth() {
-  for (let i = 0; i < 50; i++) {
-    try { if ((await fetch(`${BASE}/health`)).ok) return; } catch (_) { /* aún no arranca */ }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  throw new Error('La API no levantó en :' + PORT);
-}
-
-async function login(email) {
-  const res = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: DEV_PASSWORD }),
-  });
-  assert.strictEqual(res.status, 200, 'login falló para ' + email);
-  return (await res.json()).token;
+function login(email) {
+  return loginAt(BASE, email);
 }
 
 function post(pathname, token, body) {
-  return fetch(BASE + pathname, {
-    method: 'POST',
-    headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}),
-    body: JSON.stringify(body || {}),
-  });
+  return postJson(BASE, pathname, token, body);
 }
 
 async function main() {
-  execFileSync('node', ['src/db/migrate.js'], { cwd: ROOT, stdio: 'inherit' });
-  execFileSync('node', ['src/db/seed.js'], { cwd: ROOT, stdio: 'inherit' });
+  runMigrate();
+  runSeed();
 
-  const pool = new Pool({ connectionString: config.databaseUrl });
-  const server = spawn('node', ['src/server.js'], {
-    cwd: ROOT, env: { ...process.env, PORT: String(PORT) }, stdio: 'inherit',
-  });
+  const pool = createPool();
+  const server = startApi({ port: PORT, stdio: 'inherit' });
 
   try {
-    await waitForHealth();
+    await waitForHealth(BASE);
     const director = await login(DIRECTOR);
     const colaborador = await login(COLABORADOR);
     const rlToken = await login(RL_USER);
@@ -117,7 +92,7 @@ async function main() {
 
     console.log(`\n✔ check-content-engine pasó (${n} asserts). Brecha conocida: happy-path de IA no cubierto (requiere mock de fetch).`);
   } finally {
-    server.kill('SIGTERM');
+    await stopApi(server);
     await pool.end();
   }
 }
