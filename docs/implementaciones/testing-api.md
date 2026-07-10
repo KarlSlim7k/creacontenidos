@@ -15,8 +15,8 @@ Grupos (ver `apps/api/scripts/run-checks.js`):
   pantallas con datos falsos; atrapa imports rotos y campos mal nombrados.
 - **public** — `check-public-api.js`, `check-leads.js`: endpoints públicos.
 - **integration** — `check-newsletter.js`, `check-content-engine.js`,
-  `check-social.js`, `check-competitor-scraper.js`: módulos con guards de
-  auth/rol/validación (evitan gastar en APIs de pago).
+  `check-listening.js`, `check-social.js`, `check-competitor-scraper.js`:
+  módulos con guards de auth/rol/validación (evitan gastar en APIs de pago).
 - **e2e** — `verify-e2e.js`, `check-admin-api.js`: flujos completos
   multi-rol (panel admin, portada→nota→contacto).
 

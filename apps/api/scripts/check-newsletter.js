@@ -11,7 +11,7 @@
 // envío real de /send (Resend) y la lógica de solapamiento del cron (necesita
 // inyección de dependencias en newsletter-cron.js).
 const assert = require('node:assert');
-const { runMigrate, runSeed, createPool, startApi, stopApi, waitForHealth, login: loginAt, postJson } = require('./lib/check-helpers');
+const { runMigrate, runSeed, startApi, stopApi, waitForHealth, login: loginAt, postJson } = require('./lib/check-helpers');
 
 const PORT = Number(process.env.CHECK_PORT) || 3996;
 const BASE = `http://localhost:${PORT}`;
@@ -38,7 +38,6 @@ async function main() {
   runMigrate();
   runSeed();
 
-  const pool = createPool();
   const server = startApi({ port: PORT, stdio: 'inherit' });
 
   try {
@@ -80,7 +79,6 @@ async function main() {
     console.log(`\n✔ check-newsletter pasó (${n} asserts). Brechas conocidas: happy-path IA/Resend y solapamiento de cron (ver cabecera).`);
   } finally {
     await stopApi(server);
-    await pool.end();
   }
 }
 

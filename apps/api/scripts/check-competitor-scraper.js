@@ -90,7 +90,12 @@ function post(pathname, token, body) {
 }
 
 function startApiWithLogs(env) {
-  const proc = startApi({ port: PORT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  // Keys de IA vacías SIEMPRE: el paso 5 manda source=perplexity (con key real
+  // gastaría en Perplexity por corrida) y el happy path del paso 6 dispara
+  // generateTopicsFromFacebookPosts → chatComplete (gastaría en Nous). Sin keys
+  // ambas llamadas fallan de forma que los asserts ya toleran: perplexity → 500
+  // aceptado, y el route atrapa el error de topics y responde 200 con topics [].
+  const proc = startApi({ port: PORT, env: { PERPLEXITY_API_KEY: '', NOUS_PORTAL_API_KEY: '', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
   proc.stdout.on('data', (d) => process.stdout.write(`[api] ${d}`));
   proc.stderr.on('data', (d) => process.stderr.write(`[api] ${d}`));
   proc.on('error', (err) => console.error('[api error]', err));
@@ -129,6 +134,14 @@ async function main() {
       [u.email, checkPasswordHash, u.role, u.name],
     );
   }
+
+  // El paso 4 (facebook sin accounts → 400) exige que NO haya cuentas FB activas:
+  // si la DB de dev tiene cuentas en competitor_facebook_accounts, el endpoint las
+  // usa como default y responde 200. Se desactivan aquí y se restauran al final.
+  const { rows: activeAccounts } = await pool.query(
+    'SELECT id FROM competitor_facebook_accounts WHERE active = true'
+  );
+  await pool.query('UPDATE competitor_facebook_accounts SET active = false WHERE active = true');
 
   const stub = await startStubServer();
   const stubItems = stub.getItems();
@@ -179,7 +192,7 @@ async function main() {
       ok(r.status === 400, 'source=facebook sin accounts → 400');
     }
 
-    // --- 5. Source perplexity reconocido (sin gastar API) ---
+    // --- 5. Source perplexity reconocido (sin key inyectada → 500, nunca gasta) ---
     {
       const r = await post('/api/listening/competitors/detect', director, { source: 'perplexity' });
       ok(r.status === 200 || r.status === 500, `source=perplexity reconocido (recibido ${r.status})`);
@@ -232,6 +245,12 @@ async function main() {
   } finally {
     await stopApi(api);
     await new Promise((r) => stub.server.close(r));
+    if (activeAccounts.length) {
+      await pool.query(
+        'UPDATE competitor_facebook_accounts SET active = true WHERE id = ANY($1)',
+        [activeAccounts.map((a) => a.id)]
+      ).catch(() => {});
+    }
     await pool.query(`DELETE FROM competitor_posts WHERE post_url LIKE 'https://www.facebook.com/check-fb-%'`);
     // Limpiar activity_log antes de borrar los users (FK constraint).
     await pool.query(`DELETE FROM activity_log WHERE user_id IN (SELECT id FROM users WHERE email LIKE 'check-%@crearcontenidos.com')`);

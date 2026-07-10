@@ -39,15 +39,17 @@ function startApi({ port, env, stdio } = {}) {
 }
 
 // Robusto: SIGTERM, fallback SIGKILL, resuelve aunque el proceso ya haya muerto.
+// El timer se limpia en 'exit' — sin eso cada stopApi dejaba el event loop
+// vivo 2s extra aunque el server muriera al instante.
 function stopApi(proc) {
   return new Promise((resolve) => {
     if (!proc || proc.killed || proc.exitCode !== null) return resolve();
-    proc.on('exit', () => resolve());
-    proc.kill('SIGTERM');
-    setTimeout(() => {
+    const killTimer = setTimeout(() => {
       try { proc.kill('SIGKILL'); } catch (_) { /* ya murió */ }
       resolve();
     }, 2000);
+    proc.on('exit', () => { clearTimeout(killTimer); resolve(); });
+    proc.kill('SIGTERM');
   });
 }
 

@@ -106,6 +106,10 @@ async function main() {
     console.log('\n✔ check-social pasó (10/10).');
   } finally {
     await stopApi(server);
+    // Cleanup incondicional: si un assert falla entre el POST (paso 5) y el
+    // DELETE (paso 9), la fila quedaba viva y todas las corridas siguientes
+    // morían en el paso 5 con 409 por URL duplicada.
+    await pool.query('DELETE FROM social_posts WHERE external_url = $1', [SAMPLE_URL]).catch(() => {});
     await pool.end();
   }
 }

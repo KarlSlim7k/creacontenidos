@@ -8,7 +8,9 @@
 const assert = require('node:assert');
 const { createPool, startApi, stopApi, waitForHealth, getJson: getJSON } = require('./lib/check-helpers');
 
-const PORT = Number(process.env.CHECK_PORT || process.env.PORT) || 3996;
+// Solo CHECK_PORT: check-helpers carga src/config → dotenv, así que
+// process.env.PORT trae el 3000 del .env y el check chocaría con el dev server.
+const PORT = Number(process.env.CHECK_PORT) || 3996;
 const BASE = `http://localhost:${PORT}`;
 
 async function main() {
@@ -18,7 +20,8 @@ async function main() {
     await flow();
   } finally {
     await stopApi(server);
-    await pool.query("DELETE FROM leads WHERE email = 'verify-e2e@test.crea'"); // limpia la fila del check
+    // catch: si el flujo falló porque la DB no está, no enmascarar el error real.
+    await pool.query("DELETE FROM leads WHERE email = 'verify-e2e@test.crea'").catch(() => {});
     await pool.end();
   }
 }
