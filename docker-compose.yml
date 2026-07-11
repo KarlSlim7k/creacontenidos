@@ -56,6 +56,11 @@ services:
       # Microservicio de scraping de Facebook (apps/competitor-scraper/).
       # Si está vacío, /api/listening/competitors/detect cae a Perplexity-only.
       COMPETITOR_SCRAPER_URL: ${COMPETITOR_SCRAPER_URL:-}
+      # Firecrawl — RADAR web pública (docs/ia/firecrawl-integracion.md).
+      # Sin key o sin SOURCE_URLS, topic-detection cae a Perplexity.
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      FIRECRAWL_BASE_URL: ${FIRECRAWL_BASE_URL:-}
+      FIRECRAWL_SOURCE_URLS: ${FIRECRAWL_SOURCE_URLS:-}
     ports:
       # Host 3001: el 3000 lo ocupa el dashboard de Dokploy en el VPS.
       - "${API_HOST_PORT:-3001}:3000"
