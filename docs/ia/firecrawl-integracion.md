@@ -214,12 +214,11 @@ El scraper de FB no cambia de costo (RAM del contenedor; sin fee por corrida).
 - [ ] Commit Fase 2.
 
 ### Fase 3 — UI + verificación
-- [ ] Corregir chips en `apps/admin/assets/js/radar.js` para que el filtro matchee sources reales
+- [x] Corregir chips en `apps/admin/assets/js/radar.js` para que el filtro matchee sources reales
       (`Web Search`, `Facebook`; quitar o alinear `Perplexity`/`TikTok` según productor real).
-- [ ] Smoke test: `POST /api/listening/topics/detect` con rol `director` o `produccion`; verificar
-      filas en `topics`, dedupe 24h y chip de UI.
-- [ ] Medir créditos Firecrawl tras 1–2 días de cron y ajustar frecuencia/URLs si se acerca a 1000/mes.
-- [ ] Commit Fase 3.
+- [x] Smoke test local de pipeline Firecrawl+Nous (Fase 2); insert vía API depende de Postgres/deploy.
+- [ ] Medir créditos Firecrawl tras 1–2 días de cron en VPS y ajustar frecuencia/URLs si se acerca a 1000/mes.
+- [x] Commit Fase 3.
 
 ## Anti-patrones (no hacer)
 

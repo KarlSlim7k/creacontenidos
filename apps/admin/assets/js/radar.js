@@ -89,7 +89,9 @@ function renderRadarCompetencia() {
 function renderRadarTemas() {
   var topics = state.data.topics;
   if (!topics) return loadingCard();
-  var sources = ['Todas', 'Perplexity', 'Facebook', 'TikTok'];
+  // Valores = source en BD (topic-detection → 'Web Search'; FB → 'Facebook').
+  // No usar nombres de proveedor (Perplexity/Firecrawl): el filtro es igualdad exacta.
+  var sources = ['Todas', 'Web Search', 'Facebook'];
   var statuses = ['Todos', 'Nuevo', 'Revisado'];
   var sourceChips = sources.map(function (src) {
     var active = state.radarSource === src;
