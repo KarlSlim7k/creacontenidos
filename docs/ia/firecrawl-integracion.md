@@ -198,11 +198,11 @@ El scraper de FB no cambia de costo (RAM del contenedor; sin fee por corrida).
 ## Checklist de implementación (para agente)
 
 ### Fase 1 — Cliente + config
-- [ ] Crear `apps/api/src/lib/firecrawl-client.js` (`scrapeMarkdown`; timeout + reintento; error si no hay key).
-- [ ] Agregar `FIRECRAWL_API_KEY` (+ opcional `FIRECRAWL_BASE_URL`, `FIRECRAWL_SOURCE_URLS`) a
+- [x] Crear `apps/api/src/lib/firecrawl-client.js` (`scrapeMarkdown`; timeout + reintento; error si no hay key).
+- [x] Agregar `FIRECRAWL_API_KEY` (+ opcional `FIRECRAWL_BASE_URL`, `FIRECRAWL_SOURCE_URLS`) a
       `.env.example` (root y/o `apps/api`) y a `apps/api/src/config/index.js`.
-- [ ] Definir lista de URLs de fuentes web (constante o env). **No** reutilizar `DEFAULT_COMPETITORS`.
-- [ ] Commit Fase 1.
+- [x] Definir lista de URLs de fuentes web (constante o env). **No** reutilizar `DEFAULT_COMPETITORS`.
+- [x] Commit Fase 1.
 
 ### Fase 2 — Detección web
 - [ ] En `topic-detection.js`: rama Firecrawl → markdown → `chatComplete` → mismos campos de topic;

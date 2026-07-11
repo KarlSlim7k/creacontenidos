@@ -1,5 +1,5 @@
 // Cliente Firecrawl para scrape de web pública (RADAR / listening).
-// Fase 1: solo scrapeMarkdown. No engancha aún a topic-detection.
+// scrapeMarkdown + helpers de config. Enganchado en topic-detection (Fase 2).
 // Docs: docs/ia/firecrawl-integracion.md
 //
 // Auth: Bearer FIRECRAWL_API_KEY. Base default https://api.firecrawl.dev/v1.

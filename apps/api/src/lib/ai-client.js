@@ -78,7 +78,23 @@ async function detectTopics(query) {
   const system = `Eres un analista de tendencias para un medio editorial en Perote, Veracruz, México. Detectas temas relevantes para audiencia local y regional. Hoy es ${fecha}. Busca en la web noticias y tendencias recientes (últimos días) — nunca reportes eventos de años anteriores como si fueran de hoy.`;
   const user = `Busca tendencias y noticias actuales relevantes para un medio de contenido en Perote, Veracruz sobre: "${query}". Para cada topic, devuelve un JSON array con objetos que tengan: title, source (Web Search), mentions (número estimado), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). En "antecedentes" siempre precisa cuándo ocurrió el hecho (fecha exacta o al menos día/semana aproximada según la fuente) — si la fuente no da fecha, dilo explícitamente ("fecha exacta no reportada por la fuente") en vez de omitirlo. Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
   const { content, usage } = await perplexitySearch(system, user);
-  return { topics: parseJson(content), usage };
+  return { topics: parseJson(content), usage, model: 'sonar-pro', provider: 'perplexity' };
+}
+
+// Clasifica temas a partir de markdown YA scrapeado (Firecrawl). No busca en la
+// web — solo analiza el texto dado, igual que enrichFacebookTopics. Usado por
+// topic-detection cuando hay FIRECRAWL_API_KEY + URLs de fuentes.
+// markdownSources: [{ url, markdown }]
+async function detectTopicsFromMarkdown(query, markdownSources) {
+  const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  const system = `Eres un analista de tendencias para un medio editorial en Perote, Veracruz, México. Detectas temas relevantes para audiencia local y regional. Hoy es ${fecha}. Vas a recibir markdown YA scrapeado de sitios web públicos — no busques nada, solo analiza el texto dado. Nunca reportes eventos de años anteriores como si fueran de hoy.`;
+  const blocks = (markdownSources || []).map((s, i) => {
+    const body = String(s.markdown || '').slice(0, 6000);
+    return `### Fuente ${i + 1}: ${s.url || 'sin-url'}\n${body}`;
+  }).join('\n\n');
+  const user = `Consulta editorial: "${query}".\n\nMarkdown de fuentes:\n${blocks}\n\nA partir SOLO de ese markdown, extrae temas actuales relevantes para un medio en Perote, Veracruz. Para cada topic, devuelve un JSON array con objetos: title, source (Web Search), mentions (número estimado o 0), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). En "antecedentes" precisa cuándo ocurrió el hecho según la fuente — si no hay fecha, dilo explícitamente ("fecha exacta no reportada por la fuente"). Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics. Si el markdown no trae temas útiles, devuelve [].`;
+  const { content, usage } = await chatComplete(system, user, 'default');
+  return { topics: parseJson(content), usage, model: MODELS.default, provider: 'firecrawl' };
 }
 
 // Radar de competencia: publicaciones recientes de medios competidores de la región,
@@ -184,4 +200,4 @@ async function logActivity(pool, action, detail, userId, status, metadata) {
   );
 }
 
-module.exports = { chatComplete, detectTopics, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity };
+module.exports = { chatComplete, detectTopics, detectTopicsFromMarkdown, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity };
