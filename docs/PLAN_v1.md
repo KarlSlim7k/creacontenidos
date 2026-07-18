@@ -85,6 +85,8 @@ Router nuevo `apps/api/src/modules/public/` montado en `/api/public` (patrón ex
 
 Sustituir `CREA_ARTICLES` por `fetch` a `/api/public`. Vanilla JS, sin framework ni build (restricción del stack, no preferencia).
 
+> **Reversado (2026-07):** `apps/web` migró a Astro SSR + Tailwind + TypeScript — mes de pruebas, sin tráfico externo real que dependiera del stack anterior. La restricción de "sin build" queda sin efecto para `apps/web`; `apps/admin` sigue vanilla por ahora.
+
 - [x] `main.js`: helper único `creaApi(path)` con base URL configurable (meta tag o constante) y manejo de error visible (estado vacío con tono de marca, no pantalla rota).
 - [x] `index.html` (portada), `seccion.html`, `nota.html` (por `slug` en querystring), `perfil.html` — datos desde API. Eliminar `CREA_ARTICLES` al terminar (deletion over addition).
 - [x] `patrocinado.html` y `comunidad.html` quedan estáticas en v1 — solo verificar que no rompen al quitar el placeholder compartido.

@@ -1,0 +1,39 @@
+---
+// Puerto de renderTercerTiempoEpisodes() (main.js) — usado en home y en
+// estudio/tercer-tiempo.astro. Antes: posts client-fetched, luego cada iframe
+// resuelto on-demand vía un 2do fetch por tarjeta. Ahora todo corre server-side
+// en el mismo request (el endpoint /embed no llama a Facebook en el camino
+// síncrono — construye el iframe por regex — así que no hay costo real de
+// resolverlos en paralelo aquí), sin JS de cliente en absoluto.
+import EmptyState from './EmptyState.astro';
+import { creaApi, type SocialPost } from '../lib/api';
+import { timeAgo } from '../lib/format';
+
+interface EmbedResult { embed_html: string | null }
+
+let posts: SocialPost[] = [];
+try {
+  posts = await creaApi<SocialPost[]>('/api/public/social?network=facebook&limit=3');
+} catch {
+  posts = [];
+}
+
+const embeds = await Promise.all(
+  posts.map((p) => creaApi<EmbedResult>(`/api/public/social/${p.id}/embed`).catch(() => ({ embed_html: null })))
+);
+---
+{posts.length === 0 ? (
+  <EmptyState
+    title="Aún no hay programas cargados"
+    body="Síguenos en Facebook para ver las transmisiones en vivo."
+    gridColumn={false}
+  />
+) : (
+  posts.map((p, i) => (
+    <article>
+      <div class="img-ph ratio-4-3" style="margin-bottom:8px;overflow:hidden;" set:html={embeds[i].embed_html || (p.thumbnail_url ? `<img src="${p.thumbnail_url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">` : '<span class="cap">video: Tercer Tiempo</span>')} />
+      <p class="card-title" style="font-size:13px;margin-bottom:5px;"><a href={p.external_url} target="_blank" rel="noopener noreferrer">{p.title || 'Tercer Tiempo'}</a></p>
+      <div style="font-size:11px;color:var(--text-mute);">{timeAgo(p.created_at)}</div>
+    </article>
+  ))
+)}

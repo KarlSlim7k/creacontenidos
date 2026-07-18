@@ -1,0 +1,36 @@
+---
+import { SECTIONS } from '../../lib/sections';
+import { seccionHref } from '../../lib/format';
+import { todayLabel, currentWeather } from '../../lib/weather';
+import NewsletterForm from '../NewsletterForm.astro';
+import CofreDivider from './CofreDivider.astro';
+
+const today = todayLabel();
+const weather = await currentWeather();
+---
+<div class="ed-topbar">
+  <span>{today}</span>
+  <span class="weather desktop-only">
+    {weather && <span>{weather}</span>}
+    <a href="/comunidad">COMUNIDAD</a>
+    <NewsletterForm variant="popover" idPrefix="nl-top" />
+  </span>
+  <button class="menu-toggle mobile-only" data-menu-toggle aria-label="Abrir menú">
+    <span></span><span></span><span></span>
+  </button>
+</div>
+
+<div class="ed-masthead">
+  <a href="/" class="logo"><img src="/assets/img/logo-crea.png" alt="CREA Contenidos"></a>
+  <div style="display:flex;align-items:center;gap:18px;">
+    <div class="tagline desktop-only">Medio digital local del corredor Perote &middot; Xalapa &middot; Puebla</div>
+    <a href="/estudio" class="visit-estudio">Visitar Estudio &rarr;</a>
+  </div>
+</div>
+
+<CofreDivider />
+
+<nav class="ed-nav">
+  {SECTIONS.map((s) => <a href={seccionHref(s)} data-section={s}>{s}</a>)}
+  <a href="/producciones" data-section="Producciones" style="color:var(--brand);font-weight:600;">Producciones</a>
+</nav>

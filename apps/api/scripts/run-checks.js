@@ -10,7 +10,7 @@ const { spawnSync } = require('node:child_process');
 const ROOT = path.join(__dirname, '..');
 
 const GROUPS = {
-  unit: ['check-nota-ssr.js', 'check-admin-panel.js'],
+  unit: ['check-admin-panel.js'],
   public: ['check-public-api.js', 'check-leads.js'],
   integration: ['check-newsletter.js', 'check-content-engine.js', 'check-listening.js', 'check-social.js', 'check-competitor-scraper.js'],
   e2e: ['verify-e2e.js', 'check-admin-api.js'],

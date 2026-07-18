@@ -1,0 +1,132 @@
+---
+import EditorialLayout from '../../layouts/EditorialLayout.astro';
+import Cover from '../../components/Cover.astro';
+import EmptyState from '../../components/EmptyState.astro';
+import NewsletterForm from '../../components/NewsletterForm.astro';
+import { creaApi, ApiError, OFFLINE_STATE, type Article } from '../../lib/api';
+import { notaHref, perfilHref, seccionHref, initials, fechaLarga } from '../../lib/format';
+import { newsArticleJsonLd } from '../../lib/jsonld';
+
+const slug = Astro.params.slug || '';
+
+let article: Article | null = null;
+let fail: { title: string; body: string } | null = null;
+
+try {
+  article = await creaApi<Article>('/api/public/articles/' + encodeURIComponent(slug));
+} catch (err) {
+  Astro.response.status = err instanceof ApiError && err.status === 404 ? 404 : 502;
+  fail = err instanceof ApiError && err.status === 404
+    ? { title: 'No encontramos esta nota', body: 'Puede que ya no esté disponible o que el enlace esté incompleto. Te esperamos en la portada.' }
+    : OFFLINE_STATE;
+}
+
+let related: Article[] = [];
+if (article) {
+  try {
+    const list = await creaApi<Article[]>('/api/public/articles?section=' + encodeURIComponent(article.section) + '&limit=4');
+    related = list.filter((a) => a.slug !== article!.slug).slice(0, 3);
+  } catch {
+    related = [];
+  }
+}
+
+let image: string | null = null;
+let paras: string[] = [];
+let minutes = 1;
+let fecha = '';
+if (article) {
+  image = article.cover_image_url;
+  if (image && image.startsWith('/')) image = 'https://crea-contenidos.com' + image;
+  if (!image) image = 'https://crea-contenidos.com/assets/img/og-default.png';
+
+  const body = String(article.body || '');
+  minutes = Math.max(1, Math.round(body.split(/\s+/).length / 200));
+  fecha = fechaLarga(article.published_at);
+  paras = body.split(/\n\s*\n/).filter(Boolean);
+}
+
+const jsonLd = article ? newsArticleJsonLd(article, image) : null;
+---
+<EditorialLayout
+  title={article ? article.title : 'Nota'}
+  description={article ? (article.dek || '') : 'Notas y reportajes de CREA Contenidos, medio digital local de Perote, Veracruz y el corredor Perote–Xalapa–Puebla.'}
+  ogType="article"
+  ogImage={image || undefined}
+  noJsWarning="CREA Contenidos necesita JavaScript para mostrar esta nota. Actívalo para leerla completa."
+>
+  <Fragment slot="head">
+    {jsonLd && <script type="application/ld+json" set:html={jsonLd} />}
+  </Fragment>
+
+  <main class="container narrow" style="padding-top:28px;">
+    {fail ? (
+      <EmptyState title={fail.title} body={fail.body} cta={{ href: '/', label: 'Volver a portada' }} />
+    ) : article && (
+      <>
+        <a href={seccionHref(article.section)} class="eyebrow" style="display:block;margin-bottom:10px;">
+          {article.section.toUpperCase()}{article.is_sponsored ? ' · CONTENIDO PATROCINADO' : ''}
+        </a>
+        <h1 style="font-size:34px;line-height:1.2;margin:0 0 16px;">{article.title}</h1>
+        <div style="display:flex;align-items:center;gap:12px;padding-bottom:20px;border-bottom:0.5px solid var(--line);margin-bottom:24px;">
+          <a href={perfilHref(article.author_name)} class="avatar" style="width:36px;height:36px;"><span style="font-size:13px;">{initials(article.author_name)}</span></a>
+          <div style="font-size:12px;color:var(--text-mute);">
+            <a href={perfilHref(article.author_name)} style="color:var(--text);font-weight:500;">{article.author_name}</a> &middot; {fecha} &middot; {minutes} min de lectura
+          </div>
+        </div>
+
+        <Cover coverUrl={article.cover_image_url} section={article.section} class="featured ratio-16-9" style="margin-bottom:24px;" alt={article.title} />
+
+        {paras.map((p, i) => (
+          <>
+            <p style="font-size:16px;line-height:1.75;margin:0 0 18px;">{p}</p>
+            {i === Math.min(1, paras.length - 1) && !article!.is_sponsored && (
+              <div style="background:var(--bg-3);border-radius:8px;padding:18px 20px;margin-bottom:24px;">
+                <div class="eyebrow" style="margin-bottom:8px;">ALIADOS DE CREA</div>
+                <p style="font-size:13px;margin:0;line-height:1.55;">Esta cobertura es posible gracias a los negocios que patrocinan a CREA. <a href="/patrocinado" style="color:var(--accent-text);text-decoration:underline;">Conoce el contenido patrocinado</a> &middot; <a href="/estudio/servicios" style="color:var(--accent-text);text-decoration:underline;">Conoce cómo patrocinar</a></p>
+              </div>
+            )}
+          </>
+        ))}
+        {article.is_sponsored && (
+          <div style="background:var(--bg-3);border-radius:8px;padding:14px 18px;font-size:12px;color:var(--text-mute);">
+            Contenido patrocinado por <strong style="color:var(--text);">{article.sponsor_name || 'un aliado de CREA'}</strong>.
+          </div>
+        )}
+
+        <a href={perfilHref(article.author_name)} style="display:flex;gap:14px;align-items:center;background:var(--bg-2);border:0.5px solid var(--line);border-radius:8px;padding:16px 18px;margin:28px 0;">
+          <div class="avatar" style="width:44px;height:44px;"><span style="font-size:15px;">{initials(article.author_name)}</span></div>
+          <div>
+            <p style="font-size:13px;font-weight:600;margin:0 0 2px;">{article.author_name}</p>
+            <p style="font-size:12px;color:var(--text-mute);margin:0;">Colabora en CREA Contenidos &middot; Ver perfil</p>
+          </div>
+        </a>
+
+        <script define:vars={{ slug: article.slug }}>
+          // Fire-and-forget: cuenta la vista para "lo más leído". Si falla, no afecta la lectura.
+          fetch('/api/public/articles/' + encodeURIComponent(slug) + '/view', { method: 'POST' }).catch(() => {});
+        </script>
+      </>
+    )}
+  </main>
+
+  {article && (
+    <div class="container narrow">
+      <NewsletterForm idPrefix="nl-nota" title='¿Te gustó? Recibe "Buenos días, Perote" cada mañana' />
+    </div>
+  )}
+
+  {related.length > 0 && (
+    <div class="container" style="max-width:900px;padding-top:8px;padding-bottom:24px;">
+      <h2 class="eyebrow" style="margin-bottom:14px;font-size:11px;">NOTAS RELACIONADAS</h2>
+      <div class="grid grid-3">
+        {related.map((a) => (
+          <a href={notaHref(a.slug)}>
+            <Cover coverUrl={a.cover_image_url} section={a.section} class="ratio-4-3" style="margin-bottom:8px;" />
+            <h3 class="card-title" style="font-size:13px;line-height:1.4;font-weight:500;">{a.title}</h3>
+          </a>
+        ))}
+      </div>
+    </div>
+  )}
+</EditorialLayout>

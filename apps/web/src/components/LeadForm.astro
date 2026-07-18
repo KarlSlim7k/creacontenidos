@@ -1,0 +1,100 @@
+---
+// Dedupe de initIdeaForm() (main.js, comunidad) + estudio-contacto.js (~40
+// líneas casi idénticas) en un solo componente. Ambos postean a
+// POST /api/public/leads; solo cambian los campos visibles y source_page.
+import ChipGroup from './ChipGroup.astro';
+
+interface Props {
+  variant: 'comunidad' | 'estudio-contacto';
+  chipOptions: string[];
+  initialInterest?: string;
+}
+const { variant, chipOptions, initialInterest } = Astro.props;
+const isComunidad = variant === 'comunidad';
+---
+<form data-lead-form data-source-page={isComunidad ? 'comunidad' : 'estudio/contacto'} style={!isComunidad ? 'display:flex;flex-direction:column;gap:2px;' : undefined}>
+  <div class="field"><label for="lf-nombre">Nombre</label><input id="lf-nombre" name="nombre" type="text" required maxlength="200"></div>
+  <div class="field"><label for="lf-email">Correo{isComunidad ? '' : ' electrónico'}</label><input id="lf-email" name="email" type="email" required maxlength="320" autocomplete="email"></div>
+  {!isComunidad && (
+    <div class="field"><label for="lf-negocio">Negocio o marca</label><input id="lf-negocio" name="negocio" type="text" required maxlength="200"></div>
+  )}
+  <!-- Honeypot: los humanos no lo ven ni lo tabulan; si trae valor, el backend lo descarta. -->
+  <div class="field visually-hidden" aria-hidden="true">
+    <label for="lf-website">Sitio web (no llenar)</label>
+    <input id="lf-website" name="website" type="text" tabindex="-1" autocomplete="off">
+  </div>
+  <div class="field">
+    <label>{isComunidad ? 'Sección de interés' : 'Tipo de interés'}</label>
+    <ChipGroup options={chipOptions} dataAttr="data-interest" initialActive={initialInterest} />
+  </div>
+  <div class="field"><label for="lf-message">{isComunidad ? 'Idea o tema' : 'Mensaje'}</label><textarea id="lf-message" name="message" style={!isComunidad ? 'min-height:110px;' : undefined} required maxlength="5000"></textarea></div>
+  {isComunidad && (
+    <div class="checkbox-row"><input type="checkbox" id="soy-comunidad" required><label for="soy-comunidad">Soy parte de la comunidad de Perote o el corredor</label></div>
+  )}
+  <button type="submit" class={`btn ${isComunidad ? 'btn-brand' : 'btn-accent'}`} style={!isComunidad ? 'align-self:flex-start;margin-top:6px;' : undefined}>
+    {isComunidad ? 'Enviar idea' : 'Enviar mensaje'}
+  </button>
+  <p data-form-note role="status" aria-live="polite" tabindex="-1" style="font-size:12px;color:var(--brand);margin-top:12px;outline:none;"></p>
+</form>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('form[data-lead-form]');
+  if (form) {
+    const note = form.querySelector<HTMLElement>('[data-form-note]');
+    const submitBtn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const setNote = (text: string, kind: 'ok' | 'error') => {
+      if (!note) return;
+      note.textContent = text;
+      note.style.color = kind === 'error' ? 'var(--accent)' : 'var(--brand)';
+      note.focus();
+    };
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (submitBtn) submitBtn.disabled = true;
+      setNote('Enviando…', 'ok');
+
+      const el = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | null);
+      const activeChip = form.querySelector<HTMLElement>('[data-interest].active');
+      const negocio = el('negocio');
+      const payload = {
+        name: el('nombre')!.value.trim(),
+        email: el('email')!.value.trim(),
+        company: negocio ? negocio.value.trim() : undefined,
+        service_interest: activeChip ? activeChip.dataset.value : '',
+        message: el('message')!.value.trim(),
+        source_page: form.dataset.sourcePage,
+        website: el('website')!.value,
+      };
+
+      fetch('/api/public/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then((res) => {
+          if (res.status === 201 || res.status === 200) {
+            form.reset();
+            form.querySelectorAll<HTMLElement>('[data-interest].active').forEach((c) => c.classList.remove('active'));
+            setNote(
+              negocio
+                ? '¡Gracias! Recibimos tu mensaje. El equipo comercial te responde en menos de 48 horas.'
+                : '¡Gracias! Recibimos tu idea. El equipo editorial la va a revisar.',
+              'ok'
+            );
+            return;
+          }
+          if (res.status === 429) {
+            setNote('Has enviado demasiadas solicitudes en poco tiempo. Espera unos minutos e inténtalo de nuevo.', 'error');
+            return;
+          }
+          return res.json().then((body) => {
+            const fields = body && body.fields ? Object.keys(body.fields).join(', ') : '';
+            setNote('No pudimos enviar el formulario. Revisa los campos' + (fields ? ' (' + fields + ')' : '') + ' e inténtalo de nuevo.', 'error');
+          });
+        })
+        .catch(() => setNote('No pudimos conectar con el servidor. Inténtalo de nuevo más tarde.', 'error'))
+        .finally(() => { if (submitBtn) submitBtn.disabled = false; });
+    });
+  }
+</script>

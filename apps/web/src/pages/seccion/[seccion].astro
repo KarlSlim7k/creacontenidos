@@ -1,0 +1,74 @@
+---
+import EditorialLayout from '../../layouts/EditorialLayout.astro';
+import ArticleCardRow from '../../components/ArticleCardRow.astro';
+import MostReadItem from '../../components/MostReadItem.astro';
+import EmptyState from '../../components/EmptyState.astro';
+import ChipGroup from '../../components/ChipGroup.astro';
+import { creaApi, OFFLINE_STATE, type Article } from '../../lib/api';
+import { SECTIONS, isSection } from '../../lib/sections';
+
+const raw = Astro.params.seccion || '';
+const name = isSection(raw) ? raw : 'Local';
+
+let articles: Article[] = [];
+let articlesFailed = false;
+try {
+  articles = await creaApi<Article[]>('/api/public/articles?section=' + encodeURIComponent(name));
+} catch {
+  articlesFailed = true;
+}
+
+let mostRead: Article[] = [];
+try {
+  mostRead = await creaApi<Article[]>('/api/public/articles?sort=views&limit=3');
+} catch {
+  mostRead = [];
+}
+---
+<EditorialLayout
+  title={name}
+  description={`Cobertura de ${name} en Perote y el corredor Perote–Xalapa–Puebla.`}
+  activeSection={name}
+>
+  <main class="container" style="padding-top:24px;padding-bottom:40px;">
+    <div class="eyebrow" style="margin-bottom:6px;">SECCIÓN</div>
+    <h1 style="font-size:34px;margin:0 0 8px;">{name}</h1>
+    <p class="card-dek" style="font-size:13px;margin:0 0 20px;max-width:520px;">Cobertura de {name} en Perote y el corredor Perote&ndash;Xalapa&ndash;Puebla.</p>
+
+    <div style="margin-bottom:24px;">
+      <ChipGroup options={['Esta semana', 'Hoy', 'Este mes', 'Todo']} dataAttr="data-date-filter" initialActive="Esta semana" />
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr;gap:28px;">
+      <div>
+        {articlesFailed ? (
+          <EmptyState title={OFFLINE_STATE.title} body={OFFLINE_STATE.body} />
+        ) : articles.length === 0 ? (
+          <EmptyState
+            title={`Aún no hay notas en ${name}`}
+            body="La redacción está preparando la cobertura de esta sección. Vuelve pronto."
+            cta={{ href: '/', label: 'Volver a portada' }}
+          />
+        ) : (
+          articles.map((a) => <ArticleCardRow article={a} />)
+        )}
+      </div>
+    </div>
+
+    <div style="margin-top:28px;padding-top:20px;border-top:0.5px solid var(--line);">
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="eyebrow" style="margin-bottom:8px;">PUBLICIDAD</div>
+        <div class="img-ph" style="aspect-ratio:4/5;margin-bottom:10px;"><span class="cap">espacio display</span></div>
+        <a href="/estudio/servicios" style="font-size:11px;color:var(--accent-text);text-decoration:underline;">Anunciar aquí</a>
+      </div>
+      {mostRead.length > 0 && (
+        <>
+          <div class="eyebrow" style="margin-bottom:12px;">LO MÁS LEÍDO</div>
+          <div>
+            {mostRead.map((a, i) => <MostReadItem article={a} rank={i + 1} last={i === mostRead.length - 1} />)}
+          </div>
+        </>
+      )}
+    </div>
+  </main>
+</EditorialLayout>

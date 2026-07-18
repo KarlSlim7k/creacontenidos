@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./panel.css";
+
+@theme {
+  --color-bg: var(--bg);
+  --color-bg-2: var(--bg-2);
+  --color-text: var(--text);
+  --color-text-mute: var(--text-mute);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-accent: var(--accent);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}

@@ -1,0 +1,60 @@
+---
+import EditorialLayout from '../../layouts/EditorialLayout.astro';
+import EmptyState from '../../components/EmptyState.astro';
+import { creaApi, OFFLINE_STATE, type Article } from '../../lib/api';
+import { notaHref, initials, timeAgo } from '../../lib/format';
+
+const name = Astro.params.autor || '';
+
+let articles: Article[] = [];
+let failed = false;
+try {
+  articles = await creaApi<Article[]>('/api/public/authors/' + encodeURIComponent(name) + '/articles');
+} catch {
+  failed = true;
+}
+
+const canonical = articles[0]?.author_name || name;
+const sections: string[] = [];
+articles.forEach((a) => { if (!sections.includes(a.section)) sections.push(a.section); });
+const sectionsText = sections.length > 1
+  ? sections.slice(0, -1).join(', ') + ' y ' + sections[sections.length - 1]
+  : sections[0];
+const role = articles.length ? `Colaboración · ${sectionsText}` : 'Colaboración · CREA Contenidos';
+const meta = articles.length
+  ? `${articles.length} piezas publicadas · última ${timeAgo(articles[0].published_at)}`
+  : 'Aún no tiene piezas publicadas';
+---
+<EditorialLayout title={canonical} description="Conoce a quienes hacen CREA Contenidos: colaboradores del medio y sus piezas publicadas.">
+  <main class="container narrow" style="padding-top:32px;">
+    <div style="display:flex;gap:20px;align-items:center;margin-bottom:28px;">
+      <div class="avatar" style="width:84px;height:84px;"><span style="font-size:26px;">{initials(canonical)}</span></div>
+      <div>
+        <h1 style="font-size:28px;margin:0 0 4px;">{canonical}</h1>
+        <p style="font-size:13px;color:var(--text-mute);margin:0 0 4px;">{role}</p>
+        <p style="font-size:11px;color:var(--text-mute);margin:0;">{meta}</p>
+      </div>
+    </div>
+
+    <h2 class="eyebrow" style="margin-bottom:14px;font-size:11px;">PIEZAS PUBLICADAS</h2>
+  </main>
+
+  <div class="container narrow" style="padding-bottom:28px;">
+    {failed ? (
+      <EmptyState title={OFFLINE_STATE.title} body={OFFLINE_STATE.body} cta={{ href: '/', label: 'Volver a portada' }} />
+    ) : articles.length === 0 ? (
+      <EmptyState
+        title={`Aún no hay piezas de ${name}`}
+        body="Cuando publique su primera nota la vas a encontrar aquí."
+        cta={{ href: '/', label: 'Volver a portada' }}
+      />
+    ) : (
+      articles.map((a) => (
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:0.5px solid var(--line);">
+          <h2 style="font-size:14px;font-weight:500;color:var(--text);line-height:1.4;margin:0;"><a href={notaHref(a.slug)} style="font-family:var(--font-body);">{a.title}</a></h2>
+          <div style="font-size:11px;color:var(--text-mute);white-space:nowrap;">{a.section} &middot; {timeAgo(a.published_at)}</div>
+        </div>
+      ))
+    )}
+  </div>
+</EditorialLayout>

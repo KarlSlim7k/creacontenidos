@@ -1,0 +1,38 @@
+---
+import '../styles/global.css';
+import EstudioHeader from '../components/estudio/EstudioHeader.astro';
+import EstudioMobileMenu from '../components/estudio/EstudioMobileMenu.astro';
+import FooterEstudio from '../components/estudio/FooterEstudio.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  active?: 'servicios' | 'tercer-tiempo' | 'media-kit' | 'contacto';
+}
+const { title, description, active } = Astro.props;
+const fullTitle = title.includes('CREA') ? title : `${title} · Estudio CREA`;
+---
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{fullTitle}</title>
+<meta name="description" content={description}>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/assets/img/favicon.png">
+</head>
+<body class="theme-estudio">
+
+<header class="container">
+  <EstudioHeader active={active} />
+</header>
+
+<EstudioMobileMenu />
+
+<slot />
+
+<FooterEstudio />
+</body>
+</html>

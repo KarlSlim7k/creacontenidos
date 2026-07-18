@@ -1,0 +1,168 @@
+---
+import EditorialLayout from '../layouts/EditorialLayout.astro';
+import MastheadEditorial from '../components/editorial/MastheadEditorial.astro';
+import MobileMenu from '../components/MobileMenu.astro';
+import ArticleCard from '../components/ArticleCard.astro';
+import SponsorCard from '../components/SponsorCard.astro';
+import TercerTiempoEpisodes from '../components/TercerTiempoEpisodes.astro';
+import EmptyState from '../components/EmptyState.astro';
+import FooterEditorial from '../components/editorial/FooterEditorial.astro';
+import { creaApi, OFFLINE_STATE, type Article, type SocialPost } from '../lib/api';
+import { SECTIONS } from '../lib/sections';
+import { seccionHref } from '../lib/format';
+
+let articles: Article[] = [];
+let feedFailed = false;
+try {
+  // ponytail: un solo request para todo el catálogo semilla (24 notas); si el
+  // archivo crece más de ~15 por sección, pasar a un request por bloque.
+  articles = await creaApi<Article[]>('/api/public/articles?limit=100');
+} catch {
+  feedFailed = true;
+}
+
+const hero = articles.slice(0, 4);
+const bySection = (name: string) => articles.filter((a) => a.section === name).slice(0, 4);
+
+let sponsored: Article[] = [];
+try {
+  sponsored = await creaApi<Article[]>('/api/public/articles?sponsored=true&limit=3');
+} catch {
+  sponsored = [];
+}
+
+let prodPreview: SocialPost[] = [];
+try {
+  prodPreview = await creaApi<SocialPost[]>('/api/public/social?network=tiktok&limit=3');
+} catch {
+  prodPreview = [];
+}
+---
+<EditorialLayout
+  title="CREA Contenidos · Medio digital de Perote, Veracruz"
+  description="Noticias y contenido local del corredor Perote–Xalapa–Puebla."
+>
+  <Fragment slot="header"><MastheadEditorial /></Fragment>
+  <Fragment slot="mobile-menu">
+    <MobileMenu extraLinks={[{ href: '/producciones', label: 'Producciones CREA', color: 'var(--brand)' }]} showNewsletter />
+  </Fragment>
+
+  <main class="container">
+    <h1 class="visually-hidden">CREA Contenidos — noticias de Perote, Veracruz</h1>
+
+    <section style="padding:24px 0 6px;">
+      <div class="grid grid-4">
+        {feedFailed ? (
+          <EmptyState title={OFFLINE_STATE.title} body={OFFLINE_STATE.body} />
+        ) : (
+          hero.map((a, i) => <ArticleCard article={a} variant="hero" featured={i === 0} />)
+        )}
+      </div>
+    </section>
+
+    {sponsored.length > 0 && (
+      <div class="sponsor-strip">
+        <span><span style="width:8px;height:8px;border-radius:2px;background:var(--text);display:inline-block;"></span><span>{(sponsored[0].section || 'Cobertura local')} presentada por {sponsored[0].sponsor_name || 'un aliado de CREA'}</span></span>
+        <a href="/estudio/servicios">&iquest;Tu marca aquí? Ver paquetes</a>
+      </div>
+    )}
+
+    {['Local', 'Cultura', 'Economía'].map((s) => {
+      const list = bySection(s);
+      return list.length > 0 && (
+        <section class="section-block">
+          <div class="head"><h2><a href={seccionHref(s)}>{s}</a></h2><a href={seccionHref(s)}>Ver todo &rarr;</a></div>
+          <div class="grid grid-4">{list.map((a) => <ArticleCard article={a} variant="grid" />)}</div>
+        </section>
+      );
+    })}
+
+    {sponsored.length > 0 && (
+      <section class="section-block">
+        <div class="head"><h2>Aliados de CREA</h2><a href="/patrocinado">Ver todo el contenido patrocinado &rarr;</a></div>
+        <div class="grid grid-3">{sponsored.map((a) => <SponsorCard article={a} />)}</div>
+      </section>
+    )}
+
+    {(() => {
+      const list = bySection('Entretenimiento');
+      return list.length > 0 && (
+        <section class="section-block">
+          <div class="head"><h2><a href={seccionHref('Entretenimiento')}>Entretenimiento</a></h2><a href={seccionHref('Entretenimiento')}>Ver todo &rarr;</a></div>
+          <div class="grid grid-4">{list.map((a) => <ArticleCard article={a} variant="grid" />)}</div>
+        </section>
+      );
+    })()}
+
+    <section class="section-block prod-promo">
+      <div class="prod-promo-row">
+        <div class="prod-promo-copy">
+          <h2>Producciones CREA</h2>
+          <p>Videos y clips curados por el equipo CREA en redes sociales.</p>
+          <div class="prod-promo-badges">
+            <span class="prod-badge prod-badge--tiktok">TikTok</span>
+            <span class="prod-badge prod-badge--youtube">YouTube</span>
+            <span class="prod-badge prod-badge--facebook">Facebook</span>
+            <span class="prod-badge prod-badge--instagram">Instagram</span>
+          </div>
+          <a href="/producciones" class="btn btn-accent">Ver producciones &rarr;</a>
+        </div>
+        <div class="prod-promo-preview">
+          {prodPreview.length === 0 ? null : prodPreview.map((p) => (
+            <a href="/producciones" style="display:block;width:100px;height:140px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#000;">
+              {p.thumbnail_url
+                ? <img src={p.thumbnail_url} alt="" style="width:100%;height:100%;object-fit:cover;">
+                : <div style="width:100%;height:100%;background:#2F5233;"></div>}
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    {(() => {
+      const list = bySection('Deportes');
+      return list.length > 0 && (
+        <section class="section-block">
+          <div class="head"><h2><a href={seccionHref('Deportes')}>Deportes</a></h2><a href={seccionHref('Deportes')}>Ver todo &rarr;</a></div>
+          <div class="grid grid-4">{list.map((a) => <ArticleCard article={a} variant="grid" />)}</div>
+        </section>
+      );
+    })()}
+
+    <section class="section-block tt-promo">
+      <div class="tt-promo-row">
+        <div class="tt-promo-copy">
+          <div class="eyebrow" style="color:var(--accent);margin-bottom:8px;">PROGRAMA PROPIO CREA</div>
+          <h2>Tercer Tiempo</h2>
+          <p>Deportes y comunidad, en vivo cada lunes y viernes &middot; 8:00 pm (hora CDMX) por Facebook.</p>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <a href="/estudio/tercer-tiempo" class="btn btn-accent">Ver el programa &rarr;</a>
+            <a href="https://www.facebook.com/profile.php?id=100079776720617" target="_blank" rel="noopener noreferrer" class="btn btn-outline">Seguir en Facebook</a>
+          </div>
+        </div>
+        <div class="grid grid-3 tt-promo-preview">
+          <TercerTiempoEpisodes />
+        </div>
+      </div>
+    </section>
+
+    {(() => {
+      const list = bySection('Opinión');
+      return list.length > 0 && (
+        <section class="section-block">
+          <div class="head"><h2><a href={seccionHref('Opinión')}>Opinión</a></h2><a href={seccionHref('Opinión')}>Ver todo &rarr;</a></div>
+          <div class="grid grid-4">{list.map((a) => <ArticleCard article={a} variant="grid" />)}</div>
+        </section>
+      );
+    })()}
+  </main>
+
+  <Fragment slot="footer">
+    <FooterEditorial links={[
+      { href: '/comunidad', label: 'Comunidad' },
+      { href: '/producciones', label: 'Producciones CREA' },
+      { href: '/estudio/media-kit', label: 'Media kit' },
+      { href: '/estudio/contacto', label: 'Contacto' },
+    ]} />
+  </Fragment>
+</EditorialLayout>

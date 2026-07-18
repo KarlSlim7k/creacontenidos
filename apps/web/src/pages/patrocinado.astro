@@ -1,0 +1,47 @@
+---
+import EditorialLayout from '../layouts/EditorialLayout.astro';
+import EmptyState from '../components/EmptyState.astro';
+import SponsorCard from '../components/SponsorCard.astro';
+import FooterEditorial from '../components/editorial/FooterEditorial.astro';
+import { creaApi, OFFLINE_STATE, type Article } from '../lib/api';
+
+let articles: Article[] = [];
+let failed = false;
+try {
+  articles = await creaApi<Article[]>('/api/public/articles?sponsored=true&limit=50');
+} catch {
+  failed = true;
+}
+---
+<EditorialLayout
+  title="Contenido patrocinado"
+  description="Contenido patrocinado por negocios locales de Perote, siempre señalado con claridad y producido con el estándar editorial de CREA."
+>
+  <main class="container" style="padding-top:32px;padding-bottom:30px;">
+    <div class="eyebrow" style="margin-bottom:8px;">ALIADOS DE CREA</div>
+    <h1 style="font-size:30px;margin:0 0 8px;">Contenido patrocinado</h1>
+    <p class="card-dek" style="font-size:13px;margin:0 0 26px;max-width:560px;">Notas producidas en colaboración con negocios del corredor Perote &middot; Xalapa &middot; Puebla. <a href="/estudio/servicios" style="color:var(--accent-text);text-decoration:underline;">&iquest;Quieres anunciar tu negocio?</a></p>
+
+    <div class="grid grid-3">
+      {failed ? (
+        <EmptyState title={OFFLINE_STATE.title} body={OFFLINE_STATE.body} />
+      ) : articles.length === 0 ? (
+        <EmptyState
+          title="Aún no hay contenido patrocinado"
+          body="Cuando publiquemos una colaboración con alguna marca la vas a encontrar aquí."
+          cta={{ href: '/estudio/servicios', label: 'Conoce cómo patrocinar' }}
+        />
+      ) : (
+        articles.map((a) => <SponsorCard article={a} />)
+      )}
+    </div>
+  </main>
+
+  <Fragment slot="footer">
+    <FooterEditorial links={[
+      { href: '/comunidad', label: 'Comunidad' },
+      { href: '/estudio/servicios', label: 'Anunciar con CREA' },
+      { href: '/estudio/contacto', label: 'Contacto' },
+    ]} />
+  </Fragment>
+</EditorialLayout>

@@ -1,0 +1,109 @@
+---
+import EstudioLayout from '../../layouts/EstudioLayout.astro';
+import StatCards from '../../components/estudio/StatCards.astro';
+import TercerTiempoEpisodes from '../../components/TercerTiempoEpisodes.astro';
+import { creaApi, getSponsors, type SiteMetrics } from '../../lib/api';
+
+let metrics: SiteMetrics | null = null;
+try {
+  metrics = await creaApi<SiteMetrics>('/api/public/site-metrics');
+} catch {
+  metrics = null;
+}
+const sponsors = await getSponsors();
+---
+<EstudioLayout
+  title="Tercer Tiempo"
+  description="Tercer Tiempo, el programa de deportes y comunidad de CREA, en vivo cada semana. Espacios de patrocinio disponibles."
+  active="tercer-tiempo"
+>
+  <main class="container" style="padding-top:30px;">
+    <div class="grid grid-2" style="align-items:center;margin-bottom:26px;">
+      <div>
+        <div class="eyebrow" style="color:var(--brand);margin-bottom:12px;">PROGRAMA PROPIO CREA</div>
+        <h1 style="font-size:32px;line-height:1.15;margin:0 0 16px;">Tercer Tiempo: deportes y comunidad, en vivo cada semana</h1>
+        <p style="font-size:14px;color:var(--text-mute);line-height:1.6;margin:0 0 22px;max-width:440px;">El programa deportivo propio de CREA. Resultados, entrevistas y la vida de las ligas locales del corredor Perote &middot; Xalapa &middot; Puebla, transmitido en vivo cada semana.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <a href="/estudio/contacto" class="btn btn-accent">Hablar con ventas</a>
+          <a href="/estudio/servicios" class="btn btn-outline">Ver catálogo completo</a>
+        </div>
+      </div>
+      <div class="img-ph ratio-4-3 tt-stage">
+        <span class="tt-logo-chip tt-logo-in-left">
+          <img class="tt-logo-img" src="/assets/img/logo-crea.png" alt="CREA Contenidos">
+        </span>
+        <img class="tt-logo-img tt-logo-in-right" src="/assets/img/logo-tercer-tiempo.png" alt="Tercer Tiempo">
+      </div>
+    </div>
+
+    <StatCards metrics={metrics} activeBrands={sponsors.length} />
+
+    <div style="margin-bottom:26px;">
+      <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">FORMATOS DE PATROCINIO DISPONIBLES</div>
+      <div class="grid grid-3">
+        {[
+          { title: 'Mención de entrada', body: 'Tu marca mencionada al inicio y cierre de cada transmisión.' },
+          { title: 'Segmento patrocinado', body: 'Un bloque del programa presentado por tu marca.' },
+          { title: 'Episodio completo', body: 'Patrocinio exclusivo de una transmisión completa.' },
+        ].map((f) => (
+          <div class="panel">
+            <p style="font-size:14px;font-weight:500;color:var(--text);margin:0 0 8px;">{f.title}</p>
+            <p style="font-size:12px;color:var(--text-mute);line-height:1.5;margin:0 0 14px;">{f.body}</p>
+            <a href="/estudio/contacto?interes=Tercer%20Tiempo" style="font-size:12px;color:var(--accent);text-decoration:underline;">Cotizar</a>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div style="margin-bottom:26px;">
+      <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">HORARIOS DE TRANSMISIÓN</div>
+      <div class="panel" style="padding:0;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:0.5px solid var(--line);">
+          <span style="font-size:13px;font-weight:500;">Lunes &middot; 8:00 pm (hora CDMX)</span>
+          <span style="font-size:12px;color:var(--text-mute);">En vivo · Facebook</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;">
+          <span style="font-size:13px;font-weight:500;">Viernes &middot; 8:00 pm (hora CDMX)</span>
+          <span style="font-size:12px;color:var(--text-mute);">En vivo · Facebook</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:26px;">
+      <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">ÚLTIMOS PROGRAMAS</div>
+      <div class="grid grid-3">
+        <TercerTiempoEpisodes />
+      </div>
+    </div>
+
+    <div style="margin-bottom:26px;">
+      <a href="https://www.facebook.com/profile.php?id=100079776720617" target="_blank" rel="noopener noreferrer" class="btn btn-outline">Seguir en Facebook &rarr;</a>
+    </div>
+  </main>
+</EstudioLayout>
+
+<style>
+  .tt-stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    overflow: hidden;
+  }
+  .tt-logo-img { height: clamp(70px, 18vw, 130px); width: auto; display: block; }
+  .tt-logo-chip { display: flex; align-items: center; background: #fff; border-radius: 8px; padding: 6px 12px; }
+
+  .tt-logo-in-left { animation: tt-in-left 900ms ease-out 300ms both; }
+  .tt-logo-in-right { animation: tt-in-right 900ms ease-out 300ms both; }
+  @keyframes tt-in-left {
+    from { transform: translateX(-160%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes tt-in-right {
+    from { transform: translateX(160%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tt-logo-in-left, .tt-logo-in-right { animation: none; }
+  }
+</style>

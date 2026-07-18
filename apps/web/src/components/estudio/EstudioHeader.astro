@@ -1,0 +1,41 @@
+---
+interface Props {
+  active?: 'servicios' | 'tercer-tiempo' | 'media-kit' | 'contacto';
+}
+const { active } = Astro.props;
+const links: { href: string; key: Props['active']; label: string }[] = [
+  { href: '/estudio/servicios', key: 'servicios', label: 'Servicios' },
+  { href: '/estudio/tercer-tiempo', key: 'tercer-tiempo', label: 'Tercer Tiempo' },
+  { href: '/estudio/media-kit', key: 'media-kit', label: 'Media kit' },
+  { href: '/estudio/contacto', key: 'contacto', label: 'Contacto' },
+];
+---
+<div class="es-header">
+  <a href="/estudio" class="es-brand">
+    <span class="es-logo-chip"><img src="/assets/img/logo-crea.png" alt="CREA Contenidos"></span>
+    <span class="badge">ESTUDIO</span>
+  </a>
+  <nav class="es-nav desktop-only">
+    {links.map((l) => <a href={l.href} class={l.key === active ? 'active' : undefined}>{l.label}</a>)}
+    <a href="/" class="back">Portal editorial</a>
+  </nav>
+  <button class="menu-toggle mobile-only" data-menu-toggle aria-label="Abrir menú"><span></span><span></span><span></span></button>
+</div>
+
+<style>
+  /* logo-crea.png es negro sobre transparente (con acento rojo) — invisible
+     sobre el fondo oscuro de Estudio. Chip blanco lo hace legible sin tocar
+     el color de marca del logo. */
+  .es-logo-chip {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    border-radius: 6px;
+    padding: 4px 10px;
+  }
+  .es-logo-chip img {
+    height: 32px;
+    width: auto;
+    display: block;
+  }
+</style>

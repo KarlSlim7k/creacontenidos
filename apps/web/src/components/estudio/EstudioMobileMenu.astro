@@ -1,0 +1,13 @@
+---
+import MenuToggleScript from '../MenuToggleScript.astro';
+---
+<div class="mobile-menu" role="navigation" aria-label="Menú">
+  <div class="head"><span class="title">Menú</span><button class="close" data-menu-close aria-label="Cerrar menú">&times;</button></div>
+  <a href="/estudio/servicios">Servicios</a>
+  <a href="/estudio/tercer-tiempo">Tercer Tiempo</a>
+  <a href="/estudio/media-kit">Media kit</a>
+  <a href="/estudio/contacto" style="color:var(--accent);">Contacto</a>
+  <a href="/" style="color:var(--brand);">Portal editorial</a>
+</div>
+
+<MenuToggleScript />

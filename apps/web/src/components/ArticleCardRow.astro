@@ -1,0 +1,18 @@
+---
+// Fila horizontal (seccion.html) — imagen + título + byline.
+import Cover from './Cover.astro';
+import type { Article } from '../lib/api';
+import { notaHref, perfilHref, timeAgo } from '../lib/format';
+
+interface Props { article: Article }
+const { article: a } = Astro.props;
+---
+<div style="display:flex;gap:16px;padding:16px 0;border-bottom:0.5px solid var(--line);">
+  <Cover coverUrl={a.cover_image_url} section={a.section} style="width:140px;height:96px;flex-shrink:0;" />
+  <div>
+    <h2 class="card-title" style="font-size:15px;margin-bottom:8px;line-height:1.35;font-weight:500;">
+      <a href={notaHref(a.slug)}>{a.title}</a>
+    </h2>
+    <div class="card-byline"><a href={perfilHref(a.author_name)}>{a.author_name}</a> &middot; {timeAgo(a.published_at)}</div>
+  </div>
+</div>

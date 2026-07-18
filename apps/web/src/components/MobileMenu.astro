@@ -1,0 +1,26 @@
+---
+import { SECTIONS } from '../lib/sections';
+import { seccionHref } from '../lib/format';
+import NewsletterForm from './NewsletterForm.astro';
+import MenuToggleScript from './MenuToggleScript.astro';
+
+interface Props {
+  estudioHref?: string;
+  extraLinks?: { href: string; label: string; color?: string }[];
+  showNewsletter?: boolean;
+}
+const { estudioHref = '/estudio', extraLinks = [], showNewsletter = false } = Astro.props;
+---
+<div class="mobile-menu" role="navigation" aria-label="Menú">
+  <div class="head">
+    <span class="title">Menú</span>
+    <button class="close" data-menu-close aria-label="Cerrar menú">&times;</button>
+  </div>
+  {SECTIONS.map((s) => <a href={seccionHref(s)}>{s}</a>)}
+  {extraLinks.map((l) => <a href={l.href} style={l.color ? `color:${l.color};` : undefined}>{l.label}</a>)}
+  <a href={estudioHref} style="color:var(--brand);">Visitar Estudio &rarr;</a>
+
+  {showNewsletter && <NewsletterForm idPrefix="nl-menu" />}
+</div>
+
+<MenuToggleScript />

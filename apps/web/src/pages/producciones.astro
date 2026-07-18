@@ -1,0 +1,70 @@
+---
+// Grid de TikTok — antes client-fetch + un 2do fetch on-demand por tarjeta
+// para el iframe. El endpoint /embed no llama a TikTok en el camino síncrono
+// (construye el iframe nativo /embed/v2/:id por regex desde la URL guardada),
+// así que resolverlos todos aquí server-side es igual de barato y elimina el
+// <script async src="tiktok.com/embed.js"> — el iframe nativo no lo necesita.
+import EditorialLayout from '../layouts/EditorialLayout.astro';
+import EmptyState from '../components/EmptyState.astro';
+import { creaApi, type SocialPost } from '../lib/api';
+
+interface EmbedResult { embed_html: string | null }
+
+let posts: SocialPost[] = [];
+let failed = false;
+try {
+  posts = await creaApi<SocialPost[]>('/api/public/social?network=tiktok&limit=24');
+} catch {
+  failed = true;
+}
+
+const embeds = await Promise.all(
+  posts.map((p) => creaApi<EmbedResult>(`/api/public/social/${p.id}/embed`).catch(() => ({ embed_html: null })))
+);
+---
+<EditorialLayout
+  title="Producciones CREA"
+  description="Videos y producciones de CREA Contenidos en redes sociales. Mira lo que la redacción de Perote comparte en TikTok y YouTube."
+  noJsWarning="CREA Contenidos necesita JavaScript para mostrar el contenido. Actívalo para ver las producciones."
+>
+  <main class="container" style="padding-top:32px;padding-bottom:8px;">
+    <div class="eyebrow" style="margin-bottom:8px;">PRODUCCIONES CREA</div>
+    <h1 style="font-size:32px;margin:0 0 10px;max-width:560px;">Lo que la redacción de Perote comparte en redes</h1>
+    <p class="card-dek" style="font-size:14px;line-height:1.6;margin:0 0 28px;max-width:560px;">Videos y clips curados por el equipo CREA en TikTok, YouTube, Facebook e Instagram.</p>
+  </main>
+
+  <div class="container" style="padding-bottom:40px;">
+    {failed ? (
+      <EmptyState title="La redacción está teniendo un detalle técnico" body="No pudimos cargar las producciones en este momento. Vuelve a intentarlo en unos minutos." />
+    ) : posts.length === 0 ? (
+      <EmptyState title="Aún no hay producciones" body="La redacción está preparando los videos. Vuelve pronto o escríbenos a comunidad@crea-contenidos.com." />
+    ) : (
+      <div class="prod-grid">
+        {posts.map((p, i) => (
+          <article class="prod-card">
+            <div class="prod-embed" set:html={embeds[i].embed_html || (p.thumbnail_url ? `<img class="prod-thumb" src="${p.thumbnail_url}" alt="">` : '')} />
+            <div class="prod-meta">
+              <p class="prod-author">{p.author_name || '@' + p.network}</p>
+              <p class="prod-title">{p.title || p.external_url}</p>
+              <a class="prod-cta" href={p.external_url} target="_blank" rel="noopener noreferrer">Ver en {p.network} &rarr;</a>
+            </div>
+          </article>
+        ))}
+      </div>
+    )}
+  </div>
+</EditorialLayout>
+
+<style>
+  .prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 28px; }
+  .prod-card { background: #fff; border: 0.5px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .prod-embed { position: relative; width: 100%; background: #000; aspect-ratio: 9 / 16; overflow: hidden; }
+  .prod-embed :global(iframe) { position: absolute; inset: 0; width: 100% !important; height: 100% !important; border: 0; }
+  .prod-embed :global(.prod-thumb) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; z-index: 0; }
+  .prod-meta { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .prod-author { font-size: 11px; font-weight: 600; color: var(--brand); text-transform: uppercase; letter-spacing: 0.04em; margin: 0; }
+  .prod-title { font-size: 13px; font-weight: 500; color: var(--text); margin: 0; line-height: 1.4; }
+  .prod-cta { font-size: 11px; color: var(--accent-text); text-decoration: underline; }
+  @media (max-width: 640px) { .prod-grid { grid-template-columns: 1fr 1fr; gap: 14px; } }
+  @media (max-width: 420px) { .prod-grid { grid-template-columns: 1fr; } }
+</style>

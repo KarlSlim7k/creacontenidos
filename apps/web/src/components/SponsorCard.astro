@@ -1,0 +1,19 @@
+---
+// Puerto de sponsorCardHtml() (main.js) — usado en patrocinado.html y el
+// bloque "Aliados de CREA" de la portada.
+import Cover from './Cover.astro';
+import type { Article } from '../lib/api';
+import { notaHref } from '../lib/format';
+
+interface Props { article: Article }
+const { article: a } = Astro.props;
+const href = notaHref(a.slug);
+---
+<article>
+  <a href={href}>
+    <Cover coverUrl={a.cover_image_url} section={a.sponsor_name || 'CREA'} class="ratio-4-3" style="margin-bottom:8px;" sponsored />
+  </a>
+  <p class="card-title" style="font-size:13px;margin-bottom:5px;"><a href={href}>{a.title}</a></p>
+  <p class="card-dek" style="margin-bottom:6px;">{a.dek}</p>
+  <div style="font-size:11px;color:var(--accent-text);font-weight:500;">Patrocinado por: {a.sponsor_name || 'CREA Contenidos'}</div>
+</article>

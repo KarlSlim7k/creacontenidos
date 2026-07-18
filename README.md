@@ -90,9 +90,9 @@ docker run --rm -d --name scraper-dev -p 3015:3015 \
   -v "$(pwd)/cookies.txt:/secrets/fb_cookies.txt:ro" \
   -e FB_COOKIES_FILE=/secrets/fb_cookies.txt competitor-scraper
 
-# 4. Frontends (estáticos, sin build)
-npx serve apps/web -l 4000    # respeta apps/web/serve.json (cleanUrls off: nota.html?slug= y perfil.html?autor= necesitan el querystring)
-npx serve apps/admin -l 4001
+# 4. Frontends
+cd apps/web && npm install && npm run dev   # Astro SSR, http://localhost:4000 (proxy /api -> :3000)
+cd apps/admin && npm install && npm run dev # Vite SPA, http://localhost:4001 (proxy /api -> :3000)
 ```
 
 Ningún módulo de IA (Perplexity, Claude, OpenAI) está conectado todavía — solo el esqueleto de arquitectura con datos de prueba. El competitor scraper funciona contra Facebook con cookies reales (ver `apps/competitor-scraper/README.md` para rotación).

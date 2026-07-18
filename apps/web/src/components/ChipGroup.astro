@@ -1,0 +1,33 @@
+---
+// Grupo de chips toggle de selección única — puerto de initChips()/setChipActive()
+// (main.js). El activo inicial se resuelve server-side (antes: qs() en cliente).
+interface Props {
+  options: string[];
+  dataAttr: 'data-date-filter' | 'data-interest';
+  initialActive?: string;
+}
+const { options, dataAttr, initialActive } = Astro.props;
+---
+<div style="display:flex;gap:8px;flex-wrap:wrap;">
+  {options.map((opt) => (
+    <button
+      type="button"
+      class={`chip${opt === initialActive ? ' active' : ''}`}
+      {...{ [dataAttr]: true }}
+      data-value={opt}
+      aria-pressed={opt === initialActive ? 'true' : 'false'}
+    >{opt}</button>
+  ))}
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-date-filter], [data-interest]').forEach((chip) => {
+    const attr = chip.hasAttribute('data-date-filter') ? '[data-date-filter]' : '[data-interest]';
+    chip.addEventListener('click', () => {
+      document.querySelectorAll<HTMLElement>(attr).forEach((c) => {
+        c.classList.toggle('active', c === chip);
+        c.setAttribute('aria-pressed', c === chip ? 'true' : 'false');
+      });
+    });
+  });
+</script>

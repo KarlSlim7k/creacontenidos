@@ -1,0 +1,66 @@
+---
+import '../styles/global.css';
+import HeaderSimple from '../components/editorial/HeaderSimple.astro';
+import FooterEditorial from '../components/editorial/FooterEditorial.astro';
+import MobileMenu from '../components/MobileMenu.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  ogType?: 'website' | 'article';
+  ogImage?: string;
+  activeSection?: string;
+  noJsWarning?: string;
+}
+const {
+  title,
+  description,
+  ogType = 'website',
+  ogImage = 'https://crea-contenidos.com/assets/img/og-default.png',
+  activeSection,
+  noJsWarning = 'CREA Contenidos necesita JavaScript para mostrar el contenido. Actívalo para leer las notas.',
+} = Astro.props;
+
+const ogUrl = new URL(Astro.url.pathname, 'https://crea-contenidos.com').toString();
+const fullTitle = title.includes('CREA Contenidos') ? title : `${title} · CREA Contenidos`;
+---
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{fullTitle}</title>
+<meta name="description" content={description}>
+<meta property="og:type" content={ogType}>
+<meta property="og:site_name" content="CREA Contenidos">
+<meta property="og:title" content={fullTitle}>
+<meta property="og:description" content={description}>
+<meta property="og:url" content={ogUrl}>
+<meta property="og:image" content={ogImage}>
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/assets/img/favicon.png">
+<slot name="head" />
+</head>
+<body class="theme-editorial">
+<noscript><div style="background:#2F5233;color:#fff;text-align:center;padding:12px;font:14px/1.5 Arial,sans-serif;">{noJsWarning}</div></noscript>
+
+<header class="container">
+  <slot name="header">
+    <HeaderSimple activeSection={activeSection} />
+  </slot>
+</header>
+
+<slot name="mobile-menu">
+  <MobileMenu />
+</slot>
+
+<slot />
+
+<slot name="footer">
+  <FooterEditorial />
+</slot>
+</body>
+</html>

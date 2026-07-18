@@ -1,0 +1,64 @@
+---
+import EstudioLayout from '../../layouts/EstudioLayout.astro';
+import StatCards from '../../components/estudio/StatCards.astro';
+import { creaApi, getSponsors, type SiteMetrics } from '../../lib/api';
+
+let metrics: SiteMetrics | null = null;
+try {
+  metrics = await creaApi<SiteMetrics>('/api/public/site-metrics');
+} catch {
+  metrics = null;
+}
+const sponsors = await getSponsors();
+const updatedLabel = metrics
+  ? 'Actualizado ' + new Date(metrics.updated_at).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })
+  : '…';
+---
+<EstudioLayout
+  title="Media kit"
+  description="Métricas de audiencia, alcance mensual y formatos disponibles para anunciar tu marca con CREA Contenidos."
+  active="media-kit"
+>
+  <main class="container" style="padding-top:30px;padding-bottom:26px;">
+    <div class="eyebrow" style="margin-bottom:10px;">MEDIA KIT</div>
+    <h1 style="font-size:30px;margin:0 0 8px;">Métricas de audiencia y formatos disponibles</h1>
+    <p class="card-dek" style="font-size:13px;margin:0 0 26px;">{updatedLabel}</p>
+
+    <div class="grid grid-2" style="gap:32px;">
+      <div>
+        <StatCards metrics={metrics} activeBrands={sponsors.length} />
+        <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">EDAD DE LA AUDIENCIA</div>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:26px;">
+          {[
+            { label: '25–44 años', pct: metrics?.audience_age_25_44_pct },
+            { label: '18–24 años', pct: metrics?.audience_age_18_24_pct },
+            { label: '45 años o más', pct: metrics?.audience_age_45_plus_pct },
+          ].map((row) => (
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;"><span>{row.label}</span><span>{row.pct != null ? row.pct + '%' : '…'}</span></div>
+              <div style="width:100%;height:8px;background:var(--bg-2);border-radius:4px;overflow:hidden;"><div style={`height:100%;background:var(--accent);width:${row.pct ?? 0}%;`}></div></div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">FORMATOS DISPONIBLES</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px;">
+          {['Patrocinio de sección', 'Branded content', 'Publicidad display', 'Cobertura de eventos', 'Tercer Tiempo'].map((f) => (
+            <span class="chip" style="background:var(--bg-2);">{f}</span>
+          ))}
+        </div>
+        <div class="panel" style="background:var(--brand-bg);display:flex;flex-direction:column;gap:14px;align-items:flex-start;">
+          <div style="width:46px;height:46px;border-radius:8px;background:var(--bg-3);display:flex;align-items:center;justify-content:center;">
+            <span style="font-family:var(--font-display);font-weight:700;color:var(--brand);font-size:13px;">PDF</span>
+          </div>
+          <div>
+            <p style="font-size:15px;font-weight:500;margin:0 0 4px;">Media kit completo</p>
+            <p style="font-size:12px;color:var(--text-mute);margin:0;">Métricas detalladas, formatos y tarifas &middot; {updatedLabel}</p>
+          </div>
+          <a href="mailto:contacto@crea-contenidos.com?subject=Media%20kit%20CREA" class="btn btn-accent">Solicitar por correo</a>
+        </div>
+      </div>
+    </div>
+  </main>
+</EstudioLayout>

@@ -1,0 +1,21 @@
+---
+import { SECTIONS } from '../../lib/sections';
+import { seccionHref } from '../../lib/format';
+
+interface Props {
+  activeSection?: string;
+}
+const { activeSection } = Astro.props;
+---
+<div class="ed-header-simple">
+  <div class="left">
+    <a href="/" class="logo"><img src="/assets/img/logo-crea.png" alt="CREA"></a>
+    <nav class="ed-nav desktop-only" style="border-bottom:none;padding:0;">
+      {SECTIONS.map((s) => (
+        <a href={seccionHref(s)} data-section={s} class={activeSection === s ? 'active' : undefined}>{s}</a>
+      ))}
+    </nav>
+  </div>
+  <button class="menu-toggle mobile-only" data-menu-toggle aria-label="Abrir menú"><span></span><span></span><span></span></button>
+  <a href="/estudio" class="estudio-cta desktop-only">Estudio &rarr;</a>
+</div>

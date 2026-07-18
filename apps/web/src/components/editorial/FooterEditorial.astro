@@ -1,0 +1,18 @@
+---
+interface Props {
+  links?: { href: string; label: string }[];
+}
+const { links = [
+  { href: '/comunidad', label: 'Comunidad' },
+  { href: '/estudio/media-kit', label: 'Media kit' },
+  { href: '/estudio/contacto', label: 'Contacto' },
+] } = Astro.props;
+---
+<div class="container">
+  <footer class="site-footer">
+    <span>CREA Contenidos &middot; Perote, Veracruz</span>
+    <span class="links">
+      {links.map((l) => <a href={l.href}>{l.label}</a>)}
+    </span>
+  </footer>
+</div>

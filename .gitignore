@@ -18,3 +18,4 @@ fb_cookies*
 # Local storage de crawlee (no commitear)
 apps/competitor-scraper/storage/
 
+.astro/

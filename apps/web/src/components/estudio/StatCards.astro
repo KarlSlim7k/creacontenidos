@@ -1,0 +1,15 @@
+---
+// Puerto de renderSiteMetrics() (main.js) — 4 stat-cards reusadas en
+// estudio/index, media-kit y tercer-tiempo. `metrics` se fetchea una sola vez
+// por página (media-kit también necesita las barras de edad del mismo objeto).
+import type { SiteMetrics } from '../../lib/api';
+
+interface Props { metrics: SiteMetrics | null; activeBrands: number }
+const { metrics, activeBrands } = Astro.props;
+---
+<div class="grid grid-4" style="margin-bottom:26px;">
+  <div class="stat-card"><div class="value">{metrics ? metrics.monthly_reach_label : '—'}</div><div class="label">alcance mensual</div></div>
+  <div class="stat-card"><div class="value">{metrics ? metrics.municipalities_count : '—'}</div><div class="label">municipios cubiertos</div></div>
+  <div class="stat-card"><div class="value">{activeBrands}</div><div class="label">marcas activas</div></div>
+  <div class="stat-card"><div class="value">{metrics ? metrics.tercer_tiempo_listeners_label : '—'}</div><div class="label">oyentes Tercer Tiempo</div></div>
+</div>

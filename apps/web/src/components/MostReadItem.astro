@@ -1,0 +1,11 @@
+---
+import type { Article } from '../lib/api';
+import { notaHref } from '../lib/format';
+
+interface Props { article: Article; rank: number; last?: boolean }
+const { article: a, rank, last = false } = Astro.props;
+---
+<div class="most-read-item" style={last ? 'border-bottom:none;margin-bottom:0;' : undefined}>
+  <div class="rank">{String(rank).padStart(2, '0')}</div>
+  <p><a href={notaHref(a.slug)} style="color:inherit;">{a.title}</a></p>
+</div>

@@ -1,0 +1,16 @@
+---
+// Puerto de renderEmptyState() (main.js) — estado vacío/error con tono de marca.
+interface Props {
+  title: string;
+  body: string;
+  cta?: { href: string; label: string };
+  gridColumn?: boolean;
+}
+const { title, body, cta, gridColumn = true } = Astro.props;
+---
+<div class="panel" style={`text-align:center;padding:36px 20px;${gridColumn ? 'grid-column:1/-1;' : ''}`}>
+  <div class="eyebrow" style="margin-bottom:8px;">CREA CONTENIDOS</div>
+  <p class="card-title" style="font-size:16px;margin:0 0 6px;">{title}</p>
+  <p class="card-dek" style="margin:0 auto;max-width:420px;color:var(--text);">{body}</p>
+  {cta && <a href={cta.href} class="eyebrow" style="display:inline-block;margin-top:14px;">{cta.label} &rarr;</a>}
+</div>

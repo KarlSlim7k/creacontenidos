@@ -1,0 +1,46 @@
+---
+import EstudioLayout from '../../layouts/EstudioLayout.astro';
+import EmptyState from '../../components/EmptyState.astro';
+import { creaApi, OFFLINE_STATE, type Service } from '../../lib/api';
+
+let services: Service[] = [];
+let failed = false;
+try {
+  services = await creaApi<Service[]>('/api/public/services');
+} catch {
+  failed = true;
+}
+---
+<EstudioLayout
+  title="Servicios y paquetes comerciales"
+  description="Catálogo de servicios y paquetes comerciales del Estudio CREA: patrocinio de sección, branded content, publicidad display y producción audiovisual."
+  active="servicios"
+>
+  <main class="container" style="padding-top:30px;padding-bottom:30px;">
+    <div class="eyebrow" style="margin-bottom:10px;">CATÁLOGO</div>
+    <h1 style="font-size:30px;margin:0 0 8px;">Servicios y paquetes comerciales</h1>
+    <p class="card-dek" style="font-size:13px;margin:0 0 26px;max-width:520px;">Precios de referencia para negocios del corredor Perote &middot; Xalapa &middot; Puebla. Los paquetes se ajustan según alcance y temporada.</p>
+
+    <div class="grid grid-3">
+      {failed ? (
+        <EmptyState title={OFFLINE_STATE.title} body={OFFLINE_STATE.body} />
+      ) : services.length === 0 ? (
+        <EmptyState
+          title="Catálogo en actualización"
+          body="Escríbenos y te compartimos los paquetes disponibles directamente."
+          cta={{ href: '/estudio/contacto', label: 'Hablar con ventas' }}
+        />
+      ) : (
+        services.map((s) => (
+          <div class="service-card">
+            <p style="font-size:15px;font-weight:500;margin:0 0 6px;">{s.name}</p>
+            <p class="price">{s.price_label}</p>
+            <p style="font-size:12px;color:var(--text-mute);line-height:1.5;margin:0 0 14px;">{s.description}</p>
+            <ul>{(s.features || []).map((f) => <li>{f}</li>)}</ul>
+            <a href={`/estudio/contacto?interes=${encodeURIComponent(s.cta_interest || 'Otro')}`} class="btn btn-accent" style="align-self:flex-start;">Cotizar este paquete</a>
+          </div>
+        ))
+      )}
+    </div>
+  </main>
+</EstudioLayout>
