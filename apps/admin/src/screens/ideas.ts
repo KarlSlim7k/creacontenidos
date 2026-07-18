@@ -1,8 +1,8 @@
 // CREA Panel Admin — pantalla Bandeja de ideas.
-import { state } from '../store';
-import { esc, badge, loadingCard, STATUS_LABEL, initialsOf } from '../util';
+import { state, type Idea } from '../store';
+import { esc, badge, loadingCard, errorCard, STATUS_LABEL, initialsOf } from '../util';
 
-function ideaCard(i: any, canMove: boolean): string {
+function ideaCard(i: Idea, canMove: boolean): string {
   const moveHtml = canMove ? `<select data-action="move-idea" data-id="${i.id}" style="font-size:10px;border:0.5px solid var(--line-soft);border-radius:4px;padding:2px 4px;">${
     ['nueva', 'en_analisis', 'aprobada', 'descartada'].map((c) =>
       `<option value="${c}"${i.column_status === c ? ' selected' : ''}>${esc(STATUS_LABEL[c])}</option>`
@@ -21,23 +21,23 @@ function ideaCard(i: any, canMove: boolean): string {
 
 function ideasKanban(): string {
   const ideas = state.data.ideas;
-  if (!ideas) return loadingCard();
+  if (!ideas) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const canMove = state.user!.role === 'director' || state.user!.role === 'produccion';
   const cols = [
     { title: 'NUEVA', key: 'nueva' }, { title: 'EN ANÁLISIS', key: 'en_analisis' },
     { title: 'APROBADA', key: 'aprobada' }, { title: 'DESCARTADA', key: 'descartada' },
-  ].map((c) => ({ title: c.title, items: ideas.filter((i: any) => i.column_status === c.key) }));
+  ].map((c) => ({ title: c.title, items: ideas.filter((i: Idea) => i.column_status === c.key) }));
   return `<div>
     <h1 class="padmin-h1">Bandeja de ideas</h1><p class="padmin-lede">Flujo editorial de ideas propuestas.</p>
     <div class="padmin-kanban">${cols.map((col) =>
-      `<div><p class="padmin-kanban-col-title">${col.title} &middot; ${col.items.length}</p><div class="padmin-kanban-cards">${col.items.map((i: any) => ideaCard(i, canMove)).join('')}</div></div>`
+      `<div><p class="padmin-kanban-col-title">${col.title} &middot; ${col.items.length}</p><div class="padmin-kanban-cards">${col.items.map((i: Idea) => ideaCard(i, canMove)).join('')}</div></div>`
     ).join('')}</div>
   </div>`;
 }
 
 function ideasMine(): string {
   const ideas = state.data.ideas;
-  if (!ideas) return loadingCard();
+  if (!ideas) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const demoNote = state.demoNote === 'idea' ? '<p class="padmin-demo-hint">Idea enviada.</p>' : '';
   return `<div style="max-width:640px;">
     <h1 class="padmin-h1">Tus ideas</h1>
@@ -53,7 +53,7 @@ function ideasMine(): string {
       </form>
     </div>
     <p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 12px;">Estado de tus ideas</p>
-    <div class="padmin-card">${ideas.length ? ideas.map((i: any) =>
+    <div class="padmin-card">${ideas.length ? ideas.map((i: Idea) =>
       `<div class="padmin-row"><div><p class="padmin-row-title">${esc(i.title)}</p><p class="padmin-row-meta">${esc(i.category || '')}</p></div>${badge(i.column_status)}</div>`
     ).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Todavía no envías ninguna idea.</p></div>'}</div>
   </div>`;

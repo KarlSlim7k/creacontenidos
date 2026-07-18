@@ -1,8 +1,8 @@
 // CREA Panel Admin — pantalla RADAR (social listening).
-import { state } from '../store';
-import { esc, loadingCard } from '../util';
+import { state, type Topic, type CompetitorPost } from '../store';
+import { esc, loadingCard, errorCard } from '../util';
 
-function sentimentStyle(label: string): { color: string; text: string } {
+function sentimentStyle(label: string | null): { color: string; text: string } {
   if (label === 'positivo') return { color: 'var(--brand)', text: 'Positivo' };
   if (label === 'negativo') return { color: 'var(--danger)', text: 'Negativo' };
   return { color: 'var(--text-mute)', text: 'Neutral' };
@@ -11,7 +11,7 @@ function sentimentStyle(label: string): { color: string; text: string } {
 function renderRadarDetail(): string {
   if (state.selectedRadarId == null) return '';
   const topics = state.data.topics || [];
-  const topic = topics.filter((r: any) => r.id === state.selectedRadarId)[0];
+  const topic = topics.filter((r: Topic) => r.id === state.selectedRadarId)[0];
   if (!topic) return '';
   return `<div class="padmin-overlay">
     <div class="padmin-overlay-bg" data-action="close-radar"></div>
@@ -53,7 +53,7 @@ export function renderRadar(): string {
 
 function renderRadarCompetencia(): string {
   const posts = state.data.competitors;
-  if (!posts) return loadingCard();
+  if (!posts) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const canManage = state.user!.role === 'director' || state.user!.role === 'produccion';
   const detectBtn = canManage
     ? `<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px;">
@@ -65,7 +65,7 @@ function renderRadarCompetencia(): string {
   return detectBtn +
     `<div class="padmin-card">
       <div class="padmin-table-head padmin-cols-competencia"><span>CUENTA</span><span>PUBLICACIÓN</span><span>FECHA</span><span>INTERACCIONES</span><span>ESTADO</span><span>ACCIONES</span></div>
-      ${posts.length ? posts.map((p: any) => {
+      ${posts.length ? posts.map((p: CompetitorPost) => {
         const inter = (p.reactions || 0) + (p.comments || 0) + (p.shares || 0);
         const st = p.analyzed ? { label: 'Analizado', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Nuevo', bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
         const text = String(p.post_text || '—');
@@ -88,7 +88,7 @@ function renderRadarCompetencia(): string {
 
 function renderRadarTemas(): string {
   const topics = state.data.topics;
-  if (!topics) return loadingCard();
+  if (!topics) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   // Valores = source en BD (topic-detection → 'Web Search'; FB → 'Facebook').
   // No usar nombres de proveedor (Perplexity/Firecrawl): el filtro es igualdad exacta.
   const sources = ['Todas', 'Web Search', 'Facebook'];
@@ -101,7 +101,7 @@ function renderRadarTemas(): string {
     const active = state.radarStatus === st;
     return `<span class="padmin-chip" data-action="set-radar-status" data-value="${esc(st)}" style="background:${active ? 'var(--accent)' : 'var(--surface)'};color:${active ? '#fff' : 'var(--text)'};border-color:${active ? 'var(--accent)' : 'var(--line-soft)'};">${esc(st)}</span>`;
   }).join('');
-  const filtered = topics.filter((r: any) =>
+  const filtered = topics.filter((r: Topic) =>
     (state.radarSource === 'Todas' || r.source === state.radarSource) && (state.radarStatus === 'Todos' || r.status === state.radarStatus)
   );
 
@@ -114,7 +114,7 @@ function renderRadarTemas(): string {
     </div>
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-radar"><span>TEMA</span><span>FUENTE</span><span>MENCIONES</span><span>SENTIMIENTO</span><span>ESTADO</span><span>ACCIONES</span></div>
-      ${filtered.map((r: any) => {
+      ${filtered.map((r: Topic) => {
         const sent = sentimentStyle(r.sentiment);
         const stStyle = r.status === 'Nuevo' ? { bg: 'var(--accent-soft)', color: 'var(--accent-text)' } : { bg: 'var(--brand-soft)', color: 'var(--brand)' };
         const canManage = state.user!.role === 'director' || state.user!.role === 'produccion';

@@ -1,25 +1,19 @@
 // CREA Panel Admin — auth, login y navegación entre pantallas.
-import { state, setState, setData, adminApi, loadScreenData, type Screen, type ApiError } from './store';
+import { state, setState, setData, adminApi, loadScreenData, type Screen, type ApiError, type ActivityEntry } from './store';
 import { landingFor, esc } from './util';
+import { hashFor, screenFromHash } from './hash-router';
 // Import circular con router.ts (router importa renderLogin de aquí): seguro porque
 // render es function declaration y solo se llama en runtime, nunca durante la carga.
 import { render } from './router';
 
-// Recuerda la pantalla actual entre refrescos (sessionStorage: por pestaña, se
-// borra sola al cerrar). El SPA no tiene URLs reales por pantalla — esto evita
-// que un F5 mande siempre a Inicio sin necesitar un router de navegador.
-const SCREEN_KEY = 'crea-admin-last-screen';
-
-function persistScreen(id: Screen, extra?: number | null) {
-  try { sessionStorage.setItem(SCREEN_KEY, JSON.stringify({ screen: id, extra: extra ?? null })); } catch { /* modo privado */ }
-}
-
-function readPersistedScreen(): { screen: Screen; extra: number | null } | null {
-  try {
-    const raw = sessionStorage.getItem(SCREEN_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
+// URL real por pantalla (#screen o #screen/id): persiste en refresh, es
+// bookmarkable/compartible, y da back/forward gratis — el navegador ya
+// dispara 'hashchange' al asignar location.hash, sin pushState manual.
+window.addEventListener('hashchange', () => {
+  if (!state.user) return;
+  const target = screenFromHash(location.hash);
+  if (target) goTo(target.screen, target.extra);
+});
 
 export function login(email: string, password: string) {
   setState({ loginError: null });
@@ -36,6 +30,7 @@ export function login(email: string, password: string) {
         allowedModules: session.allowedModules,
         screen: landing, loginError: null,
       });
+      location.hash = hashFor(landing);
       loadScreenData(landing);
       loadNotifBadge();
     })
@@ -48,13 +43,13 @@ export function login(email: string, password: string) {
 
 export function loadNotifBadge() {
   if (state.user!.role !== 'director') return;
-  adminApi('/api/admin/activity?limit=5').then((r) => { setData({ notifications: r as any[] }); }).catch(() => { /* badge best-effort */ });
+  adminApi<ActivityEntry[]>('/api/admin/activity?limit=5').then((r) => { setData({ notifications: r }); }).catch(() => { /* badge best-effort */ });
 }
 
 export function logout() {
   state.token = null;
   try { localStorage.removeItem('crea-admin-token'); } catch { /* noop */ }
-  try { sessionStorage.removeItem(SCREEN_KEY); } catch { /* noop */ }
+  location.hash = '';
   setState({
     user: null, allowedModules: [], screen: 'login', loginError: null,
     errorMsg: null, successMsg: null,
@@ -75,8 +70,8 @@ export function tryResumeSession() {
   adminApi<{ id: number; name: string; role: string; allowedModules: string[] }>('/api/auth/session')
     .then((session) => {
       const landing = landingFor(session.role);
-      const persisted = readPersistedScreen();
-      const restore = persisted && session.allowedModules.indexOf(persisted.screen) !== -1 ? persisted : null;
+      const fromHash = screenFromHash(location.hash);
+      const restore = fromHash && session.allowedModules.indexOf(fromHash.screen) !== -1 ? fromHash : null;
       const screen = restore ? restore.screen : landing;
       setState({
         user: { id: session.id, name: session.name, role: session.role },
@@ -84,6 +79,7 @@ export function tryResumeSession() {
         screen,
         ...(screen === 'editor' ? { editorProposalId: restore!.extra } : {}),
       });
+      if (!restore) location.hash = hashFor(landing);
       loadScreenData(screen, restore ? restore.extra : undefined);
       loadNotifBadge();
     })
@@ -104,13 +100,13 @@ export function goTo(id: Screen, extra?: number | null) {
   if (id === 'editor') (patch as any).editorProposalId = (extra != null ? extra : null);
   setState(patch);
   loadScreenData(id, extra);
-  persistScreen(id, extra);
+  location.hash = hashFor(id, extra);
 }
 
 export function goHome() {
   const landing = landingFor(state.user!.role);
   setState({ screen: landing, deniedTarget: null });
-  persistScreen(landing);
+  location.hash = hashFor(landing);
 }
 
 export function renderLogin(): string {

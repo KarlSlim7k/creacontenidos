@@ -7,28 +7,260 @@ export interface User {
   role: string;
 }
 
+export interface Idea {
+  id: number;
+  title: string;
+  category: string | null;
+  description: string | null;
+  score: string | null;
+  column_status: 'nueva' | 'en_analisis' | 'aprobada' | 'descartada';
+  collaborator_id: number | null;
+  collaborator_name: string | null;
+}
+
+export interface Proposal {
+  id: number;
+  topic_id: number | null;
+  format: string;
+  title: string | null;
+  body: string | null;
+  dek: string | null;
+  section: string | null;
+  slug: string | null;
+  cover_image_url: string | null;
+  author_name: string | null;
+  is_sponsored: boolean;
+  sponsor_name: string | null;
+  image_prompt: string | null;
+  angulo: string | null;
+  sensibilidad: string | null;
+  origin: string | null;
+  status: string;
+  author_id: number | null;
+  review_comment: string | null;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  view_count: number;
+}
+
+export interface EditorialMetrics {
+  piecesPublished: number;
+  weeklyGoal: number;
+  weeklyPieces: { week: string; count: number }[];
+  socialChannels: unknown[];
+  totalReach: null;
+  totalPieces: number;
+  approvalRate: number | null;
+  avgDraftDays: number | null;
+  topSections: { section: string; count: number }[];
+  authors: { name: string; published: number }[];
+}
+
+export interface PipelineStep {
+  label: string;
+  status: 'completado' | 'pendiente' | 'esperando';
+  at: string | null;
+}
+
+export interface Client {
+  id: number;
+  name: string;
+  business_name: string | null;
+  package: string | null;
+  phone: string | null;
+  email: string | null;
+  active: boolean;
+  pipeline_stage: 'identificado' | 'contactado' | 'propuesta_enviada' | 'cerrado';
+  interest: string | null;
+  estimated_value: string | null;
+  last_contact_at: string | null;
+  owner_id: number | null;
+  website_url: string | null;
+  sponsor_copy: string | null;
+  last_sponsored_at: string | null;
+}
+
+export interface Lead {
+  id: number;
+  name: string;
+  email: string;
+  company: string | null;
+  service_interest: string | null;
+  message: string;
+  source_page: string | null;
+  status: 'nuevo' | 'contactado' | 'descartado';
+  notes: string | null;
+  created_at: string;
+}
+
+export interface Service {
+  id: number;
+  name: string;
+  price_label: string;
+  description: string;
+  features: string[];
+  cta_interest: string;
+  sort_order: number;
+  active: boolean;
+}
+
+export interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  created_at: string;
+}
+
+export type RoleModules = Record<string, string[]>;
+
+export interface SocialPost {
+  id: number;
+  network: 'tiktok' | 'youtube' | 'facebook' | 'instagram';
+  external_url: string;
+  title: string | null;
+  author_name: string | null;
+  thumbnail_url: string | null;
+  is_published: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+  fetched_at: string | null;
+  created_by_name: string | null;
+}
+
+export interface ActivityEntry {
+  id: number;
+  action: string;
+  detail: string | null;
+  user_id: number | null;
+  status: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  user_name: string | null;
+}
+
+export interface Integration {
+  name: string;
+  desc: string;
+  connected: boolean;
+}
+
+export interface SiteMetrics {
+  id: number;
+  monthly_reach_label: string;
+  municipalities_count: number;
+  tercer_tiempo_listeners_label: string;
+  audience_age_18_24_pct: number;
+  audience_age_25_44_pct: number;
+  audience_age_45_plus_pct: number;
+  updated_at: string;
+}
+
+export interface Topic {
+  id: number;
+  title: string;
+  source: string | null;
+  mentions: number;
+  sentiment: string | null;
+  status: string;
+  antecedentes: string | null;
+  actores: string | null;
+  angulos: string | null;
+  audiencia: string | null;
+  detected_at: string;
+}
+
+export interface CompetitorPost {
+  id: number;
+  source_platform: string;
+  source_account: string | null;
+  post_url: string | null;
+  post_text: string | null;
+  post_date: string | null;
+  reactions: number;
+  comments: number;
+  shares: number;
+  views: number;
+  media_type: string | null;
+  scraped_at: string;
+  analyzed: boolean;
+}
+
+export interface FbAccount {
+  id: number;
+  label: string;
+  handle_or_url: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface DistChannel {
+  channel: 'facebook' | 'whatsapp' | 'wordpress';
+  label: string;
+  connected: boolean;
+}
+
+export interface DistLogEntry {
+  id: number;
+  proposal_id: number | null;
+  platform: 'facebook' | 'whatsapp' | 'wordpress';
+  published_at: string | null;
+  url: string | null;
+  status: 'ok' | 'error';
+  detail: string | null;
+  title: string | null;
+  created_by_name: string | null;
+}
+
+export interface NewsletterSettings {
+  enabled: boolean;
+  send_hour: number;
+  send_minute: number;
+}
+
+export interface NewsletterEvent {
+  id: number;
+  event_date: string;
+  title: string;
+}
+
+export interface NewsletterContent {
+  weekday: string;
+  date: string;
+  clima: string;
+  notaDelDia: { titulo: string; cuerpo: string };
+  enBreve: string[];
+  datoDelDia: string;
+  agenda: string | null;
+  patrocinador: { nombre: string; copy: string; link: string } | null;
+  topicsUsed: number;
+}
+
 export interface AdminData {
-  ideas: any[] | null;
-  proposalsByKey: Record<string, any[]>;
-  clients: any[] | null;
-  topics: any[] | null;
-  users: any[] | null;
-  metrics: any | null;
-  socialPosts: any[] | null;
-  activity: any[] | null;
-  integrations: any[] | null;
-  pipeline: any | null;
-  notifications: any[] | null;
-  newsletterSettings: any | null;
-  newsletterEvents: any[] | null;
-  services: any[] | null;
-  roleModules: any | null;
-  leads: any[] | null;
-  distLog: any[] | null;
-  distChannels: any[] | null;
-  competitors: any[] | null;
-  siteMetrics: any | null;
-  fbAccounts: any[] | null;
+  ideas: Idea[] | null;
+  proposalsByKey: Record<string, Proposal[]>;
+  clients: Client[] | null;
+  topics: Topic[] | null;
+  users: AdminUser[] | null;
+  metrics: EditorialMetrics | null;
+  socialPosts: SocialPost[] | null;
+  activity: ActivityEntry[] | null;
+  integrations: Integration[] | null;
+  pipeline: PipelineStep[] | null;
+  notifications: ActivityEntry[] | null;
+  newsletterSettings: NewsletterSettings | null;
+  newsletterEvents: NewsletterEvent[] | null;
+  services: Service[] | null;
+  roleModules: RoleModules | null;
+  leads: Lead[] | null;
+  distLog: DistLogEntry[] | null;
+  distChannels: DistChannel[] | null;
+  competitors: CompetitorPost[] | null;
+  siteMetrics: SiteMetrics | null;
+  fbAccounts: FbAccount[] | null;
 }
 
 export type Screen =
@@ -36,6 +268,12 @@ export type Screen =
   | 'comercial' | 'leads' | 'metricas' | 'radar' | 'propuestas'
   | 'producciones' | 'publicadas' | 'hermes' | 'pipeline'
   | 'denegado' | 'configuracion';
+
+export interface QaResult {
+  score: number;
+  summary?: string;
+  issues: { type: string; line?: number; text: string }[];
+}
 
 export interface EditorDraft {
   title: string;
@@ -69,7 +307,7 @@ export interface State {
   editorDraft: EditorDraft | null;
   generatingProposal: boolean;
   generatingDraft: boolean;
-  qaResult: any | null;
+  qaResult: QaResult | null;
   qaBusy: boolean;
   notaPreviewHtml: string | null;
   editorImagePrompt: string | null;
@@ -77,7 +315,7 @@ export interface State {
   transparency: Record<string, unknown>;
   comentarioPieceId: number | null;
   comentarioText: string;
-  pickerPreview: any | null;
+  pickerPreview: Proposal | null;
   selectedRadarId: number | null;
   configTab: string;
   showNotifications: boolean;
@@ -95,15 +333,20 @@ export interface State {
   socialBusy: boolean;
   clientFormOpen: boolean;
   clientFormError: string | null;
-  newsletterContent: any | null;
+  newsletterContent: NewsletterContent | null;
   newsletterBusy: boolean;
   newsletterSending: boolean;
-  newsletterPreview: any | null;
+  newsletterPreview: string | null;
   newsletterSubscriberCount: number | null;
   newsletterAudioBusy: boolean;
   newsletterAudioUrl: string | null;
   demoNote: string | null;
   errorMsg: string | null;
+  // Distinto de errorMsg: ese es un toast que se auto-oculta a los 6s (store.ts
+  // setState). dataError persiste hasta la próxima navegación de pantalla —
+  // sin esto, si el fetch que llena los datos de la pantalla falla, el toast
+  // desaparece pero la pantalla se queda en "Cargando…" para siempre.
+  dataError: string | null;
   successMsg: string | null;
   soundMuted: boolean;
   deniedTarget?: string | null;
@@ -148,7 +391,7 @@ export const state: State = {
   newsletterContent: null, newsletterBusy: false, newsletterSending: false,
   newsletterPreview: null, newsletterSubscriberCount: null,
   newsletterAudioBusy: false, newsletterAudioUrl: null,
-  demoNote: null, errorMsg: null, successMsg: null, soundMuted: false,
+  demoNote: null, errorMsg: null, dataError: null, successMsg: null, soundMuted: false,
 };
 state.soundMuted = isSoundMuted();
 
@@ -267,13 +510,13 @@ export function setData(patch: Partial<AdminData>) {
 
 export function loadProposals(key: string, query: string) {
   if (state.data.proposalsByKey[key]) return;
-  adminApi(`/api/editorial/proposals?${query}`)
+  adminApi<Proposal[]>(`/api/editorial/proposals?${query}`)
     .then((rows) => {
       const byKey = Object.assign({}, state.data.proposalsByKey);
-      byKey[key] = rows as any[];
+      byKey[key] = rows;
       setData({ proposalsByKey: byKey });
     })
-    .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    .catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
 }
 
 export function invalidateProposals() {
@@ -281,18 +524,19 @@ export function invalidateProposals() {
 }
 
 export function loadScreenData(screen: Screen, extra?: number | null) {
+  state.dataError = null;
   if (screen === 'dashboard') {
     loadProposals('en_revision', 'status=en_revision');
     if (state.user!.role === 'produccion') loadProposals('mine', 'author_id=' + state.user!.id);
-    if (!state.data.ideas) adminApi('/api/editorial/ideas').then((r) => { setData({ ideas: r as any[] }); });
+    if (!state.data.ideas) adminApi<Idea[]>('/api/editorial/ideas').then((r) => { setData({ ideas: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'ideas') {
-    adminApi('/api/editorial/ideas').then((r) => { setData({ ideas: r as any[] }); });
+    adminApi<Idea[]>('/api/editorial/ideas').then((r) => { setData({ ideas: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'editor') {
     const id = extra != null ? extra : state.editorProposalId;
     loadProposals('borrador', 'status=borrador');
     loadProposals('en_revision', 'status=en_revision');
     if (id) {
-      adminApi<any>(`/api/editorial/proposals/${id}`).then((p) => {
+      adminApi<Proposal>(`/api/editorial/proposals/${id}`).then((p) => {
         setState({
           editorProposalId: id, notaPreviewHtml: null, editorImagePrompt: null, editorDraft: {
             title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || '',
@@ -301,60 +545,60 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
             image_prompt: p.image_prompt || '',
           },
         });
-      });
+      }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     }
   } else if (screen === 'aprobacion') {
     loadProposals('en_revision', 'status=en_revision');
     loadProposals('published', 'status=published');
-    adminApi('/api/distribution/channels').then((r) => { setData({ distChannels: r as any[] }); }).catch(() => { /* best-effort */ });
-    adminApi('/api/distribution/log?limit=30').then((r) => { setData({ distLog: r as any[] }); }).catch(() => { /* best-effort */ });
+    adminApi<DistChannel[]>('/api/distribution/channels').then((r) => { setData({ distChannels: r }); }).catch(() => { /* best-effort */ });
+    adminApi<DistLogEntry[]>('/api/distribution/log?limit=30').then((r) => { setData({ distLog: r }); }).catch(() => { /* best-effort */ });
   } else if (screen === 'comercial') {
-    adminApi('/api/commercial/clients').then((r) => { setData({ clients: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    adminApi<Client[]>('/api/commercial/clients').then((r) => { setData({ clients: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'leads') {
-    adminApi('/api/commercial/leads').then((r) => { setData({ leads: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    adminApi<Lead[]>('/api/commercial/leads').then((r) => { setData({ leads: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'metricas') {
-    adminApi('/api/editorial/metrics').then((r) => { setData({ metrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    adminApi<EditorialMetrics>('/api/editorial/metrics').then((r) => { setData({ metrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'radar') {
-    adminApi('/api/listening/topics').then((r) => { setData({ topics: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    adminApi<Topic[]>('/api/listening/topics').then((r) => { setData({ topics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     if (state.radarTab === 'competencia' && !state.data.competitors) {
-      adminApi('/api/listening/competitors').then((r) => { setData({ competitors: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+      adminApi<CompetitorPost[]>('/api/listening/competitors').then((r) => { setData({ competitors: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     }
   } else if (screen === 'propuestas') {
     loadProposals('propuesta', 'status=propuesta');
     loadProposals('rechazada', 'status=rechazada');
   } else if (screen === 'producciones') {
-    adminApi('/api/admin/social').then((r) => { setData({ socialPosts: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    adminApi<SocialPost[]>('/api/admin/social').then((r) => { setData({ socialPosts: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'publicadas') {
     loadProposals('published', 'status=published');
   } else if (screen === 'configuracion') {
-    if (state.configTab === 'usuarios') adminApi('/api/auth/users').then((r) => { setData({ users: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
-    if (state.configTab === 'permisos' && !state.data.roleModules) adminApi('/api/auth/roles').then((r) => { setData({ roleModules: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
-    if (state.configTab === 'integraciones') adminApi('/api/admin/integrations').then((r) => { setData({ integrations: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    if (state.configTab === 'usuarios') adminApi<AdminUser[]>('/api/auth/users').then((r) => { setData({ users: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (state.configTab === 'permisos' && !state.data.roleModules) adminApi<RoleModules>('/api/auth/roles').then((r) => { setData({ roleModules: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (state.configTab === 'integraciones') adminApi<Integration[]>('/api/admin/integrations').then((r) => { setData({ integrations: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     if (state.configTab === 'newsletter') {
-      adminApi('/api/newsletter/settings').then((r) => { setData({ newsletterSettings: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
-      adminApi('/api/newsletter/events').then((r) => { setData({ newsletterEvents: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+      adminApi<NewsletterSettings>('/api/newsletter/settings').then((r) => { setData({ newsletterSettings: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+      adminApi<NewsletterEvent[]>('/api/newsletter/events').then((r) => { setData({ newsletterEvents: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     }
-    if (state.configTab === 'servicios') adminApi('/api/commercial/services').then((r) => { setData({ services: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
-    if (state.configTab === 'cuentas-fb') adminApi('/api/listening/competitors/accounts').then((r) => { setData({ fbAccounts: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
-    if (state.configTab === 'metricas-sitio') adminApi('/api/admin/site-metrics').then((r) => { setData({ siteMetrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    if (state.configTab === 'servicios') adminApi<Service[]>('/api/commercial/services').then((r) => { setData({ services: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (state.configTab === 'cuentas-fb') adminApi<FbAccount[]>('/api/listening/competitors/accounts').then((r) => { setData({ fbAccounts: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (state.configTab === 'metricas-sitio') adminApi<SiteMetrics>('/api/admin/site-metrics').then((r) => { setData({ siteMetrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'hermes') {
-    adminApi('/api/admin/activity?limit=20').then((r) => { setData({ activity: r as any[] }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    adminApi<ActivityEntry[]>('/api/admin/activity?limit=20').then((r) => { setData({ activity: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'pipeline') {
-    adminApi('/api/editorial/pipeline').then((r) => { setData({ pipeline: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    adminApi<PipelineStep[]>('/api/editorial/pipeline').then((r) => { setData({ pipeline: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     adminApi<{ count: number }>('/api/newsletter/subscribers/count').then((r) => { setState({ newsletterSubscriberCount: r.count }); }).catch(() => { /* best-effort */ });
     if (!state.newsletterContent) {
-      adminApi('/api/newsletter/pending').then((r) => { if (r) setState({ newsletterContent: r }); }).catch(() => { /* best-effort */ });
+      adminApi<NewsletterContent | null>('/api/newsletter/pending').then((r) => { if (r) setState({ newsletterContent: r }); }).catch(() => { /* best-effort */ });
     }
   }
 }
 
 // ---------- helpers de estado compartidos por acciones ----------
 
-export function mergeKey<T extends Record<string, any>>(obj: T, key: string, value: any): T {
+export function mergeKey<T extends Record<string, unknown>>(obj: T, key: string, value: unknown): T {
   return { ...obj, [key]: value };
 }
 
-export function setProposalsKey(key: string, list: any[]) {
+export function setProposalsKey(key: string, list: Proposal[]) {
   const byKey = Object.assign({}, state.data.proposalsByKey);
   byKey[key] = list;
   setData({ proposalsByKey: byKey });

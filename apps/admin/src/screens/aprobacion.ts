@@ -1,10 +1,10 @@
 // CREA Panel Admin — pantallas Aprobación y Distribución.
-import { state } from '../store';
-import { esc, loadingCard, relativeTime } from '../util';
+import { state, type Proposal, type DistLogEntry, type DistChannel } from '../store';
+import { esc, loadingCard, errorCard, relativeTime } from '../util';
 
 const transparencyLabels = ['100% humano', 'Asistido por IA', 'Generado con IA'];
 
-function renderAprobacionDesktop(piecesInReview: any[]): string {
+function renderAprobacionDesktop(piecesInReview: Proposal[]): string {
   return `<div class="padmin-card">${piecesInReview.map((p) => {
     const selected = state.transparency[p.id];
     const approveBg = selected ? 'var(--brand)' : 'var(--bg-soft)';
@@ -29,7 +29,7 @@ function renderAprobacionDesktop(piecesInReview: any[]): string {
 function renderComentarioModal(): string {
   if (state.comentarioPieceId == null) return '';
   const pieces = state.data.proposalsByKey.en_revision || [];
-  const piece = pieces.filter((p: any) => p.id === state.comentarioPieceId)[0];
+  const piece = pieces.filter((p: Proposal) => p.id === state.comentarioPieceId)[0];
   if (!piece) return '';
   return `<div class="padmin-overlay">
     <div class="padmin-overlay-bg" data-action="close-comentario"></div>
@@ -50,13 +50,13 @@ function renderDistribucion(): string {
   const published = state.data.proposalsByKey.published;
   const channels = state.data.distChannels;
   if (!published || !channels) return '';
-  const lastPush: Record<string, any> = {};
-  (state.data.distLog || []).forEach((e: any) => {
+  const lastPush: Record<string, DistLogEntry> = {};
+  (state.data.distLog || []).forEach((e: DistLogEntry) => {
     const k = e.proposal_id + ':' + e.platform;
     if (!lastPush[k]) lastPush[k] = e;
   });
-  const rows = published.slice(0, 10).map((p: any) => {
-    const buttons = channels.map((ch: any) => {
+  const rows = published.slice(0, 10).map((p: Proposal) => {
+    const buttons = channels.map((ch: DistChannel) => {
       const push = lastPush[p.id + ':' + ch.channel];
       const busy = state.distBusy === ch.channel + ':' + p.id;
       let mark = '';
@@ -76,7 +76,7 @@ function renderDistribucion(): string {
 
 export function renderAprobacion(): string {
   const piecesInReview = state.data.proposalsByKey.en_revision;
-  if (!piecesInReview) return loadingCard();
+  if (!piecesInReview) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   return `<div>
     <h1 class="padmin-h1">Aprobación</h1>
     <p class="padmin-lede">Piezas pendientes de revisión editorial.</p>

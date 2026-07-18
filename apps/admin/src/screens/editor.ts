@@ -1,8 +1,19 @@
 // CREA Panel Admin — Editor de nota (picker, formulario, vista previa, QA).
-import { state } from '../store';
-import { esc, badge, loadingCard, initialsOf } from '../util';
+import { state, type Proposal, type EditorDraft } from '../store';
 
-function pickerRow(p: any, editable: boolean): string {
+interface NotaPreviewInput {
+  body?: string | null;
+  cover_image_url?: string | null;
+  author_name?: string | null;
+  is_sponsored?: boolean;
+  sponsor_name?: string | null;
+  section?: string | null;
+  title?: string | null;
+  dek?: string | null;
+}
+import { esc, badge, loadingCard, errorCard, initialsOf } from '../util';
+
+function pickerRow(p: Proposal, editable: boolean): string {
   const fecha = p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '';
   const thumb = p.cover_image_url
     ? `<img src="${esc(p.cover_image_url)}" alt="" class="padmin-picker-thumb" onerror="this.style.visibility='hidden';">`
@@ -39,30 +50,30 @@ function renderPickerPreview(): string {
 
 function renderEditorPicker(): string {
   const list = state.data.proposalsByKey.borrador;
-  if (!list) return loadingCard();
-  const mine = state.user!.role === 'produccion' ? list.filter((p: any) => p.author_id === state.user!.id) : list;
+  if (!list) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  const mine = state.user!.role === 'produccion' ? list.filter((p: Proposal) => p.author_id === state.user!.id) : list;
   const inReview = state.data.proposalsByKey.en_revision || [];
   return `<div>
     <h1 class="padmin-h1">Editor de nota</h1>
     <p class="padmin-lede">Elige una pieza en borrador para editar.</p>
-    <div class="padmin-card">${mine.length ? mine.map((p: any) => pickerRow(p, true)).join('') :
+    <div class="padmin-card">${mine.length ? mine.map((p: Proposal) => pickerRow(p, true)).join('') :
       '<div class="padmin-row"><p class="padmin-row-meta">No hay piezas en borrador. Aprueba una propuesta desde "Propuestas IA".</p></div>'}</div>
     ${inReview.length ?
       `<p style="font-size:11px;font-weight:600;color:var(--text-mute);letter-spacing:0.06em;margin:22px 0 10px;">EN REVISIÓN (solo lectura — se editan devolviéndolas desde Aprobación)</p>
-      <div class="padmin-card">${inReview.map((p: any) => pickerRow(p, false)).join('')}</div>`
+      <div class="padmin-card">${inReview.map((p: Proposal) => pickerRow(p, false)).join('')}</div>`
     : ''}
     ${renderPickerPreview()}
   </div>`;
 }
 
-function defaultImagePrompt(d: any): string {
+function defaultImagePrompt(d: EditorDraft): string {
   const tema = d.title ? `"${d.title}"${d.dek ? '. ' + d.dek : ''}` : 'la nota';
   return `Imagen realista y profesional para ilustrar ${tema}. Contexto: sección ${d.section || 'Local'} de un medio digital en Perote, Veracruz. Estilo fotográfico documental, tonos cálidos y neutros, alta resolución, sin texto sobre la imagen.`;
 }
 
 export function renderEditor(): string {
   if (!state.editorProposalId) return renderEditorPicker();
-  if (!state.editorDraft) return loadingCard();
+  if (!state.editorDraft) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const d = state.editorDraft;
   const imagePrompt = state.editorImagePrompt != null ? state.editorImagePrompt : (d.image_prompt || defaultImagePrompt(d));
   return `<div class="padmin-editor-wrap">
@@ -143,7 +154,7 @@ export function readEditorForm() {
 // Construye un documento HTML autocontenido que imita el render público (apps/web)
 // con los tokens del tema editorial para que el editor vea el resultado final sin depender
 // de que la nota ya esté publicada. Hex hardcodeados a propósito (el iframe no hereda var()).
-export function buildNotaPreviewDoc(d: any): string {
+export function buildNotaPreviewDoc(d: NotaPreviewInput): string {
   const body = String(d.body || '');
   const minutes = Math.max(1, Math.round(body.split(/\s+/).filter(Boolean).length / 200));
   const fecha = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -180,7 +191,7 @@ function renderQaResult(): string {
   if (!state.qaResult) return '';
   const q = state.qaResult;
   const color = q.score > 80 ? 'var(--brand)' : (q.score >= 50 ? 'var(--accent-2)' : 'var(--danger)');
-  const issues = (q.issues || []).map((i: any) =>
+  const issues = (q.issues || []).map((i) =>
     `<li style="margin-bottom:4px;">[${esc(i.type)}${i.line ? ' · línea ' + i.line : ''}] ${esc(i.text)}</li>`
   ).join('');
   return `<div class="padmin-editor-card" style="margin-top:10px;">

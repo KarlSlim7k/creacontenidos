@@ -1,10 +1,10 @@
 // CREA Panel Admin — pantallas Comercial (pipeline de clientes) y Leads.
-import { state } from '../store';
-import { esc, badge, loadingCard, STATUS_LABEL, relativeTime } from '../util';
+import { state, type Client, type Lead } from '../store';
+import { esc, badge, loadingCard, errorCard, STATUS_LABEL, relativeTime } from '../util';
 
 const PIPELINE_STAGES_ORDER = ['identificado', 'contactado', 'propuesta_enviada', 'cerrado'];
 
-function sponsorFieldsHtml(c: any): string {
+function sponsorFieldsHtml(c: Client): string {
   return `<div style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--line-soft);">
     <p style="font-size:10px;color:var(--mute-2);margin:0 0 6px;">Datos de patrocinio (newsletter)</p>
     <input type="text" id="sponsor-link-${c.id}" placeholder="Sitio web" value="${esc(c.website_url || '')}" style="width:100%;font-size:11px;padding:5px 7px;border:0.5px solid var(--line-soft);border-radius:5px;box-sizing:border-box;margin-bottom:6px;">
@@ -14,7 +14,7 @@ function sponsorFieldsHtml(c: any): string {
   </div>`;
 }
 
-function commColumn(title: string, stage: string, color: string, clients: any[], canMove: boolean, canDelete: boolean): string {
+function commColumn(title: string, stage: string, color: string, clients: Client[], canMove: boolean, canDelete: boolean): string {
   const items = clients.filter((c) => c.pipeline_stage === stage);
   const nextStage = PIPELINE_STAGES_ORDER[PIPELINE_STAGES_ORDER.indexOf(stage) + 1];
   return `<div><p class="padmin-kanban-col-title">${title} &middot; ${items.length}</p><div class="padmin-kanban-cards">${items.map((c) =>
@@ -28,7 +28,7 @@ function commColumn(title: string, stage: string, color: string, clients: any[],
 
 export function renderComercial(): string {
   const clients = state.data.clients;
-  if (!clients) return loadingCard();
+  if (!clients) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const canMove = state.user!.role === 'comercial' || state.user!.role === 'director';
   const canDelete = state.user!.role === 'director';
   const errorHtml = state.clientFormError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.clientFormError)}</p>` : '';
@@ -59,15 +59,15 @@ export function renderComercial(): string {
 
 export function renderLeads(): string {
   const leads = state.data.leads;
-  if (!leads) return loadingCard();
+  if (!leads) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const canDelete = state.user!.role === 'director';
   const statuses = ['todos', 'nuevo', 'contactado', 'descartado'];
   const chips = statuses.map((st) => {
     const active = state.leadsStatus === st;
     return `<span class="padmin-chip" data-action="set-leads-status" data-value="${st}" style="background:${active ? 'var(--brand)' : 'var(--surface)'};color:${active ? '#fff' : 'var(--text)'};border-color:${active ? 'var(--brand)' : 'var(--line-soft)'};">${st === 'todos' ? 'Todos' : STATUS_LABEL[st]}</span>`;
   }).join('');
-  const filtered = leads.filter((l: any) => state.leadsStatus === 'todos' || l.status === state.leadsStatus);
-  const nuevos = leads.filter((l: any) => l.status === 'nuevo').length;
+  const filtered = leads.filter((l: Lead) => state.leadsStatus === 'todos' || l.status === state.leadsStatus);
+  const nuevos = leads.filter((l: Lead) => l.status === 'nuevo').length;
 
   return `<div>
     <h1 class="padmin-h1">Leads</h1>
@@ -75,7 +75,7 @@ export function renderLeads(): string {
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;">${chips}</div>
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-leads"><span>RECIBIDO</span><span>CONTACTO</span><span>INTERÉS</span><span>MENSAJE</span><span>ESTADO</span><span>ACCIONES</span></div>
-      ${filtered.length ? filtered.map((l: any) =>
+      ${filtered.length ? filtered.map((l: Lead) =>
         `<div class="padmin-table-row padmin-cols-leads">
           <span style="font-size:11px;color:var(--text-mute);">${esc(relativeTime(l.created_at))}</span>
           <div style="min-width:0;"><p class="padmin-row-title">${esc(l.name)}${l.company ? ' · ' + esc(l.company) : ''}</p><p class="padmin-row-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(l.email || '')}</p></div>

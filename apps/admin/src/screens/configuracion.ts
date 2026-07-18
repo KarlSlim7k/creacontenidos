@@ -1,12 +1,12 @@
 // CREA Panel Admin — pantalla Configuración (tabs: usuarios, permisos, integraciones,
 // newsletter, servicios, cuentas FB, métricas del sitio).
-import { state } from '../store';
-import { esc, loadingCard, relativeTime, roleLabels, navItemsAll } from '../util';
+import { state, type AdminUser, type Integration, type NewsletterEvent, type Service, type FbAccount } from '../store';
+import { esc, loadingCard, errorCard, relativeTime, roleLabels, navItemsAll } from '../util';
 
 export function renderConfigUsuarios(): string {
   const users = state.data.users;
-  if (!users) return loadingCard();
-  const editing = state.editingUserId != null ? users.find((u: any) => u.id === state.editingUserId) : null;
+  if (!users) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  const editing = state.editingUserId != null ? users.find((u: AdminUser) => u.id === state.editingUserId) : null;
   const errorHtml = state.newUserError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.newUserError)}</p>` : '';
   const formHtml = state.newUserOpen ? (
     `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:760px;">
@@ -23,7 +23,7 @@ export function renderConfigUsuarios(): string {
 
   return formHtml + `<div class="padmin-card" style="max-width:760px;">
     <div class="padmin-table-head padmin-cols-users"><span>NOMBRE</span><span>ROL</span><span>ESTADO</span><span></span></div>
-    ${users.map((u: any) => {
+    ${users.map((u: AdminUser) => {
       const st = u.active ? { label: 'Activo', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Inactivo', bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
       return `<div class="padmin-table-row padmin-cols-users">
         <span style="font-size:13px;color:var(--text);">${esc(u.name)}</span>
@@ -39,7 +39,7 @@ export function renderConfigUsuarios(): string {
 
 export function renderConfigPermisos(): string {
   const roles = state.data.roleModules;
-  if (!roles) return loadingCard();
+  if (!roles) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const roleOrder = ['director', 'produccion', 'comercial', 'colaborador'];
   const mark = (v: boolean) => v ? '<span style="color:var(--brand);">✓</span>' : '<span style="color:var(--line);">—</span>';
   return `<div class="padmin-card" style="max-width:780px;overflow:auto;">
@@ -53,9 +53,9 @@ export function renderConfigPermisos(): string {
 
 export function renderConfigIntegraciones(): string {
   const integrations = state.data.integrations;
-  if (!integrations) return loadingCard();
+  if (!integrations) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   return '<p class="padmin-lede" style="margin-bottom:14px;">Solo lectura — refleja las variables de entorno configuradas en el servidor.</p>' +
-    `<div class="padmin-integraciones-grid">${integrations.map((i: any) => {
+    `<div class="padmin-integraciones-grid">${integrations.map((i: Integration) => {
       const st = i.connected ? { label: 'Conectado', bg: 'var(--brand-soft)', color: 'var(--brand)', dot: 'var(--brand)' } : { label: 'Desconectado', bg: 'var(--bg-soft)', color: 'var(--mute-2)', dot: 'var(--line)' };
       return `<div class="padmin-integracion-card"><div style="display:flex;align-items:center;gap:10px;"><span class="padmin-dot" style="background:${st.dot};"></span><div><p style="font-size:13px;font-weight:500;color:var(--text);margin:0 0 2px;">${esc(i.name)}</p><p style="font-size:11px;color:var(--text-mute);margin:0;">${esc(i.desc)}</p></div></div><span class="padmin-badge" style="background:${st.bg};color:${st.color};">${st.label}</span></div>`;
     }).join('')}</div>`;
@@ -63,7 +63,7 @@ export function renderConfigIntegraciones(): string {
 
 export function renderConfigNewsletter(): string {
   const settings = state.data.newsletterSettings;
-  if (!settings) return loadingCard();
+  if (!settings) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const hours = Array.from({ length: 24 }, (_, i) => i);
   const minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
   return `<div class="padmin-card" style="max-width:480px;padding:20px;">
@@ -94,7 +94,7 @@ export function renderConfigAgenda(): string {
       <input id="ne-title" type="text" placeholder="Ej. Corte de agua en colonia Centro, 9am-2pm" required style="flex:1;min-width:200px;">
       <button type="submit" class="padmin-btn-sm">Agregar</button>
     </form>
-    ${events == null ? loadingCard() : (events.length ? events.map((ev: any) =>
+    ${events == null ? loadingCard() : (events.length ? events.map((ev: NewsletterEvent) =>
       `<div class="padmin-row" style="padding:8px 0;"><div><p class="padmin-row-title" style="font-size:13px;">${esc(ev.title)}</p><p class="padmin-row-meta">${esc(ev.event_date)}</p></div>
         <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-newsletter-event" data-id="${ev.id}">Eliminar</button></div>`
     ).join('') : '<p class="padmin-lede">Sin eventos próximos cargados.</p>')}
@@ -103,8 +103,8 @@ export function renderConfigAgenda(): string {
 
 export function renderConfigServicios(): string {
   const services = state.data.services;
-  if (!services) return loadingCard();
-  const editing = state.editingServiceId != null ? services.find((s: any) => s.id === state.editingServiceId) : null;
+  if (!services) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  const editing = state.editingServiceId != null ? services.find((s: Service) => s.id === state.editingServiceId) : null;
   const errorHtml = state.serviceFormError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.serviceFormError)}</p>` : '';
   const formHtml = state.serviceFormOpen ? (
     `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">
@@ -124,7 +124,7 @@ export function renderConfigServicios(): string {
 
   return formHtml + `<div class="padmin-card" style="max-width:780px;">
     <div class="padmin-table-head padmin-cols-services"><span>NOMBRE</span><span>PRECIO</span><span>ESTADO</span><span></span></div>
-    ${services.length ? services.map((s: any) => {
+    ${services.length ? services.map((s: Service) => {
       const st = s.active ? { label: 'Activo', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Inactivo', bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
       return `<div class="padmin-table-row padmin-cols-services">
         <span style="font-size:13px;color:var(--text);">${esc(s.name)}</span>
@@ -141,8 +141,8 @@ export function renderConfigServicios(): string {
 
 export function renderConfigCuentasFb(): string {
   const accounts = state.data.fbAccounts;
-  if (!accounts) return loadingCard();
-  const editing = state.editingFbAccountId != null ? accounts.find((a: any) => a.id === state.editingFbAccountId) : null;
+  if (!accounts) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  const editing = state.editingFbAccountId != null ? accounts.find((a: FbAccount) => a.id === state.editingFbAccountId) : null;
   const errorHtml = state.fbAccountFormError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.fbAccountFormError)}</p>` : '';
   const formHtml = state.fbAccountFormOpen ? (
     `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:760px;">
@@ -159,7 +159,7 @@ export function renderConfigCuentasFb(): string {
   return '<p class="padmin-lede">Cuentas de Facebook que usa "Escanear Facebook" en RADAR → Competencia cuando no se especifican otras. Solo las activas se scrapean.</p>' +
     formHtml + `<div class="padmin-card" style="max-width:760px;">
     <div class="padmin-table-head padmin-cols-services"><span>MEDIO</span><span>CUENTA</span><span>ESTADO</span><span></span></div>
-    ${accounts.length ? accounts.map((a: any) => {
+    ${accounts.length ? accounts.map((a: FbAccount) => {
       const st = a.active ? { label: 'Activa', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Inactiva', bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
       return `<div class="padmin-table-row padmin-cols-services">
         <span style="font-size:13px;color:var(--text);">${esc(a.label)}</span>
@@ -176,7 +176,7 @@ export function renderConfigCuentasFb(): string {
 
 export function renderConfigMetricas(): string {
   const m = state.data.siteMetrics;
-  if (!m) return loadingCard();
+  if (!m) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   return `<div class="padmin-card" style="max-width:480px;padding:20px;">
     <form data-action="submit-site-metrics" class="padmin-grid2" style="gap:10px;">
       <div class="padmin-field" style="margin:0;"><label>Alcance mensual</label><input id="sm-reach" type="text" value="${esc(m.monthly_reach_label)}" placeholder="42K"></div>

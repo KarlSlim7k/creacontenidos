@@ -1,32 +1,32 @@
 // CREA Panel Admin — pantalla Métricas.
 import { state } from '../store';
-import { esc, loadingCard } from '../util';
+import { esc, loadingCard, errorCard } from '../util';
 
 export function renderMetricas(): string {
   const m = state.data.metrics;
-  if (!m) return loadingCard();
+  if (!m) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const weeklyPct = m.weeklyGoal ? Math.round((m.piecesPublished / m.weeklyGoal) * 100) + '%' : '0%';
   let chartHtml: string;
   if (m.weeklyPieces && m.weeklyPieces.length) {
-    const maxWeekly = Math.max(...m.weeklyPieces.map((w: any) => w.count));
+    const maxWeekly = Math.max(...m.weeklyPieces.map((w) => w.count));
     const chartW = 420, chartH = 110, chartPad = 10;
     const stepX = m.weeklyPieces.length > 1 ? (chartW - chartPad * 2) / (m.weeklyPieces.length - 1) : 0;
-    const points = m.weeklyPieces.map((w: any, idx: number) => {
+    const points = m.weeklyPieces.map((w, idx: number) => {
       const x = chartPad + idx * stepX;
       const y = chartH - chartPad - (maxWeekly ? (w.count / maxWeekly) * (chartH - chartPad * 2) : 0);
       return { x, y, week: w.week.slice(5) };
     });
-    const polyline = points.map((p: any) => p.x + ',' + p.y).join(' ');
+    const polyline = points.map((p) => p.x + ',' + p.y).join(' ');
     chartHtml = `<svg viewBox="0 0 ${chartW} ${chartH}" width="100%" height="110" style="display:block;overflow:visible;color:var(--brand);">
         <polyline points="${polyline}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
-        ${points.map((p: any) => `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="currentColor"></circle>`).join('')}
-      </svg><div class="padmin-chart-labels">${points.map((p: any) => `<span>${esc(p.week)}</span>`).join('')}</div>`;
+        ${points.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="currentColor"></circle>`).join('')}
+      </svg><div class="padmin-chart-labels">${points.map((p) => `<span>${esc(p.week)}</span>`).join('')}</div>`;
   } else {
     chartHtml = '<p class="padmin-lede" style="margin:0;">Sin piezas publicadas en las últimas semanas.</p>';
   }
 
   const topSections = m.topSections || [];
-  const maxSectionCount = topSections.length ? Math.max(...topSections.map((s: any) => s.count)) : 0;
+  const maxSectionCount = topSections.length ? Math.max(...topSections.map((s) => s.count)) : 0;
   const authors = m.authors || [];
 
   return `<div style="max-width:820px;">
@@ -47,12 +47,12 @@ export function renderMetricas(): string {
     <div class="padmin-card" style="padding:20px;">
       ${topSections.length ? (
         '<p style="font-size:11px;font-weight:600;color:var(--text-mute);margin:0 0 10px;">TOP SECCIONES</p>' +
-        topSections.map((s: any) => {
+        topSections.map((s) => {
           const pct = maxSectionCount ? Math.round((s.count / maxSectionCount) * 100) : 0;
           return `<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text);margin-bottom:4px;"><span>${esc(s.section)}</span><span>${s.count}</span></div><div style="width:100%;height:6px;background:var(--bg-soft);border-radius:3px;overflow:hidden;"><div style="height:100%;background:var(--accent);width:${pct}%;"></div></div></div>`;
         }).join('') +
         (authors.length ? '<p style="font-size:11px;font-weight:600;color:var(--text-mute);margin:18px 0 10px;">RANKING DE AUTORES</p>' +
-          authors.map((a: any) =>
+          authors.map((a) =>
             `<div class="padmin-row" style="padding:6px 0;"><span style="font-size:12px;color:var(--text);">${esc(a.name)}</span><span style="font-size:12px;font-weight:600;color:var(--text-mute);">${a.published} publicadas</span></div>`
           ).join('') : '')
       ) : '<p class="padmin-lede" style="margin:0;">Sin piezas publicadas todavía.</p>'}

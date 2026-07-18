@@ -1,17 +1,17 @@
 // CREA Panel Admin — pantallas Hermes (actividad) y Pipeline "Buenos días, Perote".
-import { state } from '../store';
-import { esc, loadingCard, relativeTime } from '../util';
+import { state, type ActivityEntry, type PipelineStep } from '../store';
+import { esc, loadingCard, errorCard, relativeTime } from '../util';
 
 export function renderHermes(): string {
   const activity = state.data.activity;
-  if (!activity) return loadingCard();
+  if (!activity) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const skillCounts: Record<string, number> = {};
-  activity.forEach((a: any) => { skillCounts[a.action] = (skillCounts[a.action] || 0) + 1; });
+  activity.forEach((a: ActivityEntry) => { skillCounts[a.action] = (skillCounts[a.action] || 0) + 1; });
   const skills = Object.keys(skillCounts).map((k) => ({ name: k, count: skillCounts[k] })).sort((a, b) => b.count - a.count);
   return `<div>
     <h1 class="padmin-h1">Estado del agente Hermes</h1>
     <p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 12px;">Actividad reciente</p>
-    ${activity.length ? `<div class="padmin-hermes-log">${activity.map((h: any) => {
+    ${activity.length ? `<div class="padmin-hermes-log">${activity.map((h: ActivityEntry) => {
       const ok = h.status === 'exito';
       return `<div class="padmin-hermes-row"><span class="padmin-hermes-time">${esc(relativeTime(h.created_at))}</span><span class="padmin-hermes-task">${esc(h.detail || h.action)}</span><span style="color:${ok ? '#7CB084' : '#D98A7A'};flex-shrink:0;">${ok ? '✓ éxito' : '✕ falló'}</span></div>`;
     }).join('')}</div>` : '<p class="padmin-lede">Sin actividad registrada todavía.</p>'}
@@ -22,7 +22,7 @@ export function renderHermes(): string {
   </div>`;
 }
 
-function pipelineStepStyle(st: any) {
+function pipelineStepStyle(st: PipelineStep) {
   if (st.status === 'completado') return { dotColor: 'var(--brand)', ringColor: 'var(--brand)', badgeBg: 'var(--brand-soft)', badgeColor: 'var(--brand)', badgeLabel: '✅ Automático completado', textColor: 'var(--text)', weight: 500 };
   if (st.status === 'esperando') return { dotColor: 'var(--accent)', ringColor: 'var(--accent)', badgeBg: 'var(--accent-soft)', badgeColor: 'var(--accent-text)', badgeLabel: '⏳ Esperando aprobación', textColor: 'var(--text)', weight: 600 };
   return { dotColor: '#fff', ringColor: 'var(--line-soft)', badgeBg: 'var(--bg-soft)', badgeColor: 'var(--mute-2)', badgeLabel: 'Pendiente — sin automatización', textColor: 'var(--mute-2)', weight: 400 };
@@ -30,11 +30,11 @@ function pipelineStepStyle(st: any) {
 
 export function renderPipeline(): string {
   const steps = state.data.pipeline;
-  if (!steps) return loadingCard();
+  if (!steps) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   return `<div>
     <h1 class="padmin-h1">Pipeline &middot; Buenos días, Perote</h1>
     <p class="padmin-lede">Estado del boletín matutino, derivado de la pieza editorial más reciente.</p>
-    <div style="max-width:640px;">${steps.map((st: any) => {
+    <div style="max-width:640px;">${steps.map((st: PipelineStep) => {
       const sty = pipelineStepStyle(st);
       return `<div class="padmin-pipeline-step">
         <div class="padmin-pipeline-rail"><span class="padmin-pipeline-dot" style="background:${sty.dotColor};border-color:${sty.ringColor};"></span><span class="padmin-pipeline-line"></span></div>
@@ -55,8 +55,8 @@ function inputVal(id: string): string {
 export function readNewsletterForm() {
   const enBreveRaw = inputVal('nl-en-breve');
   return {
-    weekday: state.newsletterContent.weekday,
-    date: state.newsletterContent.date,
+    weekday: state.newsletterContent!.weekday,
+    date: state.newsletterContent!.date,
     clima: inputVal('nl-clima'),
     notaDelDia: {
       titulo: inputVal('nl-nota-titulo'),

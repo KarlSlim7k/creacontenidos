@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantalla Dashboard (Inicio).
-import { state } from '../store';
-import { esc, badge, loadingCard } from '../util';
+import { state, type Idea, type Proposal } from '../store';
+import { esc, badge, loadingCard, errorCard } from '../util';
 
 function statCard(label: string, value: number | string, color?: string): string {
   return `<div class="padmin-stat-card"><p class="padmin-stat-label">${esc(label)}</p><p class="padmin-stat-value"${color ? ` style="color:${color};"` : ''}>${value}</p></div>`;
@@ -9,8 +9,8 @@ function statCard(label: string, value: number | string, color?: string): string
 function renderDashboardDirector(): string {
   const ideas = state.data.ideas;
   const piecesInReview = state.data.proposalsByKey.en_revision;
-  if (!ideas || !piecesInReview) return loadingCard();
-  const ideasNueva = ideas.filter((i: any) => i.column_status === 'nueva');
+  if (!ideas || !piecesInReview) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  const ideasNueva = ideas.filter((i: Idea) => i.column_status === 'nueva');
 
   return `<div>
     <p style="font-size:13px;color:var(--text-mute);margin:0 0 4px;">Buenos días</p>
@@ -22,13 +22,13 @@ function renderDashboardDirector(): string {
     <div class="padmin-grid2" style="gap:20px;">
       <div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;"><p style="font-size:12px;font-weight:600;color:var(--text);margin:0;">Ideas pendientes de decisión</p><button type="button" class="padmin-logout" data-action="goto" data-id="ideas">Ver bandeja &rarr;</button></div>
-        <div class="padmin-card">${ideasNueva.length ? ideasNueva.map((i: any) =>
+        <div class="padmin-card">${ideasNueva.length ? ideasNueva.map((i: Idea) =>
           `<div class="padmin-row clickable" data-action="goto" data-id="ideas"><div><p class="padmin-row-title">${esc(i.title)}</p><p class="padmin-row-meta">${esc(i.category || '')}</p></div><span class="padmin-idea-score">${i.score != null ? 'Score ' + i.score : ''}</span></div>`
         ).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin ideas pendientes.</p></div>'}</div>
       </div>
       <div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;"><p style="font-size:12px;font-weight:600;color:var(--text);margin:0;">Piezas en revisión</p><button type="button" class="padmin-logout" data-action="goto" data-id="aprobacion">Ir a aprobación &rarr;</button></div>
-        <div class="padmin-card">${piecesInReview.length ? piecesInReview.map((p: any) =>
+        <div class="padmin-card">${piecesInReview.length ? piecesInReview.map((p: Proposal) =>
           `<div class="padmin-row clickable" data-action="goto" data-id="aprobacion"><div><p class="padmin-row-title">${esc(p.title)}</p><p class="padmin-row-meta">${esc(p.section || '')}</p></div>${badge(p.status)}</div>`
         ).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Nada en revisión.</p></div>'}</div>
       </div>
@@ -36,7 +36,7 @@ function renderDashboardDirector(): string {
   </div>`;
 }
 
-function renderChecklistPieza(myPieces: any[]): string {
+function renderChecklistPieza(myPieces: Proposal[]): string {
   const current = myPieces.filter((p) => p.status !== 'published')[0];
   if (!current) return '';
   const items = [
@@ -55,10 +55,10 @@ function renderChecklistPieza(myPieces: any[]): string {
 
 function renderDashboardProduccion(): string {
   const myPieces = state.data.proposalsByKey.mine;
-  if (!myPieces) return loadingCard();
-  const myDraftCount = myPieces.filter((p: any) => p.status === 'borrador').length;
-  const myReviewCount = myPieces.filter((p: any) => p.status === 'en_revision').length;
-  const myPublishedCount = myPieces.filter((p: any) => p.status === 'published').length;
+  if (!myPieces) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  const myDraftCount = myPieces.filter((p: Proposal) => p.status === 'borrador').length;
+  const myReviewCount = myPieces.filter((p: Proposal) => p.status === 'en_revision').length;
+  const myPublishedCount = myPieces.filter((p: Proposal) => p.status === 'published').length;
 
   return `<div>
     <p style="font-size:13px;color:var(--text-mute);margin:0 0 4px;">Tus tareas</p>
@@ -70,7 +70,7 @@ function renderDashboardProduccion(): string {
       ${statCard('PUBLICADAS', myPublishedCount, 'var(--brand)')}
     </div>
     <p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 12px;">Piezas en proceso</p>
-    <div class="padmin-card" style="margin-bottom:28px;">${myPieces.length ? myPieces.map((p: any) =>
+    <div class="padmin-card" style="margin-bottom:28px;">${myPieces.length ? myPieces.map((p: Proposal) =>
       `<div class="padmin-row clickable" data-action="goto" data-id="editor" data-pid="${p.id}"><div><p class="padmin-row-title">${esc(p.title)}</p><p class="padmin-row-meta">${esc(p.section || '')}</p></div>${badge(p.status)}</div>`
     ).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin piezas asignadas todavía.</p></div>'}</div>
     ${renderChecklistPieza(myPieces)}
