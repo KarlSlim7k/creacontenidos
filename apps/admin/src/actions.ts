@@ -3,7 +3,7 @@ import {
   state, setState, setData, adminApi, adminApiBlob, loadScreenData, mergeKey, setProposalsKey, isSoundMuted,
   loadRadarTopics, loadRadarSummary, loadRadarStats,
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
-  type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type DistLogEntry, type RadarSource,
+  type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
 } from './store';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
@@ -527,9 +527,9 @@ export function submitCompetitorToIdea(id: number) {
 }
 
 export function submitApproveTopic(id: number) {
-  adminApi('/api/listening/topics/' + id + '/approve', { method: 'PATCH' })
-    .then(() => {
-      const topics = (state.data.topics || []).map((t) => t.id === id ? Object.assign({}, t, { status: 'Revisado' }) : t);
+  adminApi<Topic>('/api/listening/topics/' + id + '/approve', { method: 'PATCH' })
+    .then((updated) => {
+      const topics = (state.data.topics || []).map((t) => t.id === id ? updated : t);
       setData({ topics });
     })
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });

@@ -2,6 +2,10 @@
 import { state, type Topic, type CompetitorPost, type VerificationStatus, type RadarSource, type RadarStats } from '../store';
 import { esc, loadingCard, errorCard } from '../util';
 
+function canManageRadar(): boolean {
+  return state.user!.role === 'director' || state.user!.role === 'produccion';
+}
+
 const VERIFY_LABELS: Record<VerificationStatus, string> = {
   verified: 'Verificado',
   checking: 'En verificación',
@@ -105,7 +109,7 @@ function renderRadarDetail(): string {
       <p class="padmin-drawer-section-title">ACTORES INVOLUCRADOS</p><p class="padmin-drawer-section-body">${esc(topic.actores || 'Sin datos.')}</p>
       <p class="padmin-drawer-section-title">ÁNGULOS DE COBERTURA SUGERIDOS</p><p class="padmin-drawer-section-body">${esc(topic.angulos || 'Sin datos.')}</p>
       <p class="padmin-drawer-section-title">POTENCIAL DE AUDIENCIA</p><p class="padmin-drawer-section-body" style="margin-bottom:0;">${esc(topic.audiencia || 'Sin datos.')}</p>
-      ${state.user!.role === 'director' || state.user!.role === 'produccion' ?
+      ${canManageRadar() ?
         `<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid var(--line-soft);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           ${topic.verification_status === 'risk' ? '<p style="width:100%;margin:0 0 8px;font-size:12px;color:var(--danger);">Riesgo alto: generar propuesta requiere confirmación explícita (force).</p>' : ''}
           ${(topic.verification_status === 'checking' || topic.verification_status === 'signal') ? `<p style="width:100%;margin:0 0 8px;font-size:12px;color:var(--accent-text);">${topic.verification_status === 'checking' ? 'En verificación: se puede generar, pero conviene corroborar.' : 'Solo señal: la propuesta puede necesitar más research.'}</p>` : ''}
@@ -150,7 +154,7 @@ function trustBadge(trust: string): string {
 function renderRadarFuentes(): string {
   const sources = state.data.radarSources;
   if (!sources) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
-  const canManage = state.user!.role === 'director' || state.user!.role === 'produccion';
+  const canManage = canManageRadar();
   const activeCount = sources.filter((s) => s.active).length;
   return `<div>
     <p class="padmin-lede" style="margin-top:0;">Lista editorial de dominios. En la detección, evidence con host <b>alta</b> sube confianza; <b>baja</b> la penaliza. Activas: ${activeCount}.</p>
