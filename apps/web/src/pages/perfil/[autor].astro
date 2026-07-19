@@ -1,18 +1,12 @@
 ---
 import EditorialLayout from '../../layouts/EditorialLayout.astro';
 import EmptyState from '../../components/EmptyState.astro';
-import { creaApi, OFFLINE_STATE, type Article } from '../../lib/api';
+import { creaApiOrFail, OFFLINE_STATE, type Article } from '../../lib/api';
 import { notaHref, initials, timeAgo } from '../../lib/format';
 
 const name = Astro.params.autor || '';
 
-let articles: Article[] = [];
-let failed = false;
-try {
-  articles = await creaApi<Article[]>('/api/public/authors/' + encodeURIComponent(name) + '/articles');
-} catch {
-  failed = true;
-}
+const { data: articles, failed } = await creaApiOrFail<Article[]>('/api/public/authors/' + encodeURIComponent(name) + '/articles', []);
 
 const canonical = articles[0]?.author_name || name;
 const sections: string[] = [];

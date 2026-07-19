@@ -1,15 +1,9 @@
 ---
 import EstudioLayout from '../../layouts/EstudioLayout.astro';
 import EmptyState from '../../components/EmptyState.astro';
-import { creaApi, OFFLINE_STATE, type Service } from '../../lib/api';
+import { creaApiOrFail, OFFLINE_STATE, type Service } from '../../lib/api';
 
-let services: Service[] = [];
-let failed = false;
-try {
-  services = await creaApi<Service[]>('/api/public/services');
-} catch {
-  failed = true;
-}
+const { data: services, failed } = await creaApiOrFail<Service[]>('/api/public/services', []);
 ---
 <EstudioLayout
   title="Servicios y paquetes comerciales"

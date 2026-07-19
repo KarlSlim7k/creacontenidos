@@ -7,36 +7,18 @@ import SponsorCard from '../components/SponsorCard.astro';
 import TercerTiempoEpisodes from '../components/TercerTiempoEpisodes.astro';
 import EmptyState from '../components/EmptyState.astro';
 import FooterEditorial from '../components/editorial/FooterEditorial.astro';
-import { creaApi, OFFLINE_STATE, type Article, type SocialPost } from '../lib/api';
-import { SECTIONS } from '../lib/sections';
+import { creaApiSafe, creaApiOrFail, OFFLINE_STATE, type Article, type SocialPost } from '../lib/api';
 import { seccionHref } from '../lib/format';
 
-let articles: Article[] = [];
-let feedFailed = false;
-try {
-  // ponytail: un solo request para todo el catálogo semilla (24 notas); si el
-  // archivo crece más de ~15 por sección, pasar a un request por bloque.
-  articles = await creaApi<Article[]>('/api/public/articles?limit=100');
-} catch {
-  feedFailed = true;
-}
+// ponytail: un solo request para todo el catálogo semilla (24 notas); si el
+// archivo crece más de ~15 por sección, pasar a un request por bloque.
+const { data: articles, failed: feedFailed } = await creaApiOrFail<Article[]>('/api/public/articles?limit=100', []);
 
 const hero = articles.slice(0, 4);
 const bySection = (name: string) => articles.filter((a) => a.section === name).slice(0, 4);
 
-let sponsored: Article[] = [];
-try {
-  sponsored = await creaApi<Article[]>('/api/public/articles?sponsored=true&limit=3');
-} catch {
-  sponsored = [];
-}
-
-let prodPreview: SocialPost[] = [];
-try {
-  prodPreview = await creaApi<SocialPost[]>('/api/public/social?network=tiktok&limit=3');
-} catch {
-  prodPreview = [];
-}
+const sponsored = await creaApiSafe<Article[]>('/api/public/articles?sponsored=true&limit=3', []);
+const prodPreview = await creaApiSafe<SocialPost[]>('/api/public/social?network=tiktok&limit=3', []);
 ---
 <EditorialLayout
   title="CREA Contenidos · Medio digital de Perote, Veracruz"
@@ -111,7 +93,7 @@ try {
           {prodPreview.length === 0 ? null : prodPreview.map((p) => (
             <a href="/producciones" style="display:block;width:100px;height:140px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#000;">
               {p.thumbnail_url
-                ? <img src={p.thumbnail_url} alt="" style="width:100%;height:100%;object-fit:cover;">
+                ? <img src={p.thumbnail_url} alt="" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async">
                 : <div style="width:100%;height:100%;background:#2F5233;"></div>}
             </a>
           ))}

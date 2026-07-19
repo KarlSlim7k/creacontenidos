@@ -100,7 +100,14 @@ app.use('/api', socialRouter);
 // ESM; import() dinámico (válido desde CJS) en vez de require().
 async function main() {
   const { handler: astroHandler } = await import('../../web/dist/server/entry.mjs');
-  app.use(express.static(path.join(__dirname, '../../web/dist/client')));
+  const webClientDir = path.join(__dirname, '../../web/dist/client');
+  // _astro/ son los bundles JS/CSS de Astro, con hash de contenido en el nombre
+  // (ej. comunidad.B792ozcr.css) — cambiar el contenido cambia el nombre, así
+  // que cachearlos "para siempre" es seguro. El resto de dist/client (robots.txt,
+  // assets/img/* copiados tal cual desde public/) NO tiene hash, así que solo
+  // cache corto: si se reemplaza el archivo, los visitantes lo ven en <1 día.
+  app.use('/_astro', express.static(path.join(webClientDir, '_astro'), { maxAge: '1y', immutable: true }));
+  app.use(express.static(webClientDir, { maxAge: '1d' }));
   app.use(astroHandler);
   app.use(errorHandler);
 

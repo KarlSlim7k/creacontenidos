@@ -17,6 +17,28 @@ export async function creaApi<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// La mayoría de los bloques de datos de una página (relacionadas, patrocinados,
+// "lo más leído"...) no son críticos: si fallan, la página igual debe renderizar
+// con una lista vacía en vez de tirar un 500. Este helper es ese try/catch.
+export async function creaApiSafe<T>(path: string, fallback: T): Promise<T> {
+  try {
+    return await creaApi<T>(path);
+  } catch {
+    return fallback;
+  }
+}
+
+// Igual que creaApiSafe, pero para páginas que muestran un EmptyState de
+// "detalle técnico" distinto de una lista genuinamente vacía — necesitan
+// saber SI falló, no solo el valor de reemplazo.
+export async function creaApiOrFail<T>(path: string, fallback: T): Promise<{ data: T; failed: boolean }> {
+  try {
+    return { data: await creaApi<T>(path), failed: false };
+  } catch {
+    return { data: fallback, failed: true };
+  }
+}
+
 // Puerto de renderEstudioSponsors() (main.js): deriva las marcas activas a
 // partir de las notas patrocinadas publicadas (no hay tabla de "clientes
 // destacados" separada) — una fila por sponsor_name distinto.

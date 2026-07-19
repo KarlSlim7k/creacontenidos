@@ -6,17 +6,11 @@
 // <script async src="tiktok.com/embed.js"> — el iframe nativo no lo necesita.
 import EditorialLayout from '../layouts/EditorialLayout.astro';
 import EmptyState from '../components/EmptyState.astro';
-import { creaApi, type SocialPost } from '../lib/api';
+import { creaApi, creaApiOrFail, type SocialPost } from '../lib/api';
 
 interface EmbedResult { embed_html: string | null }
 
-let posts: SocialPost[] = [];
-let failed = false;
-try {
-  posts = await creaApi<SocialPost[]>('/api/public/social?network=tiktok&limit=24');
-} catch {
-  failed = true;
-}
+const { data: posts, failed } = await creaApiOrFail<SocialPost[]>('/api/public/social?network=tiktok&limit=24', []);
 
 const embeds = await Promise.all(
   posts.map((p) => creaApi<EmbedResult>(`/api/public/social/${p.id}/embed`).catch(() => ({ embed_html: null })))
@@ -42,7 +36,7 @@ const embeds = await Promise.all(
       <div class="prod-grid">
         {posts.map((p, i) => (
           <article class="prod-card">
-            <div class="prod-embed" set:html={embeds[i].embed_html || (p.thumbnail_url ? `<img class="prod-thumb" src="${p.thumbnail_url}" alt="">` : '')} />
+            <div class="prod-embed" set:html={embeds[i].embed_html || (p.thumbnail_url ? `<img class="prod-thumb" src="${p.thumbnail_url}" alt="" loading="lazy" decoding="async">` : '')} />
             <div class="prod-meta">
               <p class="prod-author">{p.author_name || '@' + p.network}</p>
               <p class="prod-title">{p.title || p.external_url}</p>

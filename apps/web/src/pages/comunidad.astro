@@ -4,16 +4,11 @@ import MobileMenu from '../components/MobileMenu.astro';
 import NewsletterForm from '../components/NewsletterForm.astro';
 import LeadForm from '../components/LeadForm.astro';
 import FooterEditorial from '../components/editorial/FooterEditorial.astro';
-import { creaApi, type Author } from '../lib/api';
+import { creaApiSafe, type Author } from '../lib/api';
 import { perfilHref } from '../lib/format';
 import { SECTIONS } from '../lib/sections';
 
-let authors: Author[] = [];
-try {
-  authors = await creaApi<Author[]>('/api/public/authors');
-} catch {
-  authors = [];
-}
+const authors = await creaApiSafe<Author[]>('/api/public/authors', []);
 ---
 <EditorialLayout title="Comunidad" description="Cuéntanos lo que pasa en tu colonia, tu pueblo o tu negocio. La comunidad también hace CREA Contenidos.">
   <Fragment slot="mobile-menu">

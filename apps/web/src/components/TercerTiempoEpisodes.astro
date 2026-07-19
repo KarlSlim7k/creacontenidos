@@ -31,7 +31,7 @@ const embeds = await Promise.all(
 ) : (
   posts.map((p, i) => (
     <article>
-      <div class="img-ph ratio-4-3" style="margin-bottom:8px;overflow:hidden;" set:html={embeds[i].embed_html || (p.thumbnail_url ? `<img src="${p.thumbnail_url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">` : '<span class="cap">video: Tercer Tiempo</span>')} />
+      <div class="img-ph ratio-4-3" style="margin-bottom:8px;overflow:hidden;" set:html={embeds[i].embed_html || (p.thumbnail_url ? `<img src="${p.thumbnail_url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" decoding="async">` : '<span class="cap">video: Tercer Tiempo</span>')} />
       <p class="card-title" style="font-size:13px;margin-bottom:5px;"><a href={p.external_url} target="_blank" rel="noopener noreferrer">{p.title || 'Tercer Tiempo'}</a></p>
       <div style="font-size:11px;color:var(--text-mute);">{timeAgo(p.created_at)}</div>
     </article>

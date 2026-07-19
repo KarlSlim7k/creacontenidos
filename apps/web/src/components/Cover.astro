@@ -9,12 +9,14 @@ interface Props {
   style?: string;
   alt?: string;
   sponsored?: boolean;
+  eager?: boolean;
 }
-const { coverUrl, section = 'CREA', class: cls, style, alt = '', sponsored = false } = Astro.props;
+const { coverUrl, section = 'CREA', class: cls, style, alt = '', sponsored = false, eager = false } = Astro.props;
 ---
 <div class:list={['img-ph', cls]} style={style}>
   {coverUrl
-    ? <img src={coverUrl} alt={alt} style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">
+    ? <img src={coverUrl} alt={alt} style="width:100%;height:100%;object-fit:cover;border-radius:inherit;"
+        loading={eager ? 'eager' : 'lazy'} decoding={eager ? undefined : 'async'} fetchpriority={eager ? 'high' : undefined}>
     : <span class="cap">foto: {section.toLowerCase()}</span>}
   {sponsored && <span class="sponsored-tag">CONTENIDO PATROCINADO</span>}
 </div>

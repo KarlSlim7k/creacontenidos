@@ -17,7 +17,7 @@ const href = notaHref(a.slug);
 {variant === 'hero' ? (
   <article>
     <a href={href}>
-      <Cover coverUrl={a.cover_image_url} section={a.section} class={`ratio-4-3${featured ? ' featured' : ''}`} style="margin-bottom:10px;" />
+      <Cover coverUrl={a.cover_image_url} section={a.section} class={`ratio-4-3${featured ? ' featured' : ''}`} style="margin-bottom:10px;" eager={featured} />
       <div class="eyebrow" style="margin-bottom:6px;">{a.section.toUpperCase()}</div>
       <h2 class="card-title" style="font-size:17px;line-height:1.3;margin-bottom:6px;">{a.title}</h2>
     </a>

@@ -2,14 +2,9 @@
 import EstudioLayout from '../../layouts/EstudioLayout.astro';
 import StatCards from '../../components/estudio/StatCards.astro';
 import TercerTiempoEpisodes from '../../components/TercerTiempoEpisodes.astro';
-import { creaApi, getSponsors, type SiteMetrics } from '../../lib/api';
+import { creaApiSafe, getSponsors, type SiteMetrics } from '../../lib/api';
 
-let metrics: SiteMetrics | null = null;
-try {
-  metrics = await creaApi<SiteMetrics>('/api/public/site-metrics');
-} catch {
-  metrics = null;
-}
+const metrics = await creaApiSafe<SiteMetrics | null>('/api/public/site-metrics', null);
 const sponsors = await getSponsors();
 ---
 <EstudioLayout

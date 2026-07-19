@@ -56,7 +56,7 @@ const jsonLd = article ? newsArticleJsonLd(article, image) : null;
   noJsWarning="CREA Contenidos necesita JavaScript para mostrar esta nota. Actívalo para leerla completa."
 >
   <Fragment slot="head">
-    {jsonLd && <script type="application/ld+json" set:html={jsonLd} />}
+    {jsonLd && <script type="application/ld+json" set:html={jsonLd} is:inline />}
   </Fragment>
 
   <main class="container narrow" style="padding-top:28px;">
@@ -102,7 +102,7 @@ const jsonLd = article ? newsArticleJsonLd(article, image) : null;
           </div>
         </a>
 
-        <script define:vars={{ slug: article.slug }}>
+        <script define:vars={{ slug: article.slug }} is:inline>
           // Fire-and-forget: cuenta la vista para "lo más leído". Si falla, no afecta la lectura.
           fetch('/api/public/articles/' + encodeURIComponent(slug) + '/view', { method: 'POST' }).catch(() => {});
         </script>

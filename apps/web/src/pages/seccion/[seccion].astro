@@ -4,26 +4,14 @@ import ArticleCardRow from '../../components/ArticleCardRow.astro';
 import MostReadItem from '../../components/MostReadItem.astro';
 import EmptyState from '../../components/EmptyState.astro';
 import ChipGroup from '../../components/ChipGroup.astro';
-import { creaApi, OFFLINE_STATE, type Article } from '../../lib/api';
-import { SECTIONS, isSection } from '../../lib/sections';
+import { creaApiSafe, creaApiOrFail, OFFLINE_STATE, type Article } from '../../lib/api';
+import { isSection } from '../../lib/sections';
 
 const raw = Astro.params.seccion || '';
 const name = isSection(raw) ? raw : 'Local';
 
-let articles: Article[] = [];
-let articlesFailed = false;
-try {
-  articles = await creaApi<Article[]>('/api/public/articles?section=' + encodeURIComponent(name));
-} catch {
-  articlesFailed = true;
-}
-
-let mostRead: Article[] = [];
-try {
-  mostRead = await creaApi<Article[]>('/api/public/articles?sort=views&limit=3');
-} catch {
-  mostRead = [];
-}
+const { data: articles, failed: articlesFailed } = await creaApiOrFail<Article[]>('/api/public/articles?section=' + encodeURIComponent(name), []);
+const mostRead = await creaApiSafe<Article[]>('/api/public/articles?sort=views&limit=3', []);
 ---
 <EditorialLayout
   title={name}

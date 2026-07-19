@@ -3,15 +3,9 @@ import EditorialLayout from '../layouts/EditorialLayout.astro';
 import EmptyState from '../components/EmptyState.astro';
 import SponsorCard from '../components/SponsorCard.astro';
 import FooterEditorial from '../components/editorial/FooterEditorial.astro';
-import { creaApi, OFFLINE_STATE, type Article } from '../lib/api';
+import { creaApiOrFail, OFFLINE_STATE, type Article } from '../lib/api';
 
-let articles: Article[] = [];
-let failed = false;
-try {
-  articles = await creaApi<Article[]>('/api/public/articles?sponsored=true&limit=50');
-} catch {
-  failed = true;
-}
+const { data: articles, failed } = await creaApiOrFail<Article[]>('/api/public/articles?sponsored=true&limit=50', []);
 ---
 <EditorialLayout
   title="Contenido patrocinado"
