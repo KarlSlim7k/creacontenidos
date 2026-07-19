@@ -60,6 +60,11 @@ export function handleClick(e: MouseEvent) {
     case 'set-radar-status': setState({ radarStatus: attr(el, 'data-value') }); loadRadarTopics(true); break;
     case 'set-radar-verification': setState({ radarVerification: attr(el, 'data-value') }); loadRadarTopics(true); break;
     case 'load-more-topics': loadRadarTopics(false); break;
+    case 'refresh-radar':
+      loadRadarTopics(true);
+      loadRadarSummary();
+      loadRadarStats();
+      break;
     case 'retry-radar-stats': setState({ radarStatsError: null }); loadRadarStats(); break;
     case 'set-radar-stats-days': {
       const days = Number(attr(el, 'data-value')) || 30;

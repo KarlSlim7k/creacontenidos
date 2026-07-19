@@ -270,8 +270,12 @@ function renderCalibration(stats: RadarStats | null): string {
 function renderRadarTemas(): string {
   const topics = state.data.topics;
   if (!topics) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
-  // Valores = source en BD (topic-detection → 'Web Search'; FB → 'Facebook').
-  const sources = ['Todas', 'Web Search', 'Facebook'];
+  // Sources dinámicos: del summary del API (o de lo cargado si el summary falló).
+  const known = state.data.topicSummary
+    ? state.data.topicSummary.sources.slice()
+    : [...new Set(topics.map((t) => t.source).filter(Boolean))] as string[];
+  if (state.radarSource !== 'Todas' && !known.includes(state.radarSource)) known.push(state.radarSource);
+  const sources = ['Todas', ...known];
   const workflowStatuses = ['Todos', 'Nuevo', 'Revisado'];
   const verifications: { id: string; label: string }[] = [
     { id: 'Todos', label: 'Todos' },
@@ -291,11 +295,12 @@ function renderRadarTemas(): string {
   return `${renderSummary()}
     ${renderCalibration(state.data.radarStats)}
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;">${sourceChips}
-      ${state.user!.role === 'director' || state.user!.role === 'produccion' ?
-        `<span style="margin-left:auto;display:flex;gap:8px;">
-          ${topics.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-topics">🗑 Limpiar todo</button>' : ''}
-          <button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ${state.radarBusy ? 'disabled' : ''}>${state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias'}</button>
-        </span>` : ''}
+      <span style="margin-left:auto;display:flex;gap:8px;">
+        <button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" title="Recargar temas, resumen y calibración" data-action="refresh-radar">↻ Actualizar</button>
+        ${state.user!.role === 'director' || state.user!.role === 'produccion' ?
+          `${topics.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-topics">🗑 Limpiar todo</button>' : ''}
+          <button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ${state.radarBusy ? 'disabled' : ''}>${state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias'}</button>` : ''}
+      </span>
     </div>
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">${verifyChips}</div>
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;"><span style="font-size:10px;color:var(--text-mute);text-transform:uppercase;margin-right:4px;">Workflow</span>${workflowChips}</div>

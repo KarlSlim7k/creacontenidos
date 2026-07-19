@@ -684,14 +684,20 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
   } else if (screen === 'metricas') {
     adminApi<EditorialMetrics>('/api/editorial/metrics').then((r) => { setData({ metrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'radar') {
-    loadRadarTopics(true);
-    loadRadarSummary();
-    loadRadarStats();
-    if (state.radarTab === 'competencia' && !state.data.competitors) {
-      adminApi<CompetitorPost[]>('/api/listening/competitors').then((r) => { setData({ competitors: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    }
-    if (state.radarTab === 'fuentes') {
-      adminApi<RadarSource[]>('/api/listening/radar-sources').then((r) => { setData({ radarSources: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    // Carga perezosa por tab con caché: cambiar de tab no refetchea lo que ya
+    // está cargado (los datos se refrescan con el botón ↻ o tras mutaciones).
+    if (state.radarTab === 'competencia') {
+      if (!state.data.competitors) {
+        adminApi<CompetitorPost[]>('/api/listening/competitors').then((r) => { setData({ competitors: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+      }
+    } else if (state.radarTab === 'fuentes') {
+      if (!state.data.radarSources) {
+        adminApi<RadarSource[]>('/api/listening/radar-sources').then((r) => { setData({ radarSources: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+      }
+    } else {
+      if (!state.data.topics) loadRadarTopics(true);
+      if (!state.data.topicSummary) loadRadarSummary();
+      if (!state.data.radarStats) loadRadarStats();
     }
   } else if (screen === 'propuestas') {
     loadProposals('propuesta', 'status=propuesta');
