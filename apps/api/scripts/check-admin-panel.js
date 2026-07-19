@@ -94,7 +94,7 @@ async function main() {
         assert(!appEl.innerHTML.includes('undefined'), `"undefined" en configuracion/${tab}`);
       }
     } else if (s === 'radar') {
-      for (const tab of ['temas', 'competencia']) { state.radarTab = tab; render(); }
+      for (const tab of ['temas', 'competencia', 'fuentes']) { state.radarTab = tab; render(); }
       state.selectedRadarId = 1; render(); state.selectedRadarId = null;
     } else {
       render();

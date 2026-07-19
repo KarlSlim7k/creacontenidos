@@ -74,9 +74,17 @@ async function perplexitySearch(systemPrompt, userMessage) {
 }
 
 async function detectTopics(query) {
+  const { VERIFICATION_JSON_SPEC } = require('./topic-verification');
   const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-  const system = `Eres un analista de tendencias para un medio editorial en Perote, Veracruz, México. Detectas temas relevantes para audiencia local y regional. Hoy es ${fecha}. Busca en la web noticias y tendencias recientes (últimos días) — nunca reportes eventos de años anteriores como si fueran de hoy.`;
-  const user = `Busca tendencias y noticias actuales relevantes para un medio de contenido en Perote, Veracruz sobre: "${query}". Para cada topic, devuelve un JSON array con objetos que tengan: title, source (Web Search), mentions (número estimado), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). En "antecedentes" siempre precisa cuándo ocurrió el hecho (fecha exacta o al menos día/semana aproximada según la fuente) — si la fuente no da fecha, dilo explícitamente ("fecha exacta no reportada por la fuente") en vez de omitirlo. Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
+  const system = `Eres un analista de tendencias y verificación para un medio editorial en Perote, Veracruz, México. Detectas temas relevantes y evalúas si son defendibles (no rumor ni clickbait). Hoy es ${fecha}. Busca en la web noticias y tendencias recientes (últimos días) — nunca reportes eventos de años anteriores como si fueran de hoy.`;
+  const user = `Busca tendencias y noticias actuales relevantes para un medio de contenido en Perote, Veracruz sobre: "${query}".
+
+Para cada topic, devuelve un JSON array con objetos: title, source (Web Search), mentions (número estimado de interés, NO es confianza), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos, audiencia.
+En "antecedentes" siempre precisa cuándo ocurrió el hecho (fecha exacta o al menos día/semana aproximada según la fuente) — si la fuente no da fecha, dilo explícitamente ("fecha exacta no reportada por la fuente").
+
+${VERIFICATION_JSON_SPEC}
+
+Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics.`;
   const { content, usage } = await perplexitySearch(system, user);
   return { topics: parseJson(content), usage, model: 'sonar-pro', provider: 'perplexity' };
 }
@@ -86,13 +94,25 @@ async function detectTopics(query) {
 // topic-detection cuando hay FIRECRAWL_API_KEY + URLs de fuentes.
 // markdownSources: [{ url, markdown }]
 async function detectTopicsFromMarkdown(query, markdownSources) {
+  const { VERIFICATION_JSON_SPEC } = require('./topic-verification');
   const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-  const system = `Eres un analista de tendencias para un medio editorial en Perote, Veracruz, México. Detectas temas relevantes para audiencia local y regional. Hoy es ${fecha}. Vas a recibir markdown YA scrapeado de sitios web públicos — no busques nada, solo analiza el texto dado. Nunca reportes eventos de años anteriores como si fueran de hoy.`;
+  const system = `Eres un analista de tendencias y verificación para un medio editorial en Perote, Veracruz, México. Hoy es ${fecha}. Vas a recibir markdown YA scrapeado de sitios web públicos — no busques nada, solo analiza el texto dado. Evalúa defensibilidad (no rumor ni clickbait). Nunca reportes eventos de años anteriores como si fueran de hoy.`;
   const blocks = (markdownSources || []).map((s, i) => {
     const body = String(s.markdown || '').slice(0, 6000);
     return `### Fuente ${i + 1}: ${s.url || 'sin-url'}\n${body}`;
   }).join('\n\n');
-  const user = `Consulta editorial: "${query}".\n\nMarkdown de fuentes:\n${blocks}\n\nA partir SOLO de ese markdown, extrae temas actuales relevantes para un medio en Perote, Veracruz. Para cada topic, devuelve un JSON array con objetos: title, source (Web Search), mentions (número estimado o 0), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos (ángulos de cobertura sugeridos), audiencia (potencial de audiencia). En "antecedentes" precisa cuándo ocurrió el hecho según la fuente — si no hay fecha, dilo explícitamente ("fecha exacta no reportada por la fuente"). Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics. Si el markdown no trae temas útiles, devuelve [].`;
+  const user = `Consulta editorial: "${query}".
+
+Markdown de fuentes:
+${blocks}
+
+A partir SOLO de ese markdown, extrae temas actuales relevantes para un medio en Perote, Veracruz. Para cada topic, JSON array con: title, source (Web Search), mentions (0 si no hay dato), sentiment (positivo/negativo/neutral), antecedentes, actores, angulos, audiencia.
+En "antecedentes" precisa cuándo ocurrió el hecho según la fuente — si no hay fecha, dilo explícitamente.
+En evidence.url usa solo URLs que aparezcan en el markdown de entrada (o la URL de la sección Fuente N).
+
+${VERIFICATION_JSON_SPEC}
+
+Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics. Si el markdown no trae temas útiles, devuelve [].`;
   const { content, usage } = await chatComplete(system, user, 'default');
   return { topics: parseJson(content), usage, model: MODELS.default, provider: 'firecrawl' };
 }
@@ -112,10 +132,20 @@ async function detectCompetitorPosts(competitors) {
 // detectCompetitorPosts, acá NO se busca en la web — el texto ya viene dado por
 // el scraper — así que basta chatComplete (Nous) en vez de Perplexity.
 async function enrichFacebookTopics(posts) {
+  const { VERIFICATION_JSON_SPEC } = require('./topic-verification');
   const fecha = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-  const system = `Eres un analista de tendencias para un medio editorial en Perote, Veracruz, México. Hoy es ${fecha}. Vas a recibir publicaciones YA recopiladas de páginas de Facebook de medios competidores — no busques nada, solo analiza el texto dado.`;
-  const postsJson = JSON.stringify(posts.map((p) => ({ source_account: p.source_account, post_text: p.post_text, post_date: p.post_date })));
-  const user = `Publicaciones (array de longitud ${posts.length}):\n${postsJson}\n\nPara CADA publicación, en el mismo orden, devuelve un objeto con: title (tema editorial breve derivado del post, no copies el texto literal), sentiment (positivo/negativo/neutral), antecedentes (qué pasó y cuándo, según post_date — si no hay fecha dilo explícitamente), actores, angulos (ángulos de cobertura sugeridos para CREA Contenidos), audiencia (potencial de audiencia local). Devuelve SOLO un JSON array de longitud ${posts.length}, mismo orden que la entrada, sin texto adicional.`;
+  const system = `Eres un analista de tendencias y verificación para un medio editorial en Perote, Veracruz, México. Hoy es ${fecha}. Vas a recibir publicaciones YA recopiladas de Facebook — no busques nada, solo analiza el texto. Un solo post de red social suele ser source_count=1 y kind social; no marques verified sin fuente primaria o corroboración.`;
+  const postsJson = JSON.stringify(posts.map((p) => ({ source_account: p.source_account, post_text: p.post_text, post_date: p.post_date, post_url: p.post_url || null })));
+  const user = `Publicaciones (array de longitud ${posts.length}):
+${postsJson}
+
+Para CADA publicación, en el mismo orden, devuelve un objeto con: title (tema editorial breve, no copies el texto literal), sentiment (positivo/negativo/neutral), antecedentes (qué pasó y cuándo, según post_date — si no hay fecha dilo explícitamente), actores, angulos, audiencia,
+source (usa "Facebook"),
+evidence (incluye la cuenta y post_url si viene en la entrada).
+
+${VERIFICATION_JSON_SPEC}
+
+Devuelve SOLO un JSON array de longitud ${posts.length}, mismo orden que la entrada, sin texto adicional.`;
   const { content } = await chatComplete(system, user, 'default');
   return parseJson(content);
 }

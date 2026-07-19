@@ -2,7 +2,7 @@
 import {
   state, setState, setData, adminApi, adminApiBlob, loadScreenData, mergeKey, setProposalsKey, isSoundMuted,
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
-  type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry,
+  type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource, type RadarStats,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
 } from './store';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
@@ -57,7 +57,25 @@ export function handleClick(e: MouseEvent) {
       break;
     case 'set-radar-source': setState({ radarSource: attr(el, 'data-value') }); break;
     case 'set-radar-status': setState({ radarStatus: attr(el, 'data-value') }); break;
-    case 'set-radar-tab': setState({ radarTab: attr(el, 'data-tab') as 'temas' | 'competencia' }); loadScreenData('radar'); break;
+    case 'set-radar-verification': setState({ radarVerification: attr(el, 'data-value') }); break;
+    case 'set-radar-stats-days': {
+      const days = Number(attr(el, 'data-value')) || 30;
+      setState({ radarStatsDays: days });
+      adminApi('/api/listening/radar-stats?days=' + days)
+        .then((r) => { setData({ radarStats: r as RadarStats }); })
+        .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+      break;
+    }
+    case 'set-radar-tab': setState({ radarTab: attr(el, 'data-tab') as 'temas' | 'competencia' | 'fuentes' }); loadScreenData('radar'); break;
+    case 'toggle-radar-source': {
+      const id = Number(attr(el, 'data-id'));
+      const active = attr(el, 'data-active') !== 'true';
+      adminApi(`/api/listening/radar-sources/${id}`, { method: 'PATCH', body: { active } })
+        .then(() => adminApi('/api/listening/radar-sources'))
+        .then((rows) => { setData({ radarSources: rows as RadarSource[] }); })
+        .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+      break;
+    }
     case 'detect-competitors':
       setState({ competitorsBusy: true });
       adminApi('/api/listening/competitors/detect', { method: 'POST' })
@@ -216,12 +234,31 @@ export function handleClick(e: MouseEvent) {
       break;
     case 'generate-proposal-from-topic': {
       const topicId = Number(attr(el, 'data-id'));
+      const forceRisk = attr(el, 'data-force-risk') === '1';
+      if (forceRisk) {
+        const ok = window.confirm(
+          'Este tema está en riesgo editorial alto (rumor, clickbait o fuente débil).\n\n¿Forzar generación de propuesta de todas formas?'
+        );
+        if (!ok) break;
+      }
       const format = document.getElementById('proposal-format-' + topicId) as HTMLSelectElement | null;
       setState({ generatingProposal: true });
-      adminApi<Proposal>('/api/content/generate-proposal', { method: 'POST', body: { topic_id: topicId, format: format ? format.value : 'nota' } })
+      const body: { topic_id: number; format: string; force?: boolean } = {
+        topic_id: topicId,
+        format: format ? format.value : 'nota',
+      };
+      if (forceRisk) body.force = true;
+      adminApi<Proposal & { warnings?: string[] }>('/api/content/generate-proposal', { method: 'POST', body })
         .then((proposal) => {
           state.data.proposalsByKey = {};
-          setState({ generatingProposal: false, selectedRadarId: null, successMsg: 'Propuesta creada: ' + proposal.title });
+          const warn = Array.isArray(proposal.warnings) && proposal.warnings.length
+            ? ' — ' + proposal.warnings.join(' ')
+            : '';
+          setState({
+            generatingProposal: false,
+            selectedRadarId: null,
+            successMsg: 'Propuesta creada: ' + proposal.title + warn,
+          });
         })
         .catch((err: ApiError) => { setState({ generatingProposal: false, errorMsg: err.message }); });
       break;

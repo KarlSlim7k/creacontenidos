@@ -4,7 +4,7 @@ const config = require('../../config');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { detectCompetitorPosts, enrichFacebookTopics, logActivity } = require('../../lib/ai-client');
 const { scrapeCompetitorPosts } = require('../../lib/competitor-scraper-client');
-const { detectAndSaveTopics } = require('../../lib/topic-detection');
+const { detectAndSaveTopics, insertTopicIfNew } = require('../../lib/topic-detection');
 
 const router = express.Router();
 
@@ -45,9 +45,8 @@ async function insertCompetitorPosts(posts) {
 }
 
 // Convierte publicaciones de Facebook recién scrapeadas en topics de RADAR
-// (source='Facebook'), para que ese chip en Temas filtre datos reales. Mismo
-// dedupe por título+24h que usa POST /topics/detect. mentions se calcula acá
-// (reactions+comments+shares reales), no se le pide a la IA que lo invente.
+// (source='Facebook'). Mismo dedupe + normalización de verificación que
+// POST /topics/detect (insertTopicIfNew). mentions = engagement real del post.
 async function generateTopicsFromFacebookPosts(posts, userId) {
   const enriched = await enrichFacebookTopics(posts);
   const insertedTopics = [];
@@ -55,20 +54,32 @@ async function generateTopicsFromFacebookPosts(posts, userId) {
     const post = posts[i];
     const topic = enriched[i] || {};
     const title = topic.title || String(post.post_text || '').slice(0, 120) || 'Publicación de Facebook';
-    const { rows: dupes } = await pool.query(
-      `SELECT id FROM topics WHERE lower(title) = lower($1) AND detected_at >= now() - interval '24 hours'`,
-      [title]
-    );
-    if (dupes.length) continue;
     const mentions = (Number(post.reactions) || 0) + (Number(post.comments) || 0) + (Number(post.shares) || 0);
-    const { rows } = await pool.query(
-      `INSERT INTO topics (title, source, mentions, sentiment, antecedentes, actores, angulos, audiencia)
-       VALUES ($1, 'Facebook', $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [title, mentions, topic.sentiment || null, topic.antecedentes || null, topic.actores || null, topic.angulos || null, topic.audiencia || null]
+    // Si el modelo no trajo evidence, anclar al post scrapeado
+    const evidence = Array.isArray(topic.evidence) && topic.evidence.length
+      ? topic.evidence
+      : [{
+        label: post.source_account || 'Facebook',
+        url: post.post_url || null,
+        kind: 'social',
+        supports: 'publicación en red',
+        reliable: false,
+      }];
+    const row = await insertTopicIfNew(
+      {
+        ...topic,
+        title,
+        evidence,
+        source_count: topic.source_count != null ? topic.source_count : 1,
+      },
+      { source: 'Facebook', mentions }
     );
-    insertedTopics.push(rows[0]);
+    if (row) insertedTopics.push(row);
   }
-  await logActivity(pool, 'radar_detect_fb', `${insertedTopics.length} topics generados desde Facebook`, userId, 'exito', { posts_count: posts.length });
+  await logActivity(pool, 'radar_detect_fb', `${insertedTopics.length} topics generados desde Facebook`, userId, 'exito', {
+    posts_count: posts.length,
+    inserted: insertedTopics.length,
+  });
   return insertedTopics;
 }
 
@@ -87,7 +98,9 @@ router.post('/topics/detect', requireAuth, requireRole('director', 'produccion')
   }
 });
 
-// GET /api/listening/topics?source=&status= — pantalla RADAR del panel admin.
+// GET /api/listening/topics?source=&status=&verification_status= — pantalla RADAR.
+// verification_status: verified|checking|signal|risk (independiente de status Nuevo/Revisado).
+// Topics pre-migración: confidence y verification_status pueden ser null (sin evaluar).
 router.get('/topics', requireAuth, async (req, res, next) => {
   try {
     const params = [];
@@ -100,9 +113,15 @@ router.get('/topics', requireAuth, async (req, res, next) => {
       params.push(req.query.status);
       clauses.push(`status = $${params.length}`);
     }
+    if (req.query.verification_status) {
+      params.push(req.query.verification_status);
+      clauses.push(`verification_status = $${params.length}`);
+    }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT id, title, source, mentions, sentiment, status, antecedentes, actores, angulos, audiencia, detected_at
+      `SELECT id, title, source, mentions, sentiment, status, antecedentes, actores, angulos, audiencia,
+              confidence, verification_status, known_facts, unknown_facts, evidence, risk_flags,
+              editorial_decision, source_count, detected_at
        FROM topics ${where} ORDER BY detected_at DESC`,
       params
     );
@@ -343,6 +362,246 @@ router.delete('/competitors/accounts/:id', requireAuth, requireRole('director'),
   try {
     const { rows } = await pool.query('DELETE FROM competitor_facebook_accounts WHERE id = $1 RETURNING id', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Cuenta no encontrada' });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/listening/radar-stats?days=30 — calibración RADAR (Fase 6).
+// Distribución de verification_status, gate risk, propuestas por status, detecciones.
+// Solo lectura; no gasta IA. Auth: cualquier usuario autenticado.
+router.get('/radar-stats', requireAuth, async (req, res, next) => {
+  try {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+
+    const { rows: statusRows } = await pool.query(
+      `SELECT
+         COALESCE(verification_status, 'unevaluated') AS status,
+         count(*)::int AS count,
+         round(avg(confidence)::numeric, 1) AS avg_confidence
+       FROM topics
+       WHERE detected_at >= now() - ($1 || ' days')::interval
+       GROUP BY 1
+       ORDER BY 2 DESC`,
+      [days]
+    );
+
+    const totalTopics = statusRows.reduce((s, r) => s + r.count, 0);
+    const byStatus = {};
+    for (const r of statusRows) {
+      byStatus[r.status] = {
+        count: r.count,
+        pct: totalTopics ? Math.round((r.count / totalTopics) * 1000) / 10 : 0,
+        avg_confidence: r.avg_confidence != null ? Number(r.avg_confidence) : null,
+      };
+    }
+
+    const { rows: propRows } = await pool.query(
+      `SELECT
+         COALESCE(metadata->>'verification_status', 'unknown') AS vstatus,
+         count(*)::int AS count
+       FROM activity_log
+       WHERE action = 'generate_proposal'
+         AND status = 'exito'
+         AND created_at >= now() - ($1 || ' days')::interval
+       GROUP BY 1`,
+      [days]
+    );
+    const proposalsByStatus = {};
+    let proposalsGenerated = 0;
+    for (const r of propRows) {
+      proposalsByStatus[r.vstatus] = r.count;
+      proposalsGenerated += r.count;
+    }
+
+    const { rows: blockRows } = await pool.query(
+      `SELECT count(*)::int AS n FROM activity_log
+       WHERE action = 'generate_proposal'
+         AND status = 'fallo'
+         AND metadata->>'reason' = 'verification_risk'
+         AND created_at >= now() - ($1 || ' days')::interval`,
+      [days]
+    );
+    const blockedRisk = blockRows[0] ? blockRows[0].n : 0;
+
+    const { rows: forcedRows } = await pool.query(
+      `SELECT count(*)::int AS n FROM activity_log
+       WHERE action = 'generate_proposal'
+         AND status = 'exito'
+         AND (metadata->>'forced')::boolean = true
+         AND metadata->>'verification_status' = 'risk'
+         AND created_at >= now() - ($1 || ' days')::interval`,
+      [days]
+    );
+    const forcedRisk = forcedRows[0] ? forcedRows[0].n : 0;
+
+    const { rows: detectRows } = await pool.query(
+      `SELECT
+         count(*)::int AS runs,
+         coalesce(sum((metadata->>'count')::int), 0)::int AS inserted,
+         coalesce(sum((metadata->>'upgraded')::int), 0)::int AS upgraded,
+         coalesce(sum((metadata->>'skipped_similar')::int), 0)::int AS skipped_similar
+       FROM activity_log
+       WHERE action IN ('radar_detect', 'radar_detect_auto', 'radar_detect_fb')
+         AND status = 'exito'
+         AND created_at >= now() - ($1 || ' days')::interval`,
+      [days]
+    );
+    const detection = detectRows[0] || { runs: 0, inserted: 0, upgraded: 0, skipped_similar: 0 };
+
+    const { rows: srcRows } = await pool.query(
+      `SELECT trust, count(*)::int AS n FROM radar_sources WHERE active = true GROUP BY trust`
+    );
+    const sourcesByTrust = { high: 0, medium: 0, low: 0 };
+    let sourcesActive = 0;
+    for (const r of srcRows) {
+      sourcesByTrust[r.trust] = r.n;
+      sourcesActive += r.n;
+    }
+
+    // Hints de calibración (reglas simples, no ML)
+    const hints = [];
+    const riskPct = (byStatus.risk && byStatus.risk.pct) || 0;
+    const verifiedPct = (byStatus.verified && byStatus.verified.pct) || 0;
+    if (totalTopics >= 5 && riskPct >= 40) {
+      hints.push('≥40% de topics en risk: revisar falsos positivos en prompts o lista de fuentes low.');
+    }
+    if (totalTopics >= 5 && verifiedPct >= 70) {
+      hints.push('≥70% verified: puede haber over-trust del modelo; el cap de multi-fuente debería estar activo.');
+    }
+    if (blockedRisk === 0 && (byStatus.risk && byStatus.risk.count > 0) && proposalsGenerated > 0) {
+      hints.push('Hay topics risk pero 0 bloqueos del gate: nadie intentó generar desde risk (o no hay logs recientes).');
+    }
+    if (forcedRisk >= 3) {
+      hints.push(`Se forzó propuesta desde risk ${forcedRisk} veces: revisar si el gate es demasiado estricto o la agenda está sucia.`);
+    }
+    if (detection.skipped_similar > detection.inserted && detection.runs > 0) {
+      hints.push('Más skips por similitud que inserts: dedupe activo; si faltan temas legítimos, bajar TITLE_SIMILARITY_THRESHOLD.');
+    }
+    if (!hints.length) {
+      hints.push('Sin alertas automáticas en la ventana. Revisá docs/ia/radar-calibracion.md para umbrales.');
+    }
+
+    res.json({
+      days,
+      topics: { total: totalTopics, by_status: byStatus },
+      proposals: {
+        generated: proposalsGenerated,
+        by_verification_status: proposalsByStatus,
+        blocked_risk: blockedRisk,
+        forced_from_risk: forcedRisk,
+      },
+      detection: {
+        runs: detection.runs,
+        inserted: detection.inserted,
+        upgraded: detection.upgraded,
+        skipped_similar: detection.skipped_similar,
+      },
+      sources: { active: sourcesActive, by_trust: sourcesByTrust },
+      hints,
+      knobs: {
+        confidence_verified_min: 75,
+        confidence_risk_max: 39,
+        title_similarity: 0.45,
+        scrape_multi_bonus: 10,
+        trust_high_bonus: 8,
+        trust_medium_bonus: 2,
+        trust_low_malus: 12,
+        doc: 'docs/ia/radar-calibracion.md',
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Lista editorial de fuentes RADAR (radar_sources, migración 035) ---
+
+function normalizeDomain(raw) {
+  let d = String(raw || '').trim().toLowerCase();
+  d = d.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].replace(/^\./, '');
+  return d;
+}
+
+// GET /api/listening/radar-sources — panel RADAR tab Fuentes (cualquier auth).
+router.get('/radar-sources', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, domain, label, trust, active, notes, created_at
+       FROM radar_sources ORDER BY trust ASC, label ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/listening/radar-sources — director | produccion
+router.post('/radar-sources', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const domain = normalizeDomain(req.body && req.body.domain);
+    const label = req.body && typeof req.body.label === 'string' ? req.body.label.trim() : '';
+    const trust = String((req.body && req.body.trust) || 'medium').toLowerCase();
+    const notes = req.body && req.body.notes != null ? String(req.body.notes).slice(0, 500) : null;
+    const errors = {};
+    if (!domain || !domain.includes('.')) errors.domain = 'Dominio inválido (ej. perote.gob.mx)';
+    if (!label) errors.label = 'Campo requerido';
+    if (!['high', 'medium', 'low'].includes(trust)) errors.trust = 'Debe ser high, medium o low';
+    if (Object.keys(errors).length) return res.status(400).json({ error: 'Datos inválidos', fields: errors });
+
+    const active = req.body.active === undefined ? true : Boolean(req.body.active);
+    const { rows } = await pool.query(
+      `INSERT INTO radar_sources (domain, label, trust, active, notes)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [domain, label, trust, active, notes]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'Ese dominio ya está en la lista' });
+    }
+    next(err);
+  }
+});
+
+// PATCH /api/listening/radar-sources/:id
+router.patch('/radar-sources/:id', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const { label, trust, active, notes } = req.body || {};
+    if (label === undefined && trust === undefined && active === undefined && notes === undefined) {
+      return res.status(400).json({ error: 'Nada que actualizar' });
+    }
+    if (trust !== undefined && !['high', 'medium', 'low'].includes(String(trust).toLowerCase())) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { trust: 'Debe ser high, medium o low' } });
+    }
+    const { rows } = await pool.query(
+      `UPDATE radar_sources SET
+         label = COALESCE($1, label),
+         trust = COALESCE($2, trust),
+         active = COALESCE($3, active),
+         notes = COALESCE($4, notes)
+       WHERE id = $5 RETURNING *`,
+      [
+        label === undefined ? null : String(label).trim(),
+        trust === undefined ? null : String(trust).toLowerCase(),
+        active === undefined ? null : Boolean(active),
+        notes === undefined ? null : (notes == null ? null : String(notes).slice(0, 500)),
+        req.params.id,
+      ]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Fuente no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/listening/radar-sources/:id — solo director
+router.delete('/radar-sources/:id', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('DELETE FROM radar_sources WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Fuente no encontrada' });
     res.status(204).end();
   } catch (err) {
     next(err);

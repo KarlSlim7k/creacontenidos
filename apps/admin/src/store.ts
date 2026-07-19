@@ -159,6 +159,18 @@ export interface SiteMetrics {
   updated_at: string;
 }
 
+/** Evidencia de ficha RADAR (JSONB evidence[]). */
+export interface TopicEvidence {
+  label: string;
+  url?: string | null;
+  kind?: string | null;
+  supports?: string | null;
+  reliable?: boolean | null;
+}
+
+/** verified|checking|signal|risk — null = sin evaluar (topics pre-Fase 2). */
+export type VerificationStatus = 'verified' | 'checking' | 'signal' | 'risk';
+
 export interface Topic {
   id: number;
   title: string;
@@ -170,6 +182,14 @@ export interface Topic {
   actores: string | null;
   angulos: string | null;
   audiencia: string | null;
+  confidence: number | null;
+  verification_status: VerificationStatus | null;
+  known_facts: string | null;
+  unknown_facts: string | null;
+  evidence: TopicEvidence[] | null;
+  risk_flags: Array<string | { code?: string; message?: string }> | null;
+  editorial_decision: string | null;
+  source_count: number | null;
   detected_at: string;
 }
 
@@ -195,6 +215,41 @@ export interface FbAccount {
   handle_or_url: string;
   active: boolean;
   created_at: string;
+}
+
+/** Fuente de la lista editorial RADAR (radar_sources). */
+export interface RadarSource {
+  id: number;
+  domain: string;
+  label: string;
+  trust: 'high' | 'medium' | 'low';
+  active: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
+/** GET /api/listening/radar-stats — calibración Fase 6. */
+export interface RadarStats {
+  days: number;
+  topics: {
+    total: number;
+    by_status: Record<string, { count: number; pct: number; avg_confidence: number | null }>;
+  };
+  proposals: {
+    generated: number;
+    by_verification_status: Record<string, number>;
+    blocked_risk: number;
+    forced_from_risk: number;
+  };
+  detection: {
+    runs: number;
+    inserted: number;
+    upgraded: number;
+    skipped_similar: number;
+  };
+  sources: { active: number; by_trust: Record<string, number> };
+  hints: string[];
+  knobs?: Record<string, string | number>;
 }
 
 export interface DistChannel {
@@ -259,6 +314,8 @@ export interface AdminData {
   distLog: DistLogEntry[] | null;
   distChannels: DistChannel[] | null;
   competitors: CompetitorPost[] | null;
+  radarSources: RadarSource[] | null;
+  radarStats: RadarStats | null;
   siteMetrics: SiteMetrics | null;
   fbAccounts: FbAccount[] | null;
 }
@@ -298,8 +355,12 @@ export interface State {
   distBusy: string | null;
   radarSource: string;
   radarStatus: string;
+  /** Filtro de verification_status: Todos | verified | checking | signal | risk | none */
+  radarVerification: string;
   radarBusy: boolean;
-  radarTab: 'temas' | 'competencia';
+  radarTab: 'temas' | 'competencia' | 'fuentes';
+  /** Ventana de radar-stats: 7 | 30 */
+  radarStatsDays: number;
   competitorsBusy: boolean;
   leadsStatus: string;
   propuestaRejecting: number | null;
@@ -369,11 +430,11 @@ export const state: State = {
     ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null,
     socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null,
     newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null,
-    distLog: null, distChannels: null, competitors: null, siteMetrics: null, fbAccounts: null,
+    distLog: null, distChannels: null, competitors: null, radarSources: null, radarStats: null, siteMetrics: null, fbAccounts: null,
   },
   distBusy: null,
-  radarSource: 'Todas', radarStatus: 'Todos', radarBusy: false,
-  radarTab: 'temas', competitorsBusy: false,
+  radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos', radarBusy: false,
+  radarTab: 'temas', competitorsBusy: false, radarStatsDays: 30,
   leadsStatus: 'todos',
   propuestaRejecting: null,
   editorProposalId: null, editorDraft: null,
@@ -560,8 +621,14 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     adminApi<EditorialMetrics>('/api/editorial/metrics').then((r) => { setData({ metrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'radar') {
     adminApi<Topic[]>('/api/listening/topics').then((r) => { setData({ topics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    adminApi<RadarStats>('/api/listening/radar-stats?days=' + (state.radarStatsDays || 30))
+      .then((r) => { setData({ radarStats: r }); })
+      .catch(() => { /* best-effort calibración */ });
     if (state.radarTab === 'competencia' && !state.data.competitors) {
       adminApi<CompetitorPost[]>('/api/listening/competitors').then((r) => { setData({ competitors: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    }
+    if (state.radarTab === 'fuentes') {
+      adminApi<RadarSource[]>('/api/listening/radar-sources').then((r) => { setData({ radarSources: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     }
   } else if (screen === 'propuestas') {
     loadProposals('propuesta', 'status=propuesta');

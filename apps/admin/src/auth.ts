@@ -57,7 +57,7 @@ export function logout() {
       ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null,
       socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null,
       newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null,
-      distLog: null, distChannels: null, competitors: null, siteMetrics: null, fbAccounts: null,
+      distLog: null, distChannels: null, competitors: null, radarSources: null, radarStats: null, siteMetrics: null, fbAccounts: null,
     },
   });
 }

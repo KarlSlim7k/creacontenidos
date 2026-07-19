@@ -30,37 +30,124 @@ FROM (VALUES
 JOIN users u ON u.email = v.email
 WHERE NOT EXISTS (SELECT 1 FROM story_ideas si WHERE si.title = v.title);
 
--- Ficha de contexto para RADAR (temas detectados por listening)
-INSERT INTO topics (title, source, mentions, sentiment, status, antecedentes, actores, angulos, audiencia)
-SELECT v.title, v.source, v.mentions, v.sentiment, v.status, v.antecedentes, v.actores, v.angulos, v.audiencia
+-- Ficha de contexto + verificación demo para RADAR (Fase 1: null-safe UI)
+INSERT INTO topics (
+  title, source, mentions, sentiment, status, antecedentes, actores, angulos, audiencia,
+  confidence, verification_status, known_facts, unknown_facts, evidence, risk_flags,
+  editorial_decision, source_count
+)
+SELECT v.title, v.source, v.mentions::int, v.sentiment, v.status, v.antecedentes, v.actores, v.angulos, v.audiencia,
+  v.confidence::smallint, v.verification_status, v.known_facts, v.unknown_facts,
+  v.evidence::jsonb, v.risk_flags::jsonb, v.editorial_decision, v.source_count::smallint
 FROM (VALUES
   ('Aumento de robos a comercios en el centro', 'Facebook', 34, 'negativo', 'Nuevo',
     'Tercer reporte de robos a locales del centro en dos semanas. La página de la policía municipal no ha emitido comunicado oficial.',
     'Policía municipal, Cámara de Comercio de Perote, comerciantes afectados',
     'Cronología de los tres casos; entrevista a comerciantes; postura de la policía municipal',
-    'Alto — tema de seguridad genera alta interacción local'),
-  ('Nueva ciclovía en la avenida Reforma', 'Perplexity', 12, 'positivo', 'Nuevo',
+    'Alto — tema de seguridad genera alta interacción local',
+    22, 'risk',
+    'Circulan reportes en redes sobre robos en el centro; no hay cifras oficiales.',
+    'Número de casos, horarios, confirmación policial.',
+    '[{"label":"Hilo en Facebook","kind":"social","supports":"rumor local","reliable":false}]',
+    '["titular_alarmista","sin_autoridad_citada","single_source"]',
+    'No titular como hecho. Verificar con policía municipal antes de cualquier nota.',
+    1),
+  ('Nueva ciclovía en la avenida Reforma', 'Web Search', 12, 'positivo', 'Nuevo',
     'El ayuntamiento publicó el trazo preliminar de una ciclovía piloto de 2km sobre avenida Reforma.',
     'Ayuntamiento de Perote, colectivo ciclista local, comerciantes de la avenida',
     'Mapa del trazo; reacciones de comerciantes; comparación con otras ciudades de la región',
-    'Medio — interés de nicho pero buen potencial de compartidos'),
-  ('Quejas por corte de agua en la colonia Centro', 'TikTok', 58, 'negativo', 'Revisado',
+    'Medio — interés de nicho pero buen potencial de compartidos',
+    86, 'verified',
+    'El ayuntamiento publicó trazo preliminar de ciclovía piloto (2 km) en avenida Reforma.',
+    'Fecha de obra y presupuesto detallado.',
+    '[{"label":"Ayuntamiento de Perote","kind":"primary","supports":"trazo y alcance","reliable":true},{"label":"Medio local","kind":"secondary","supports":"corroboración","reliable":true}]',
+    '[]',
+    'Apto para propuesta. Citar comunicado municipal y distinguir preliminar vs obra iniciada.',
+    2),
+  ('Quejas por corte de agua en la colonia Centro', 'Web Search', 58, 'negativo', 'Revisado',
     'Corte de agua de 4 días sin aviso previo. Videos de vecinos acumulan miles de vistas.',
     'Comisión municipal de agua, vecinos de la colonia Centro',
     'Cronología del corte; postura oficial; impacto en negocios locales',
-    'Alto — queja ciudadana con alto engagement en redes'),
-  ('Video viral sobre bache en la carretera a Xalapa', 'TikTok', 76, 'negativo', 'Nuevo',
+    'Alto — queja ciudadana con alto engagement en redes',
+    92, 'verified',
+    'Autoridad de agua informó corte; medios locales replican horario de restablecimiento.',
+    NULL,
+    '[{"label":"CMAS / comisión de agua","kind":"primary","supports":"corte y zona","reliable":true},{"label":"Medio local","kind":"secondary","supports":"corroboración","reliable":true}]',
+    '[]',
+    'Apto. Citar fuente primaria e indicar si fue programado o por falla.',
+    2),
+  ('Video viral sobre bache en la carretera a Xalapa', 'Facebook', 76, 'negativo', 'Nuevo',
     'Video de un vehículo dañado por un bache acumula más de 70 menciones en 24 horas.',
     'Obras públicas municipales, automovilistas afectados',
     'Verificación en sitio; respuesta de obras públicas; reincidencia del problema',
-    'Alto — formato viral con alto potencial de alcance'),
-  ('Aumento en el precio del gas en la región', 'Perplexity', 27, 'neutral', 'Nuevo',
+    'Alto — formato viral con alto potencial de alcance',
+    48, 'checking',
+    'Circula video de daño por bache en carretera a Xalapa; alto engagement.',
+    'Ubicación exacta, confirmación de obras públicas, fecha del hecho.',
+    '[{"label":"Video en redes","kind":"social","supports":"reclamo viral","reliable":false}]',
+    '["single_source","geoloc_pendiente"]',
+    'Condicionado: geolocalizar y pedir postura de obras públicas antes de publicar.',
+    1),
+  ('Aumento en el precio del gas en la región', 'Web Search', 27, 'neutral', 'Nuevo',
     'Precio del gas LP subió 8% en las últimas tres semanas en la región.',
     'Distribuidoras de gas, CRE, consumidores',
     'Comparativo de precios semanal; explicación del alza; impacto en hogares',
-    'Medio — tema económico de interés amplio')
-) AS v(title, source, mentions, sentiment, status, antecedentes, actores, angulos, audiencia)
+    'Medio — tema económico de interés amplio',
+    61, 'signal',
+    'Reportes de alza del gas LP en la región; falta serie oficial local completa.',
+    'Cifra CRE o ticket de distribuidora local con fecha.',
+    '[{"label":"Notas regionales","kind":"secondary","supports":"tendencia de precio","reliable":true}]',
+    '["falta_dato_local"]',
+    'Señal útil. No afirmar porcentaje sin fuente con fecha y zona.',
+    1)
+) AS v(title, source, mentions, sentiment, status, antecedentes, actores, angulos, audiencia,
+  confidence, verification_status, known_facts, unknown_facts, evidence, risk_flags, editorial_decision, source_count)
 WHERE NOT EXISTS (SELECT 1 FROM topics t WHERE t.title = v.title);
+
+-- Backfill verificación en demos ya insertados (idempotente: solo si aún sin evaluar)
+UPDATE topics t SET
+  confidence = v.confidence::smallint,
+  verification_status = v.verification_status,
+  known_facts = v.known_facts,
+  unknown_facts = v.unknown_facts,
+  evidence = v.evidence::jsonb,
+  risk_flags = v.risk_flags::jsonb,
+  editorial_decision = v.editorial_decision,
+  source_count = v.source_count::smallint,
+  source = CASE WHEN t.source IN ('Perplexity', 'TikTok') THEN v.source ELSE t.source END
+FROM (VALUES
+  ('Aumento de robos a comercios en el centro', 'Facebook', 22, 'risk',
+    'Circulan reportes en redes sobre robos en el centro; no hay cifras oficiales.',
+    'Número de casos, horarios, confirmación policial.',
+    '[{"label":"Hilo en Facebook","kind":"social","supports":"rumor local","reliable":false}]',
+    '["titular_alarmista","sin_autoridad_citada","single_source"]',
+    'No titular como hecho. Verificar con policía municipal antes de cualquier nota.', 1),
+  ('Nueva ciclovía en la avenida Reforma', 'Web Search', 86, 'verified',
+    'El ayuntamiento publicó trazo preliminar de ciclovía piloto (2 km) en avenida Reforma.',
+    'Fecha de obra y presupuesto detallado.',
+    '[{"label":"Ayuntamiento de Perote","kind":"primary","supports":"trazo y alcance","reliable":true},{"label":"Medio local","kind":"secondary","supports":"corroboración","reliable":true}]',
+    '[]',
+    'Apto para propuesta. Citar comunicado municipal y distinguir preliminar vs obra iniciada.', 2),
+  ('Quejas por corte de agua en la colonia Centro', 'Web Search', 92, 'verified',
+    'Autoridad de agua informó corte; medios locales replican horario de restablecimiento.',
+    NULL,
+    '[{"label":"CMAS / comisión de agua","kind":"primary","supports":"corte y zona","reliable":true},{"label":"Medio local","kind":"secondary","supports":"corroboración","reliable":true}]',
+    '[]',
+    'Apto. Citar fuente primaria e indicar si fue programado o por falla.', 2),
+  ('Video viral sobre bache en la carretera a Xalapa', 'Facebook', 48, 'checking',
+    'Circula video de daño por bache en carretera a Xalapa; alto engagement.',
+    'Ubicación exacta, confirmación de obras públicas, fecha del hecho.',
+    '[{"label":"Video en redes","kind":"social","supports":"reclamo viral","reliable":false}]',
+    '["single_source","geoloc_pendiente"]',
+    'Condicionado: geolocalizar y pedir postura de obras públicas antes de publicar.', 1),
+  ('Aumento en el precio del gas en la región', 'Web Search', 61, 'signal',
+    'Reportes de alza del gas LP en la región; falta serie oficial local completa.',
+    'Cifra CRE o ticket de distribuidora local con fecha.',
+    '[{"label":"Notas regionales","kind":"secondary","supports":"tendencia de precio","reliable":true}]',
+    '["falta_dato_local"]',
+    'Señal útil. No afirmar porcentaje sin fuente con fecha y zona.', 1)
+) AS v(title, source, confidence, verification_status, known_facts, unknown_facts, evidence, risk_flags, editorial_decision, source_count)
+WHERE t.title = v.title AND t.verification_status IS NULL;
 
 -- Pipeline de contenido: propuestas IA sin decidir, piezas en borrador/revisión, una rechazada.
 -- (Los 24 artículos 'published' ya viven en 002_web_articles.sql — aquí solo las etapas previas.)

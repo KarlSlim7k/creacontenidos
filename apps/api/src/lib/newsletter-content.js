@@ -40,10 +40,14 @@ async function pickNextSponsor() {
 // agenda sí tiene fuente real (newsletter_events, cargados a mano en el panel);
 // si no hay eventos hoy, queda null igual — nunca se inventa un evento.
 async function generateContent() {
+  // Excluir risk: no alimentar el newsletter con rumor/clickbait (RADAR Fase 5).
+  // null (legacy) y checking/signal/verified sí entran; prioriza score alto si existe.
   const { rows: topics } = await pool.query(
     `SELECT title, sentiment, antecedentes, angulos FROM topics
      WHERE detected_at >= now() - interval '48 hours'
-     ORDER BY mentions DESC LIMIT 5`
+       AND (verification_status IS NULL OR verification_status <> 'risk')
+     ORDER BY COALESCE(confidence, 0) DESC, mentions DESC
+     LIMIT 5`
   );
   if (!topics.length) {
     const err = new Error('Sin topics detectados en las últimas 48 horas. Corre RADAR primero.');

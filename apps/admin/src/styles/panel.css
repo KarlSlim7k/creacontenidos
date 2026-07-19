@@ -172,7 +172,8 @@
 .padmin-table-row.clickable { cursor: pointer; }
 /* Plantillas de columnas compartidas head/row — el min-width fuerza scroll horizontal
    dentro de .padmin-card (overflow-x:auto) en móvil en vez de aplastar las columnas. */
-.padmin-cols-radar { grid-template-columns: 1fr 100px 90px 90px 90px 110px; min-width: 620px; }
+/* Tema | Fuente | Interés | Confianza | Verificación | Acciones */
+.padmin-cols-radar { grid-template-columns: minmax(160px, 1.6fr) 100px 70px 80px 120px 110px; min-width: 700px; }
 .padmin-cols-social { grid-template-columns: 50px 100px 1fr 90px 90px 130px; min-width: 640px; }
 .padmin-cols-users { grid-template-columns: 1fr 1fr 90px 210px; min-width: 620px; }
 .padmin-cols-permisos { grid-template-columns: 2fr 70px 90px 80px 90px; min-width: 560px; }
