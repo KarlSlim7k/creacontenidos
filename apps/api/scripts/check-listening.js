@@ -241,6 +241,29 @@ async function main() {
     ok(Array.isArray(riskTopics) && riskTopics.every((t) => t.verification_status === 'risk'),
       'filtro verification_status=risk solo devuelve risk');
 
+    // --- H_TOPICS_PAGING: limit/offset + verification_status=none ---
+    const authDirector = { headers: { Authorization: 'Bearer ' + director } };
+    const page1 = await (await fetch(`${BASE}/api/listening/topics?limit=1&offset=0`, authDirector)).json();
+    const page2 = await (await fetch(`${BASE}/api/listening/topics?limit=1&offset=1`, authDirector)).json();
+    ok(page1.length === 1 && page2.length === 1, 'limit=1 devuelve 1 fila por página');
+    const allTopics = await (await fetch(`${BASE}/api/listening/topics?limit=500`, authDirector)).json();
+    ok(allTopics.length === topicsBody.length, 'limit=500 devuelve todo el seed');
+    const noneTopics = await (await fetch(`${BASE}/api/listening/topics?verification_status=none`, authDirector)).json();
+    ok(Array.isArray(noneTopics) && noneTopics.every((t) => t.verification_status == null),
+      'filtro verification_status=none solo devuelve nulls');
+
+    // --- H_TOPICS_SUMMARY: totales + sources coherentes con la lista ---
+    const sumRes = await fetch(`${BASE}/api/listening/topics/summary`, authDirector);
+    ok(sumRes.status === 200, `GET /topics/summary → 200 (llegó ${sumRes.status})`);
+    const sum = await sumRes.json();
+    ok(typeof sum.total === 'number' && sum.by_verification && Array.isArray(sum.sources), 'summary shape');
+    const sumParts = Object.values(sum.by_verification).reduce((a, b) => a + b, 0);
+    ok(sumParts === sum.total, `by_verification suma total (${sumParts} vs ${sum.total})`);
+    ok(sum.total === topicsBody.length, `summary.total = lista sin paginar (${sum.total} vs ${topicsBody.length})`);
+    ok((sum.by_verification.none || 0) === noneTopics.length, 'summary.none = filtro none');
+    ok(sum.sources.includes('Web Search'), 'summary.sources incluye Web Search');
+    ok((await fetch(`${BASE}/api/listening/topics/summary`)).status === 401, 'summary sin token → 401');
+
     // --- H_RADAR_SOURCES: lista editorial ---
     const srcRes = await fetch(`${BASE}/api/listening/radar-sources`, {
       headers: { Authorization: 'Bearer ' + director },
@@ -335,6 +358,18 @@ async function main() {
     const afterCalls = (after.body.byAction.generate_proposal || { calls: 0 }).calls;
     ok(after.body.totalTokens - before.body.totalTokens === 12345, `H_USAGE: delta de tokens = 12345 (fue ${after.body.totalTokens - before.body.totalTokens})`);
     ok(afterCalls - beforeCalls === 1, `H_USAGE_NULL: la fila con usage:null no cuenta como call (delta calls=${afterCalls - beforeCalls}, esperado 1)`);
+
+    // --- H_TOPICS_BULK_DELETE: DELETE /topics vacía el RADAR (re-seed al final
+    //     para no dejar la BD sin topics para los checks siguientes) ---
+    ok((await fetch(`${BASE}/api/listening/topics`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + colaborador } })).status === 403,
+      'bulk delete colaborador → 403');
+    const bulkRes = await fetch(`${BASE}/api/listening/topics`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + director } });
+    ok(bulkRes.status === 200, `bulk delete director → 200 (llegó ${bulkRes.status})`);
+    const bulk = await bulkRes.json();
+    ok(typeof bulk.deleted === 'number' && bulk.deleted > 0, 'bulk delete devuelve deleted > 0');
+    const afterBulk = await (await fetch(`${BASE}/api/listening/topics`, authDirector)).json();
+    ok(afterBulk.length === 0, 'bulk delete vacía topics');
+    runSeed();
 
     console.log(`\n✔ check-listening pasó (${n} asserts). Brecha conocida: happy-path de detección/generación con IA real no cubierto (requiere mock de fetch).`);
   } finally {

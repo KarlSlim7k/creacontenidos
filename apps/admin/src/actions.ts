@@ -1,8 +1,9 @@
 // CREA Panel Admin — acciones (submit/handle) y delegación de eventos por data-action.
 import {
   state, setState, setData, adminApi, adminApiBlob, loadScreenData, mergeKey, setProposalsKey, isSoundMuted,
+  loadRadarTopics, loadRadarSummary, loadRadarStats,
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
-  type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource, type RadarStats,
+  type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
 } from './store';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
@@ -55,15 +56,15 @@ export function handleClick(e: MouseEvent) {
       if (el.getAttribute('data-kind') === 'error') setState({ errorMsg: null });
       else setState({ successMsg: null });
       break;
-    case 'set-radar-source': setState({ radarSource: attr(el, 'data-value') }); break;
-    case 'set-radar-status': setState({ radarStatus: attr(el, 'data-value') }); break;
-    case 'set-radar-verification': setState({ radarVerification: attr(el, 'data-value') }); break;
+    case 'set-radar-source': setState({ radarSource: attr(el, 'data-value') }); loadRadarTopics(true); break;
+    case 'set-radar-status': setState({ radarStatus: attr(el, 'data-value') }); loadRadarTopics(true); break;
+    case 'set-radar-verification': setState({ radarVerification: attr(el, 'data-value') }); loadRadarTopics(true); break;
+    case 'load-more-topics': loadRadarTopics(false); break;
+    case 'retry-radar-stats': setState({ radarStatsError: null }); loadRadarStats(); break;
     case 'set-radar-stats-days': {
       const days = Number(attr(el, 'data-value')) || 30;
-      setState({ radarStatsDays: days });
-      adminApi('/api/listening/radar-stats?days=' + days)
-        .then((r) => { setData({ radarStats: r as RadarStats }); })
-        .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+      setState({ radarStatsDays: days, radarStatsError: null });
+      loadRadarStats();
       break;
     }
     case 'set-radar-tab': setState({ radarTab: attr(el, 'data-tab') as 'temas' | 'competencia' | 'fuentes' }); loadScreenData('radar'); break;
@@ -89,11 +90,12 @@ export function handleClick(e: MouseEvent) {
     case 'detect-competitors-fb':
       setState({ competitorsBusy: true });
       adminApi('/api/listening/competitors/detect', { method: 'POST', body: { source: 'facebook' } })
-        .then(() => Promise.all([adminApi<CompetitorPost[]>('/api/listening/competitors'), adminApi<Topic[]>('/api/listening/topics')]))
-        .then((results) => {
-          state.data.competitors = results[0];
-          state.data.topics = results[1];
+        .then(() => adminApi<CompetitorPost[]>('/api/listening/competitors'))
+        .then((posts) => {
           setState({ competitorsBusy: false, successMsg: 'Escaneo de Facebook completado.' });
+          setData({ competitors: posts });
+          loadRadarTopics(true);
+          loadRadarSummary();
         })
         .catch((err: ApiError) => { setState({ competitorsBusy: false, errorMsg: err.message }); });
       break;
@@ -226,9 +228,11 @@ export function handleClick(e: MouseEvent) {
     case 'detect-radar':
       setState({ radarBusy: true });
       adminApi('/api/listening/topics/detect', { method: 'POST' })
-        .then(() => adminApi<Topic[]>('/api/listening/topics'))
-        .then((topics) => {
-          setState({ radarBusy: false, data: Object.assign({}, state.data, { topics }) });
+        .then(() => {
+          setState({ radarBusy: false, successMsg: 'Detección completada.' });
+          loadRadarTopics(true);
+          loadRadarSummary();
+          loadRadarStats();
         })
         .catch((err: ApiError) => { setState({ radarBusy: false, errorMsg: err.message }); });
       break;
@@ -533,16 +537,21 @@ export function submitDeleteTopic(id: number) {
       const topics = (state.data.topics || []).filter((t) => t.id !== id);
       setData({ topics });
       if (state.selectedRadarId === id) setState({ selectedRadarId: null });
+      loadRadarSummary();
     })
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
 }
 
 export function submitClearTopics() {
-  const topics = state.data.topics || [];
-  if (!topics.length) return;
-  if (!confirm('¿Eliminar los ' + topics.length + ' temas detectados? No se puede deshacer.')) return;
-  Promise.all(topics.map((t: Topic) => adminApi('/api/listening/topics/' + t.id, { method: 'DELETE' })))
-    .then(() => { setData({ topics: [] }); setState({ selectedRadarId: null }); })
+  const total = (state.data.topicSummary && state.data.topicSummary.total) || (state.data.topics || []).length;
+  if (!total) return;
+  if (!confirm('¿Eliminar los ' + total + ' temas detectados? No se puede deshacer.')) return;
+  adminApi('/api/listening/topics', { method: 'DELETE' })
+    .then(() => {
+      setState({ data: Object.assign({}, state.data, { topics: [] }), selectedRadarId: null, radarTopicsHasMore: false });
+      loadRadarSummary();
+      loadRadarStats();
+    })
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
 }
 

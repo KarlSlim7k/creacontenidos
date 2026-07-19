@@ -228,6 +228,13 @@ export interface RadarSource {
   created_at: string;
 }
 
+/** GET /api/listening/topics/summary — totales RADAR (independiente del filtro/página activa). */
+export interface TopicSummary {
+  total: number;
+  by_verification: Record<string, number>;
+  sources: string[];
+}
+
 /** GET /api/listening/radar-stats — calibración Fase 6. */
 export interface RadarStats {
   days: number;
@@ -316,6 +323,7 @@ export interface AdminData {
   competitors: CompetitorPost[] | null;
   radarSources: RadarSource[] | null;
   radarStats: RadarStats | null;
+  topicSummary: TopicSummary | null;
   siteMetrics: SiteMetrics | null;
   fbAccounts: FbAccount[] | null;
 }
@@ -361,6 +369,10 @@ export interface State {
   radarTab: 'temas' | 'competencia' | 'fuentes';
   /** Ventana de radar-stats: 7 | 30 */
   radarStatsDays: number;
+  /** Error del fetch de radar-stats (se muestra inline en el bloque Calibración). */
+  radarStatsError: string | null;
+  /** true si la última página de topics vino llena → puede haber más en el servidor. */
+  radarTopicsHasMore: boolean;
   competitorsBusy: boolean;
   leadsStatus: string;
   propuestaRejecting: number | null;
@@ -430,11 +442,13 @@ export const state: State = {
     ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null,
     socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null,
     newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null,
-    distLog: null, distChannels: null, competitors: null, radarSources: null, radarStats: null, siteMetrics: null, fbAccounts: null,
+    distLog: null, distChannels: null, competitors: null, radarSources: null, radarStats: null,
+    topicSummary: null, siteMetrics: null, fbAccounts: null,
   },
   distBusy: null,
   radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos', radarBusy: false,
   radarTab: 'temas', competitorsBusy: false, radarStatsDays: 30,
+  radarStatsError: null, radarTopicsHasMore: false,
   leadsStatus: 'todos',
   propuestaRejecting: null,
   editorProposalId: null, editorDraft: null,
@@ -584,6 +598,56 @@ export function invalidateProposals() {
   state.data.proposalsByKey = {};
 }
 
+// ---------- RADAR: carga server-side (filtros + paginación viven en la API) ----------
+
+export const RADAR_PAGE = 50;
+
+// Pide RADAR_PAGE+1 filas: si llegan PAGE+1 hay más páginas — evita un COUNT
+// extra en el API solo para mostrar "Cargar más".
+export function loadRadarTopics(reset: boolean) {
+  const offset = reset ? 0 : (state.data.topics || []).length;
+  const p = new URLSearchParams();
+  if (state.radarSource !== 'Todas') p.set('source', state.radarSource);
+  if (state.radarStatus !== 'Todos') p.set('status', state.radarStatus);
+  if (state.radarVerification !== 'Todos') p.set('verification_status', state.radarVerification);
+  p.set('limit', String(RADAR_PAGE + 1));
+  if (offset > 0) p.set('offset', String(offset));
+  adminApi<Topic[]>('/api/listening/topics?' + p.toString())
+    .then((rows) => {
+      const hasMore = rows.length > RADAR_PAGE;
+      const page = hasMore ? rows.slice(0, RADAR_PAGE) : rows;
+      // Dedupe por id: un topic detectado entre página y página desplazaría el offset.
+      const prev = reset ? [] : (state.data.topics || []);
+      const seen = new Set(prev.map((t) => t.id));
+      setState({
+        data: Object.assign({}, state.data, { topics: prev.concat(page.filter((t) => !seen.has(t.id))) }),
+        radarTopicsHasMore: hasMore,
+      });
+    })
+    .catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+}
+
+// Best-effort: si falla, las tarjetas muestran "—" (la lista sí reporta error).
+export function loadRadarSummary() {
+  adminApi<TopicSummary>('/api/listening/topics/summary')
+    .then((r) => { setData({ topicSummary: r }); })
+    .catch(() => { /* tarjetas en guion */ });
+}
+
+// Guard contra respuestas fuera de orden al alternar 7d/30d rápido.
+export function loadRadarStats() {
+  const days = state.radarStatsDays || 30;
+  adminApi<RadarStats>('/api/listening/radar-stats?days=' + days)
+    .then((r) => {
+      if ((state.radarStatsDays || 30) !== days) return;
+      setState({ radarStatsError: null, data: Object.assign({}, state.data, { radarStats: r }) });
+    })
+    .catch((err: ApiError) => {
+      if ((state.radarStatsDays || 30) !== days) return;
+      setState({ radarStatsError: err.message });
+    });
+}
+
 export function loadScreenData(screen: Screen, extra?: number | null) {
   state.dataError = null;
   if (screen === 'dashboard') {
@@ -620,10 +684,9 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
   } else if (screen === 'metricas') {
     adminApi<EditorialMetrics>('/api/editorial/metrics').then((r) => { setData({ metrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'radar') {
-    adminApi<Topic[]>('/api/listening/topics').then((r) => { setData({ topics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    adminApi<RadarStats>('/api/listening/radar-stats?days=' + (state.radarStatsDays || 30))
-      .then((r) => { setData({ radarStats: r }); })
-      .catch(() => { /* best-effort calibración */ });
+    loadRadarTopics(true);
+    loadRadarSummary();
+    loadRadarStats();
     if (state.radarTab === 'competencia' && !state.data.competitors) {
       adminApi<CompetitorPost[]>('/api/listening/competitors').then((r) => { setData({ competitors: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     }

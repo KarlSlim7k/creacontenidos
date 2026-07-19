@@ -208,16 +208,10 @@ function renderRadarCompetencia(): string {
     </div>`;
 }
 
-function matchesVerificationFilter(r: Topic, filter: string): boolean {
-  if (filter === 'Todos') return true;
-  if (filter === 'none') return r.verification_status == null;
-  return r.verification_status === filter;
-}
-
-function renderSummary(topics: Topic[]): string {
-  const n = (v: VerificationStatus | null) => topics.filter((t) => t.verification_status === v).length;
-  const none = topics.filter((t) => t.verification_status == null).length;
-  const card = (label: string, count: number, hint: string, tone: string) =>
+function renderSummary(): string {
+  const summary = state.data.topicSummary;
+  const n = (key: string): number | string => (summary ? (summary.by_verification[key] || 0) : '—');
+  const card = (label: string, count: number | string, hint: string, tone: string) =>
     `<div style="background:var(--surface);border:0.5px solid var(--line-soft);border-radius:7px;padding:12px 14px;">
       <span style="font-size:10px;color:var(--text-mute);text-transform:uppercase;letter-spacing:0.04em;">${esc(label)}</span>
       <b style="display:block;font-size:22px;margin-top:4px;color:${tone};">${count}</b>
@@ -227,12 +221,18 @@ function renderSummary(topics: Topic[]): string {
     ${card('Verificados', n('verified'), 'Listos para propuesta', 'var(--brand)')}
     ${card('En verificación', n('checking'), 'Requieren evidencia', 'var(--accent-text)')}
     ${card('Riesgo alto', n('risk'), 'Rumor o fuente débil', 'var(--danger)')}
-    ${card('Sin evaluar', none, 'Legacy o pre-scoring', 'var(--text)')}
+    ${card('Sin evaluar', n('none'), 'Legacy o pre-scoring', 'var(--text)')}
   </div>`;
 }
 
 function renderCalibration(stats: RadarStats | null): string {
   if (!stats) {
+    if (state.radarStatsError) {
+      return `<div style="margin:0 0 16px;padding:12px 14px;background:var(--surface);border:0.5px solid var(--line-soft);border-radius:7px;font-size:12px;color:var(--danger);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>Calibración: ${esc(state.radarStatsError)}</span>
+        <span class="padmin-chip" data-action="retry-radar-stats" style="cursor:pointer;">Reintentar</span>
+      </div>`;
+    }
     return `<div style="margin:0 0 16px;padding:12px 14px;background:var(--surface);border:0.5px solid var(--line-soft);border-radius:7px;font-size:12px;color:var(--text-mute);">Calibración: cargando stats…</div>`;
   }
   const days = state.radarStatsDays || stats.days;
@@ -288,13 +288,7 @@ function renderRadarTemas(): string {
   const workflowChips = workflowStatuses.map((st) => chip(state.radarStatus === st, 'set-radar-status', st, st, 'var(--accent)')).join('');
   const verifyChips = verifications.map((v) => chip(state.radarVerification === v.id, 'set-radar-verification', v.id, v.label, 'var(--brand)')).join('');
 
-  const filtered = topics.filter((r: Topic) =>
-    (state.radarSource === 'Todas' || r.source === state.radarSource)
-    && (state.radarStatus === 'Todos' || r.status === state.radarStatus)
-    && matchesVerificationFilter(r, state.radarVerification)
-  );
-
-  return `${renderSummary(topics)}
+  return `${renderSummary()}
     ${renderCalibration(state.data.radarStats)}
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;">${sourceChips}
       ${state.user!.role === 'director' || state.user!.role === 'produccion' ?
@@ -307,7 +301,7 @@ function renderRadarTemas(): string {
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;"><span style="font-size:10px;color:var(--text-mute);text-transform:uppercase;margin-right:4px;">Workflow</span>${workflowChips}</div>
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-radar"><span>TEMA</span><span>FUENTE</span><span>INTERÉS</span><span>CONFIANZA</span><span>VERIFICACIÓN</span><span>ACCIONES</span></div>
-      ${filtered.length ? filtered.map((r: Topic) => {
+      ${topics.length ? topics.map((r: Topic) => {
         const vStyle = verificationStyle(r.verification_status);
         const canManage = state.user!.role === 'director' || state.user!.role === 'produccion';
         const sub = r.known_facts
@@ -327,5 +321,6 @@ function renderRadarTemas(): string {
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">No hay temas con estos filtros.</p></div>'}
     </div>
+    ${state.radarTopicsHasMore ? `<div style="display:flex;justify-content:center;margin-top:12px;"><button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" data-action="load-more-topics">Cargar más temas</button></div>` : ''}
     ${renderRadarDetail()}`;
 }

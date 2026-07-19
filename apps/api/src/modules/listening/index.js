@@ -98,9 +98,12 @@ router.post('/topics/detect', requireAuth, requireRole('director', 'produccion')
   }
 });
 
-// GET /api/listening/topics?source=&status=&verification_status= — pantalla RADAR.
-// verification_status: verified|checking|signal|risk (independiente de status Nuevo/Revisado).
-// Topics pre-migración: confidence y verification_status pueden ser null (sin evaluar).
+// GET /api/listening/topics?source=&status=&verification_status=&limit=&offset= — pantalla RADAR.
+// verification_status: verified|checking|signal|risk|none (none = IS NULL; independiente
+// de status Nuevo/Revisado). Topics pre-migración: confidence y verification_status
+// pueden ser null (sin evaluar). Sin limit devuelve todo (compat con checks/legacy);
+// con limit la respuesta sigue siendo un array — el admin pide limit+1 para saber
+// si hay más páginas sin necesidad de un COUNT extra.
 router.get('/topics', requireAuth, async (req, res, next) => {
   try {
     const params = [];
@@ -113,19 +116,73 @@ router.get('/topics', requireAuth, async (req, res, next) => {
       params.push(req.query.status);
       clauses.push(`status = $${params.length}`);
     }
-    if (req.query.verification_status) {
+    if (req.query.verification_status === 'none') {
+      clauses.push('verification_status IS NULL');
+    } else if (req.query.verification_status) {
       params.push(req.query.verification_status);
       clauses.push(`verification_status = $${params.length}`);
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    let paging = '';
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 0, 0), 500);
+    if (limit > 0) {
+      params.push(limit);
+      paging += ` LIMIT $${params.length}`;
+      const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+      if (offset > 0) {
+        params.push(offset);
+        paging += ` OFFSET $${params.length}`;
+      }
+    }
     const { rows } = await pool.query(
       `SELECT id, title, source, mentions, sentiment, status, antecedentes, actores, angulos, audiencia,
               confidence, verification_status, known_facts, unknown_facts, evidence, risk_flags,
               editorial_decision, source_count, detected_at
-       FROM topics ${where} ORDER BY detected_at DESC`,
+       FROM topics ${where} ORDER BY detected_at DESC${paging}`,
       params
     );
     res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/listening/topics/summary — totales por verification_status + lista de
+// sources distintos. Alimenta las tarjetas de resumen y los chips de fuente del
+// RADAR, que ya no pueden derivarse del array paginado en el cliente.
+router.get('/topics/summary', requireAuth, async (req, res, next) => {
+  try {
+    const { rows: counts } = await pool.query(
+      `SELECT COALESCE(verification_status, 'none') AS vs, count(*)::int AS n
+       FROM topics GROUP BY 1`
+    );
+    const byVerification = {};
+    let total = 0;
+    for (const r of counts) {
+      byVerification[r.vs] = r.n;
+      total += r.n;
+    }
+    const { rows: sources } = await pool.query(
+      `SELECT DISTINCT source FROM topics WHERE source IS NOT NULL ORDER BY source`
+    );
+    res.json({
+      total,
+      by_verification: byVerification,
+      sources: sources.map((r) => r.source),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/listening/topics — vacía el RADAR de una vez (reemplaza al
+// "limpiar todo" del admin que hacía N DELETEs paralelos con fallo parcial
+// posible). content_proposals.topic_id queda NULL por ON DELETE SET NULL (024).
+router.delete('/topics', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const result = await pool.query('DELETE FROM topics');
+    await logActivity(pool, 'radar_clear', `${result.rowCount} topics eliminados (limpiar todo)`, req.user.id, 'exito', { deleted: result.rowCount });
+    res.json({ deleted: result.rowCount });
   } catch (err) {
     next(err);
   }
