@@ -1,27 +1,31 @@
 #!/usr/bin/env node
-// Smoke test del panel admin (apps/admin/assets/js): carga el grafo de módulos ES
-// completo con stubs de DOM y renderiza todas las pantallas con datos falsos.
-// Atrapa imports rotos, identificadores sin importar y campos mal nombrados que
-// pintan "undefined". No necesita servidor ni Postgres (grupo unit).
+// Smoke test del panel admin (apps/admin/src, Vite+TS): carga el grafo de
+// módulos real con stubs de DOM y renderiza todas las pantallas con datos
+// falsos. Atrapa imports rotos, identificadores sin importar y campos mal
+// nombrados que pintan "undefined". No necesita servidor ni Postgres (grupo
+// unit).
 //
-// El package.json raíz es "type": "commonjs", así que los .js del admin se copian
-// a un tmpdir con su propio {"type":"module"} para poder importarlos desde Node.
+// Los módulos son TS con imports sin extensión (resolución estilo bundler,
+// no válida para el ESM nativo de Node) — se resuelven con el propio Vite en
+// middlewareMode + ssrLoadModule (ya es devDependency de apps/admin), en vez
+// de copiar archivos a mano.
 'use strict';
 
 const assert = require('node:assert');
-const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
 
-const SRC = path.join(__dirname, '..', '..', 'admin', 'assets', 'js');
+const ADMIN_ROOT = path.join(__dirname, '..', '..', 'admin');
 
 async function main() {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'crea-admin-smoke-'));
-  for (const f of fs.readdirSync(SRC).filter((f) => f.endsWith('.js'))) {
-    fs.copyFileSync(path.join(SRC, f), path.join(tmp, f));
-  }
-  fs.writeFileSync(path.join(tmp, 'package.json'), '{"type":"module"}');
+  // apps/api no tiene vite como dependencia: se resuelve contra el node_modules
+  // de apps/admin (vite expone entry "require" en su package.json para esto).
+  const { createServer } = require(require.resolve('vite', { paths: [ADMIN_ROOT] }));
+  const vite = await createServer({
+    root: ADMIN_ROOT,
+    server: { middlewareMode: true },
+    appType: 'custom',
+    logLevel: 'error',
+  });
 
   // ---------- stubs mínimos de navegador ----------
   const listeners = {};
@@ -32,7 +36,7 @@ async function main() {
     getElementById: (id) => (id === 'app' ? appEl : fakeInput),
     addEventListener: (ev, fn) => { listeners['doc:' + ev] = fn; },
   };
-  globalThis.location = { hostname: 'localhost' };
+  globalThis.location = { hostname: 'localhost', port: '', hash: '' };
   globalThis.localStorage = {
     _s: {},
     getItem(k) { return Object.prototype.hasOwnProperty.call(this._s, k) ? this._s[k] : null; },
@@ -41,14 +45,14 @@ async function main() {
   };
   globalThis.window = globalThis;
   globalThis.confirm = () => false;
+  globalThis.addEventListener = (ev, fn) => { listeners['win:' + ev] = fn; }; // hashchange: nunca se dispara, el test navega mutando state.screen directo
   globalThis.fetch = () => new Promise(() => {}); // nunca resuelve: solo se prueba render síncrono
 
   // ---------- carga del grafo ----------
-  const mod = (f) => import(pathToFileURL(path.join(tmp, f)).href);
-  await mod('main.js');
-  const { state } = await mod('store.js');
-  const { render } = await mod('router.js');
-  const actions = await mod('actions.js');
+  const { state } = await vite.ssrLoadModule('/src/store.ts');
+  const { render } = await vite.ssrLoadModule('/src/router.ts');
+  const actions = await vite.ssrLoadModule('/src/actions.ts');
+  await vite.ssrLoadModule('/src/main.ts');
 
   // DOMContentLoaded → delegación + tryResumeSession (sin token → login)
   listeners['doc:DOMContentLoaded']();
@@ -117,7 +121,7 @@ async function main() {
   assert(appEl.innerHTML.includes('padmin-login'), 'logout no regresó al login');
   console.log('✓ logout regresa al login');
 
-  fs.rmSync(tmp, { recursive: true, force: true });
+  await vite.close();
   console.log('OK: smoke del panel admin pasó.');
 }
 

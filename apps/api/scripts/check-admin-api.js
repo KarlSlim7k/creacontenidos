@@ -158,8 +158,8 @@ async function main() {
     assert.strictEqual(p.status, 'published', 'debe poder republicarse tras reabrir y corregir');
 
     // 7. RADAR: solo lectura, filtro por fuente.
-    const topics = await (await fetch(`${BASE}/api/listening/topics?source=TikTok`, { headers: auth(directorToken) })).json();
-    assert.ok(topics.length >= 1 && topics.every((t) => t.source === 'TikTok'));
+    const topics = await (await fetch(`${BASE}/api/listening/topics?source=Facebook`, { headers: auth(directorToken) })).json();
+    assert.ok(topics.length >= 1 && topics.every((t) => t.source === 'Facebook'));
     assert.ok(topics[0].antecedentes, 'la ficha de contexto de RADAR no trae antecedentes');
 
     // 8. Comercial: kanban restringido a comercial/director, mover de columna.
