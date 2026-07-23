@@ -90,6 +90,7 @@ Sustituir `CREA_ARTICLES` por `fetch` a `/api/public`. Vanilla JS, sin framework
 - [x] `main.js`: helper único `creaApi(path)` con base URL configurable (meta tag o constante) y manejo de error visible (estado vacío con tono de marca, no pantalla rota).
 - [x] `index.html` (portada), `seccion.html`, `nota.html` (por `slug` en querystring), `perfil.html` — datos desde API. Eliminar `CREA_ARTICLES` al terminar (deletion over addition).
 - [x] `patrocinado.html` y `comunidad.html` quedan estáticas en v1 — solo verificar que no rompen al quitar el placeholder compartido.
+  > **Actualizado (2026-07-23):** ya no aplica. `patrocinado.astro` (`?sponsored=true`) y `comunidad.astro` (`/api/public/authors`) consumen la API real, igual que `estudio/servicios.astro` (`/api/public/services`), `estudio/media-kit.astro` y `estudio/tercer-tiempo.astro` (`/api/public/site-metrics`, sponsors, `/api/public/social`). Nada queda hardcodeado presentado como dato real; verificado archivo por archivo en `apps/web/src/pages` y `apps/web/src/components`.
 - **Aceptación:** con API arriba, las 4 páginas pintan datos del seed; con API abajo, muestran estado vacío digno; `frontend-review` + `responsive` pasadas.
 
 ### Fase 3 — Estudio funcional (contacto + leads)
