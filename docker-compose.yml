@@ -63,7 +63,9 @@ services:
       FIRECRAWL_SOURCE_URLS: ${FIRECRAWL_SOURCE_URLS:-}
     ports:
       # Host 3001: el 3000 lo ocupa el dashboard de Dokploy en el VPS.
-      - "${API_HOST_PORT:-3001}:3000"
+      # Bind a 127.0.0.1: Traefik ya rutea por dokploy-network; publicar en
+      # 0.0.0.0 exponía la API en HTTP plano saltándose el TLS de Traefik.
+      - "127.0.0.1:${API_HOST_PORT:-3001}:3000"
     healthcheck:
       # node:22 trae fetch global; el puerto interno siempre es 3000.
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
