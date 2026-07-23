@@ -169,7 +169,7 @@ export function handleClick(e: MouseEvent) {
     case 'toggle-mobile-nav': setState({ mobileNavOpen: !state.mobileNavOpen }); break;
     case 'delete-borrador': submitDeleteBorrador(Number(attr(el, 'data-id'))); break;
     case 'reopen-published': submitReopenPublished(Number(attr(el, 'data-id'))); break;
-    case 'delete-published': submitDeletePublished(Number(attr(el, 'data-id'))); break;
+    case 'delete-published': submitDeletePublished(Number(attr(el, 'data-id')), attr(el, 'data-title')); break;
     case 'generate-image': {
       if (!state.editorProposalId) break;
       state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
@@ -580,8 +580,12 @@ export function submitReopenPublished(id: number) {
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
 }
 
-export function submitDeletePublished(id: number) {
-  if (!confirm('¿Eliminar esta nota publicada? Se quita del sitio de forma permanente y no se puede deshacer.')) return;
+export function submitDeletePublished(id: number, title: string) {
+  const typed = prompt(`Esta nota está VIVA en el sitio. Para eliminarla escribe su título exacto:\n\n${title}`);
+  if (typed !== title) {
+    if (typed !== null) alert('El título no coincide. No se eliminó la nota.');
+    return;
+  }
   adminApi('/api/editorial/proposals/' + id, { method: 'DELETE' })
     .then(() => {
       setProposalsKey('published', (state.data.proposalsByKey.published || []).filter((p) => p.id !== id));

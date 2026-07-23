@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { SECTIONS } = require('../../lib/sections');
+const { logActivity } = require('../../lib/ai-client');
 
 const router = express.Router();
 
@@ -288,12 +289,19 @@ router.patch('/proposals/:id/reopen', requireAuth, requireRole('director', 'prod
 router.delete('/proposals/:id', requireAuth, requireRole('director'), async (req, res, next) => {
   try {
     if (!(await requireStatus(req.params.id, ['rechazada', 'borrador', 'published'], res))) return;
+    const { rows } = await pool.query('SELECT title, status FROM content_proposals WHERE id = $1', [req.params.id]);
     // Sin esto las imágenes IA quedarían huérfanas (FK es ON DELETE SET NULL).
     await pool.query('DELETE FROM generated_images WHERE proposal_id = $1', [req.params.id]);
     // published_content (bitácora de distribución) referencia esta fila SIN ON DELETE:
     // borrar una publicada con push previo a un canal fallaría por violación de FK.
     await pool.query('DELETE FROM published_content WHERE proposal_id = $1', [req.params.id]);
     await pool.query('DELETE FROM content_proposals WHERE id = $1', [req.params.id]);
+    // Único borrado editorial que puede quitar una nota viva del sitio — se audita, a diferencia
+    // de otros deletes del módulo, para poder responder "quién y cuándo" ante un borrado accidental.
+    await logActivity(pool, 'proposal_delete', `Nota eliminada (${rows[0].status}): ${rows[0].title}`, req.user.id, 'exito', {
+      proposal_id: Number(req.params.id),
+      status: rows[0].status,
+    });
     res.status(204).end();
   } catch (err) {
     next(err);

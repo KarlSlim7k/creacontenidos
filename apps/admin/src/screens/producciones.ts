@@ -58,7 +58,7 @@ export function renderPublicadas(): string {
       </div>
       <span style="display:flex;gap:6px;flex-wrap:wrap;">
         <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="reopen-published" data-id="${p.id}">Editar</button>
-        ${state.user!.role === 'director' ? `<button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-published" data-id="${p.id}">Eliminar</button>` : ''}
+        ${state.user!.role === 'director' ? `<button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-published" data-id="${p.id}" data-title="${esc(p.title)}">Eliminar</button>` : ''}
       </span>
     </div>`
   ).join('');
