@@ -19,3 +19,7 @@ fb_cookies*
 apps/competitor-scraper/storage/
 
 .astro/
+
+# Playwright corrido desde la raíz por error (config real: apps/admin/e2e/)
+/test-results/
+/report/
