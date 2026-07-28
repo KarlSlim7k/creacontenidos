@@ -1,8 +1,10 @@
 # Auditoría integral — CREA Command Center (2026-07-07)
 
-> **Estado (2026-07-28):** 7 de 8 hallazgos ya corregidos — H1, H2, H3, H5, H6, H7, H8 resueltos.
-> Solo **H4** (deps `tar`/`uuid` con vulnerabilidad conocida) sigue abierto: `npm audit` en `apps/api`
-> todavía reporta ambos. Documento se conserva como registro histórico; no describe el estado actual del código salvo H4.
+> **Estado (2026-07-28):** los 8 hallazgos ya están corregidos. H4 (`tar`/`uuid` vulnerables, vía
+> `bcrypt`→`@mapbox/node-pre-gyp` y `node-cron`) se cerró subiendo `bcrypt@6` (usa `node-gyp-build`,
+> ya no depende de `node-pre-gyp`/`tar`) y `node-cron@4` (cero dependencias, ya no depende de `uuid`).
+> `npm audit` en `apps/api` da 0 vulnerabilidades. Verificado: login real contra hash `$2b$` existente
+> (compat bcrypt 5→6) y boot con los 2 cron jobs registrados. Documento se conserva como registro histórico.
 
 Auditoría de solo lectura sobre `apps/api`, `apps/web`, `apps/admin`, `Dockerfile`, `docker-compose.yml` y `apps/api/scripts`. Cada hallazgo cita archivo y línea reales, verificados leyendo el código — no hay hallazgos especulativos.
 
