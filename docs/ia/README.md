@@ -21,6 +21,7 @@
 - [`politica-ia-y-gate-editorial.md`](./politica-ia-y-gate-editorial.md) — reglas de ruteo de modelos, costo, y gate editorial. Señala explícitamente qué ya está implementado en `apps/api/src/modules/editorial` y qué sigue pendiente.
 - [`especificacion-pipeline.md`](./especificacion-pipeline.md) — qué debe hacer cada capa (`listening` → `content-engine` → `editorial` → `distribution`) para que el pipeline funcione de punta a punta. Traduce las specs de skills de Hermes (v1) a procedimientos concretos sobre el schema y los módulos Express de v2 — sin Hermes, sin Telegram, sin microservicios.
 - [`runbook-incidentes.md`](./runbook-incidentes.md) — qué hacer cuando falla un proveedor de IA, falla una publicación, o se detecta contenido sensible. Recortado de la versión v1 (sin broker de eventos, sin Mac mini/OpenClaw — no existen en esta arquitectura).
+- [`casos-uso-hermes.md`](./casos-uso-hermes.md) — escenarios que justificarían desplegar Hermes completo, límites de seguridad y criterios para no añadirlo antes de tiempo.
 
 Ver también [`../adr/0001-ia-hibrida-gate-editorial.md`](../adr/0001-ia-hibrida-gate-editorial.md).
 

@@ -19,6 +19,8 @@
     "check:listening": "node scripts/check-listening.js",
     "check:newsletter": "node scripts/check-newsletter.js",
     "check:scraper": "node scripts/check-competitor-scraper.js",
+    "check:slug": "node scripts/check-slug.js",
+    "check:telegram": "node scripts/check-telegram.js",
     "test": "node scripts/run-checks.js unit",
     "test:unit": "node scripts/run-checks.js unit",
     "test:public": "node scripts/run-checks.js public",

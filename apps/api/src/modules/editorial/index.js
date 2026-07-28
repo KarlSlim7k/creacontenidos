@@ -3,6 +3,8 @@ const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { SECTIONS } = require('../../lib/sections');
 const { logActivity } = require('../../lib/ai-client');
+const { publishProposal, returnProposal } = require('../../lib/editorial-review');
+const { slugify } = require('../../lib/slug');
 
 const router = express.Router();
 
@@ -186,6 +188,19 @@ router.patch('/proposals/:id/draft', requireAuth, async (req, res, next) => {
       params.push(value || null);
       sets.push(`${field} = $${params.length}`);
     }
+    // Si el autor deja el campo vacío, el título produce un slug estable. Un slug
+    // escrito manualmente siempre se conserva tal cual.
+    if (req.body.slug !== undefined && !String(req.body.slug).trim()) {
+      const title = req.body.title === undefined
+        ? (await pool.query('SELECT title FROM content_proposals WHERE id = $1', [req.params.id])).rows[0].title
+        : req.body.title;
+      const base = slugify(title);
+      if (!base) return res.status(400).json({ error: 'Datos inválidos', fields: { slug: 'Agrega un título para generar el slug' } });
+      const { rows: clash } = await pool.query('SELECT 1 FROM content_proposals WHERE slug = $1 AND id <> $2', [base, req.params.id]);
+      const slug = clash.length ? `${base}-${req.params.id}` : base;
+      const slugIndex = sets.findIndex((set) => set.startsWith('slug = '));
+      if (slugIndex >= 0) { params[slugIndex] = slug; } else { params.push(slug); sets.push(`slug = $${params.length}`); }
+    }
     if (req.body.body !== undefined) {
       params.push(String(req.body.body));
       sets.push(`body = $${params.length}`);
@@ -223,25 +238,12 @@ router.patch('/proposals/:id/submit-review', requireAuth, async (req, res, next)
 });
 
 // Aprobación (solo director): publica — exige origen del contenido (transparencia) y slug ya definido.
-const VALID_ORIGINS = ['100% humano', 'Asistido por IA', 'Generado con IA'];
 router.patch('/proposals/:id/publish', requireAuth, requireRole('director'), async (req, res, next) => {
   try {
-    if (!(await requireStatus(req.params.id, 'en_revision', res))) return;
     const { origin } = req.body || {};
-    if (!VALID_ORIGINS.includes(origin)) {
-      return res.status(400).json({ error: 'Datos inválidos', fields: { origin: 'Origen del contenido requerido' } });
-    }
-    const { rows: current } = await pool.query('SELECT slug, title FROM content_proposals WHERE id = $1', [req.params.id]);
-    if (!current[0].slug) {
-      return res.status(400).json({ error: 'Falta asignar un slug antes de publicar (Editor de nota)' });
-    }
-    const { rows } = await pool.query(
-      `UPDATE content_proposals SET status = 'published', origin = $1, published_at = now(), updated_at = now()
-       WHERE id = $2 RETURNING ${PROPOSAL_FIELDS}`,
-      [origin, req.params.id]
-    );
-    res.json(rows[0]);
+    res.json(await publishProposal(pool, req.params.id, origin));
   } catch (err) {
+    if (err.status === 400 && err.message === 'Origen del contenido requerido') return res.status(400).json({ error: 'Datos inválidos', fields: { origin: err.message } });
     next(err);
   }
 });
@@ -249,18 +251,10 @@ router.patch('/proposals/:id/publish', requireAuth, requireRole('director'), asy
 // Aprobación (solo director): devolver con comentarios.
 router.patch('/proposals/:id/return', requireAuth, requireRole('director'), async (req, res, next) => {
   try {
-    if (!(await requireStatus(req.params.id, 'en_revision', res))) return;
     const { comment } = req.body || {};
-    if (typeof comment !== 'string' || !comment.trim()) {
-      return res.status(400).json({ error: 'Datos inválidos', fields: { comment: 'Motivo requerido' } });
-    }
-    const { rows } = await pool.query(
-      `UPDATE content_proposals SET status = 'borrador', review_comment = $1, updated_at = now()
-       WHERE id = $2 RETURNING ${PROPOSAL_FIELDS}`,
-      [comment.trim(), req.params.id]
-    );
-    res.json(rows[0]);
+    res.json(await returnProposal(pool, req.params.id, comment));
   } catch (err) {
+    if (err.status === 400 && err.message === 'Motivo requerido') return res.status(400).json({ error: 'Datos inválidos', fields: { comment: err.message } });
     next(err);
   }
 });

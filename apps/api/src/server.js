@@ -15,8 +15,10 @@ const authRouter = require('./modules/auth');
 const commercialRouter = require('./modules/commercial');
 const socialRouter = require('./modules/social');
 const newsletterRouter = require('./modules/newsletter');
+const telegramRouter = require('./modules/telegram');
 const { startNewsletterCron } = require('./lib/newsletter-cron');
 const { startListeningCron } = require('./lib/listening-cron');
+const { startTelegramReviewCron } = require('./lib/telegram-review-cron');
 const { SECTIONS } = require('./lib/sections');
 const pool = require('./db/pool');
 
@@ -90,6 +92,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/admin', authRouter.adminRouter);
 app.use('/api/commercial', commercialRouter);
 app.use('/api/newsletter', newsletterRouter);
+app.use('/api/telegram', telegramRouter);
 // socialRouter define tanto rutas públicas (/public/social*) como admin (/admin/social*).
 app.use('/api', socialRouter);
 
@@ -117,6 +120,7 @@ async function main() {
 
   startNewsletterCron();
   startListeningCron();
+  startTelegramReviewCron();
 }
 
 main();
