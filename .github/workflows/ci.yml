@@ -38,7 +38,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: apps/api/package-lock.json
+          cache-dependency-path: |
+            apps/api/package-lock.json
+            apps/admin/package-lock.json
+      - name: Instalar dependencias del panel
+        working-directory: apps/admin
+        run: npm ci
       - name: Instalar dependencias
         working-directory: apps/api
         run: npm ci
