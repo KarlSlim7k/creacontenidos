@@ -1,5 +1,11 @@
 # Auditoría de la superficie pública — CREA Command Center
 
+> **Estado (2026-07-28):** los 4 hallazgos de este documento ya están corregidos (CSP custom en
+> `server.js`, `trust proxy` configurado, XSS del thumbnail eliminado al migrar `apps/web` a Astro SSR
+> con auto-escape, y el form de newsletter ya está dentro de `MobileMenu.astro`). Documento se conserva
+> como registro histórico; no describe el estado actual del código, que además ya no es HTML estático
+> sino Astro SSR (`apps/web` migró después de esta auditoría).
+
 **Fecha:** 7 de julio de 2026
 **Alcance:** portal editorial público (`apps/web/*.html` + `assets/`), API pública de solo lectura (`apps/api/src/modules/public/`), rutas sociales públicas (`modules/social`), Estudio (`apps/web/estudio/`), formulario de leads, newsletter completo (módulo, cron, plantilla, Resend, migraciones 018–021) y flujo de podcast/ElevenLabs.
 **Método:** lectura directa del código de cada archivo del alcance, incluyendo las versiones instaladas de `helmet` (7.2.0) y `express-rate-limit` (8.5.2). Nada especulativo: cada hallazgo cita archivo y línea.

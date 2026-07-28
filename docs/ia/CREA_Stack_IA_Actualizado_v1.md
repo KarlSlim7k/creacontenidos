@@ -4,8 +4,15 @@ subtitle: "Actualización de Stack de IA — Hermes Agent + Nous Portal + MiniMa
 version: "1.0"
 fecha: "Julio 2026"
 autor: "Emmanuel Reyes Zapata — Director Editorial, CREA Contenidos"
-estado: "Documento vigente. Sustituye las secciones de stack de IA de los documentos anteriores para el periodo de prueba (Mes 1)."
+estado: "SUPERSEDIDO (2026-07-28). Documento histórico de la decisión de negocio inicial, ya no describe el stack real."
 ---
+
+> **Supersedido:** la idea de "un solo punto de entrada" (Hermes/Nous Portal para todo) se abandonó en
+> la práctica — el código actual llama proveedores directo por capa: Perplexity para búsqueda real
+> (Nous/Hermes "no buscaba nada, solo alucinaba" — comentario en `ai-client.js`), Nous Portal solo para
+> texto (propuestas/borradores/QA/newsletter), OpenRouter para imagen, ElevenLabs directo para audio.
+> Stack real y vigente: [`stack-ia-servicios-costos.md`](./stack-ia-servicios-costos.md). Este documento
+> se conserva como registro de la decisión original de negocio (mes de pruebas), no como referencia técnica.
 
 # CREA Contenidos — Actualización de Stack de IA
 

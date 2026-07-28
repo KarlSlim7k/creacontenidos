@@ -1,5 +1,9 @@
 # Auditoría integral — CREA Command Center (2026-07-07)
 
+> **Estado (2026-07-28):** 7 de 8 hallazgos ya corregidos — H1, H2, H3, H5, H6, H7, H8 resueltos.
+> Solo **H4** (deps `tar`/`uuid` con vulnerabilidad conocida) sigue abierto: `npm audit` en `apps/api`
+> todavía reporta ambos. Documento se conserva como registro histórico; no describe el estado actual del código salvo H4.
+
 Auditoría de solo lectura sobre `apps/api`, `apps/web`, `apps/admin`, `Dockerfile`, `docker-compose.yml` y `apps/api/scripts`. Cada hallazgo cita archivo y línea reales, verificados leyendo el código — no hay hallazgos especulativos.
 
 ## Resumen ejecutivo

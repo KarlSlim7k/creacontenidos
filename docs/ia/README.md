@@ -10,9 +10,10 @@
 
 | Documento | Qué cubre |
 |---|---|
-| [`../CREA_Stack_IA_Actualizado_v1.md`](../CREA_Stack_IA_Actualizado_v1.md) | Decisión de negocio vigente (Hermes Agent + Nous Portal + MiniMax) para el mes de pruebas. Documento ejecutivo, no técnico — no asume ninguna estructura de código. |
-| [`../PLAN_v1.md`](../PLAN_v1.md) | Plan ya completado del apartado público (portal + Estudio). Explícitamente dejó fuera listening/content-engine. |
-| Esta carpeta (`ia/`) | La capa que `PLAN_v1.md` dejó fuera: qué deben hacer `listening`, `content-engine`, `distribution` cuando se implementen, y las políticas editoriales/IA que ya se decidieron en v1 y siguen vigentes en v2. |
+| [`CREA_Stack_IA_Actualizado_v1.md`](./CREA_Stack_IA_Actualizado_v1.md) | **Supersedido.** Decisión de negocio original (Hermes Agent + Nous Portal + MiniMax) para el mes de pruebas — ya no describe el stack real, se conserva como histórico. |
+| [`stack-ia-servicios-costos.md`](./stack-ia-servicios-costos.md) | Stack de IA **vigente**: qué proveedor sirve cada capa (texto/imagen/audio/búsqueda) y por qué. |
+| [`../planes/PLAN_v1.md`](../planes/PLAN_v1.md) | Plan completado del apartado público (portal + Estudio). Explícitamente dejó fuera listening/content-engine. |
+| Esta carpeta (`ia/`) | La capa que `PLAN_v1.md` dejó fuera: políticas editoriales/IA y qué hacen `listening`, `content-engine`, `distribution` — ya implementados, ver estado abajo. |
 
 ## Archivos
 
@@ -23,6 +24,6 @@
 
 Ver también [`../adr/0001-ia-hibrida-gate-editorial.md`](../adr/0001-ia-hibrida-gate-editorial.md).
 
-## Estado de implementación (2026-07-01)
+## Estado de implementación (2026-07-28)
 
-`listening`, `content-engine` y `distribution` siguen siendo esqueletos (`// TODO`) — ver `apps/api/src/modules/<capa>/README.md`. `editorial` ya implementa el pipeline completo de propuestas (`propuesta → borrador → en_revision → published | rechazada`) incluyendo el campo de transparencia IA (`origin`), pero sobre datos de seed, no sobre generación real. Estos documentos son la especificación a implementar, no una descripción de código existente.
+`listening`, `content-engine`, `distribution` y `editorial` ya están implementados (no quedan esqueletos `// TODO`) — RADAR (listening) con paginación/filtros/gate editorial, content-engine generando propuesta/borrador/QA/imagen vía los proveedores reales de [`stack-ia-servicios-costos.md`](./stack-ia-servicios-costos.md), editorial con el pipeline completo (`propuesta → borrador → en_revision → published | rechazada`) incluyendo `origin` para transparencia IA. Estos documentos siguen siendo la referencia de política/spec, ya no la descripción de un esqueleto pendiente.

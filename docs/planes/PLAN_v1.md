@@ -1,5 +1,8 @@
 # PLAN v1 — Desarrollo funcional del apartado público (Editorial + Estudio)
 
+> **COMPLETADO (2026-07-28).** Las 5 fases (§5) están cerradas — se conserva como registro de alcance
+> y convenciones (§6), no como plan de trabajo activo. Estado actual del stack IA: [`../ia/stack-ia-servicios-costos.md`](../ia/stack-ia-servicios-costos.md).
+
 > Documento de trabajo para Claude Code (y demás agentes vía `AGENTS.md`).
 > Objetivo: pasar el frontend público de maquetas estáticas con datos hardcodeados
 > a una plataforma funcional servida por la API, **sin tocar todavía** los módulos
