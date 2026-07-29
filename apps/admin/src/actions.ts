@@ -9,6 +9,7 @@ import {
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
 import { readNewsletterForm } from './screens/hermes';
 import { goTo, login, logout } from './auth';
+import { promptPwaInstall } from './pwa';
 
 // ---------- lectura de formularios inline ----------
 
@@ -35,6 +36,7 @@ export function handleClick(e: MouseEvent) {
   const action = el.getAttribute('data-action');
   switch (action) {
     case 'logout': logout(); break;
+    case 'install-pwa': promptPwaInstall(); break;
     case 'goto': goTo(attr(el, 'data-id') as Screen, el.getAttribute('data-pid') ? Number(el.getAttribute('data-pid')) : null); break;
     case 'open-editor': goTo('editor', Number(attr(el, 'data-id'))); break;
     case 'close-editor': setState({ editorProposalId: null, editorDraft: null }); break;

@@ -2,6 +2,25 @@
 // newsletter, servicios, cuentas FB, métricas del sitio).
 import { state, type AdminUser, type Integration, type NewsletterEvent, type Service, type FbAccount } from '../store';
 import { esc, loadingCard, errorCard, relativeTime, roleLabels, navItemsAll } from '../util';
+import { isPwaInstalled, isIosDevice } from '../pwa';
+
+function renderPwaInstallCard(): string {
+  let body: string;
+  if (isPwaInstalled()) {
+    body = '<p class="padmin-lede" style="margin:0;">Ya está instalada en este dispositivo.</p>';
+  } else if (state.pwaInstallAvailable) {
+    body = '<button type="button" class="padmin-btn padmin-btn-sm" data-action="install-pwa">Instalar aplicación (Admin)</button>';
+  } else if (isIosDevice()) {
+    body = '<p class="padmin-lede" style="margin:0;">En Safari: botón Compartir → "Agregar a inicio".</p>';
+  } else {
+    body = '<p class="padmin-lede" style="margin:0;">Tu navegador aún no ofreció instalar. Busca el ícono de instalar en la barra de direcciones.</p>';
+  }
+  return `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:560px;">
+    <p style="font-size:13px;font-weight:600;color:var(--text);margin:0 0 8px;">Instalar como aplicación</p>
+    <p class="padmin-lede" style="margin:0 0 10px;">Agrega el panel a la pantalla de inicio de tu teléfono o computadora — se abre como app aparte.</p>
+    ${body}
+  </div>`;
+}
 
 export function renderConfigUsuarios(): string {
   const users = state.data.users;
@@ -54,7 +73,8 @@ export function renderConfigPermisos(): string {
 export function renderConfigIntegraciones(): string {
   const integrations = state.data.integrations;
   if (!integrations) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
-  return '<p class="padmin-lede" style="margin-bottom:14px;">Solo lectura — refleja las variables de entorno configuradas en el servidor.</p>' +
+  return renderPwaInstallCard() +
+    '<p class="padmin-lede" style="margin-bottom:14px;">Solo lectura — refleja las variables de entorno configuradas en el servidor.</p>' +
     `<div class="padmin-integraciones-grid">${integrations.map((i: Integration) => {
       const st = i.connected ? { label: 'Conectado', bg: 'var(--brand-soft)', color: 'var(--brand)', dot: 'var(--brand)' } : { label: 'Desconectado', bg: 'var(--bg-soft)', color: 'var(--mute-2)', dot: 'var(--line)' };
       return `<div class="padmin-integracion-card"><div style="display:flex;align-items:center;gap:10px;"><span class="padmin-dot" style="background:${st.dot};"></span><div><p style="font-size:13px;font-weight:500;color:var(--text);margin:0 0 2px;">${esc(i.name)}</p><p style="font-size:11px;color:var(--text-mute);margin:0;">${esc(i.desc)}</p></div></div><span class="padmin-badge" style="background:${st.bg};color:${st.color};">${st.label}</span></div>`;

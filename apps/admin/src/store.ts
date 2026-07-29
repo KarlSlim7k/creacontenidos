@@ -424,6 +424,7 @@ export interface State {
   soundMuted: boolean;
   deniedTarget?: string | null;
   mobileNavOpen?: boolean;
+  pwaInstallAvailable: boolean;
 }
 
 export const CREA_API_BASE = (function () {
@@ -467,6 +468,7 @@ export const state: State = {
   newsletterPreview: null, newsletterSubscriberCount: null,
   newsletterAudioBusy: false, newsletterAudioUrl: null,
   demoNote: null, errorMsg: null, dataError: null, successMsg: null, soundMuted: false,
+  pwaInstallAvailable: false,
 };
 state.soundMuted = isSoundMuted();
 
