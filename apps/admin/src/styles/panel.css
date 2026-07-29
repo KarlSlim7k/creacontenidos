@@ -90,7 +90,7 @@
 @keyframes padmin-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .padmin-logout { font-size: 11px; color: var(--accent-text); cursor: pointer; display: inline-block; padding: 10px 0; background: none; border: none; }
 
-.padmin-content { flex: 1; overflow: auto; background: var(--bg-admin); padding: 28px 32px; }
+.padmin-content { flex: 1; min-width: 0; overflow: auto; background: var(--bg-admin); padding: 28px 32px; }
 .padmin-h1 { font-weight: 600; font-size: 22px; color: var(--text); margin: 0 0 6px; }
 .padmin-lede { font-size: 13px; color: var(--text-mute); margin: 0 0 22px; }
 
@@ -219,7 +219,9 @@
   .padmin-nav, .padmin-account { display: none; }
   .padmin-sidebar.nav-open .padmin-nav { display: flex; flex-direction: column; padding: 10px 0 4px; }
   .padmin-sidebar.nav-open .padmin-account { display: block; border-top: 0.5px solid var(--line-soft); margin-top: 8px; padding: 12px 4px 0; }
+  .padmin-content { padding: 20px 16px; }
   .padmin-editor-grid2 { grid-template-columns: 1fr; }
+  .padmin-toast-stack { right: 16px; bottom: 16px; left: 16px; max-width: none; }
 }
 
 /* ---------- proposals ---------- */
@@ -238,6 +240,10 @@
 .padmin-drawer-close { cursor: pointer; font-size: 13px; color: var(--text-mute); }
 .padmin-drawer-section-title { font-size: 11px; font-weight: 600; color: var(--text); letter-spacing: 0.06em; margin: 0 0 8px; }
 .padmin-drawer-section-body { font-size: 13px; color: var(--text-2); line-height: 1.5; margin: 0 0 20px; }
+@media (max-width: 640px) {
+  .padmin-modal { top: 16px; transform: translateX(-50%); max-height: calc(100dvh - 32px); overflow: auto; padding: 20px; }
+  .padmin-drawer { width: 100%; padding: 20px 16px 28px; }
+}
 
 /* ---------- hermes (log oscuro — colores propios, no del tema claro) ---------- */
 .padmin-hermes-log { background: #15201A; border-radius: 8px; padding: 4px 0; margin-bottom: 28px; }
