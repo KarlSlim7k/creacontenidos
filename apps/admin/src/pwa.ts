@@ -4,7 +4,8 @@ import { setState } from './store';
 let deferredPrompt: Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> } | null = null;
 
 export function isPwaInstalled(): boolean {
-  return window.matchMedia('(display-mode: standalone)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
+  const standaloneMode = typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
+  return standaloneMode || (navigator as unknown as { standalone?: boolean }).standalone === true;
 }
 
 export function isIosDevice(): boolean {
