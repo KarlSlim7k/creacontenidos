@@ -19,7 +19,7 @@ function channelList() {
 }
 
 function noteUrl(slug) {
-  return config.publicSiteUrl.replace(/\/+$/, '') + '/nota.html?slug=' + encodeURIComponent(slug);
+  return config.publicSiteUrl.replace(/\/+$/, '') + '/notas/' + encodeURIComponent(slug);
 }
 
 // Solo notas con status='published' se distribuyen — nunca saltarse la puerta editorial.

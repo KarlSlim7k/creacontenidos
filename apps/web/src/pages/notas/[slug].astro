@@ -49,7 +49,7 @@ if (article) {
 const jsonLd = article ? newsArticleJsonLd(article, image) : null;
 ---
 <EditorialLayout
-  title={article ? article.title : 'Nota'}
+  title={article ? article.title : (fail ? fail.title : 'Nota')}
   description={article ? (article.dek || '') : 'Notas y reportajes de CREA Contenidos, medio digital local de Perote, Veracruz y el corredor Perote–Xalapa–Puebla.'}
   ogType="article"
   ogImage={image || undefined}
