@@ -6,8 +6,8 @@ Sistema de automatización editorial de CREA Contenidos (Perote, Veracruz).
 
 4 capas en secuencia, implementadas como módulos en `apps/api/src/modules/`:
 
-1. **Listening** — cron jobs que consultan Perplexity Sonar API y/o el microservicio `apps/competitor-scraper/` (Playwright + cookies de Facebook) para detectar temas relevantes en Perote y publicaciones de competidores.
-2. **Content Engine** — genera propuestas (nota, post, guion de audio, guion de video, meme) con Claude API.
+1. **Listening** — cron jobs que detectan temas de Perote con Firecrawl (scraping de medios regionales, `apps/api/src/lib/firecrawl-client.js`), con Perplexity Sonar como fallback si no hay key o URLs, más el microservicio `apps/competitor-scraper/` (Playwright + cookies de Facebook) para publicaciones de competidores. Cada tema pasa por verificación editorial (confianza, evidencia, banderas de riesgo).
+2. **Content Engine** — genera propuestas (nota, post, guion de audio, guion de video, meme), borradores, imágenes de portada y QA vía **Nous Portal**. Los modelos se eligen por env var (`AI_MODEL_DEFAULT`, `_COMPLEX`, `_QA`) y hay un reintento contra `AI_MODEL_FALLBACK` si el primario falla; las imágenes van por OpenRouter (`AI_MODEL_IMAGE`).
 3. **Editorial** — API del panel donde se revisa, edita, aprueba o rechaza cada propuesta. Nada se publica sin aprobación humana.
 4. **Distribution** — publica el contenido aprobado (Facebook, sitio, WhatsApp) y guarda métricas.
 
@@ -95,4 +95,24 @@ cd apps/web && npm install && npm run dev   # Astro SSR, http://localhost:4000 (
 cd apps/admin && npm install && npm run dev # Vite SPA, http://localhost:4001 (proxy /api -> :3000)
 ```
 
-Ningún módulo de IA (Perplexity, Claude, OpenAI) está conectado todavía — solo el esqueleto de arquitectura con datos de prueba. El competitor scraper (`apps/competitor-scraper/`) funciona contra Facebook con cookies reales — verificado en dev local (2026-07-29): sesión autenticada y scrape de una página pública sin login wall (ver `apps/competitor-scraper/README.md` sección "Operación" para el detalle y sección "Pitfall" si el archivo de cookies termina montado como directorio en vez de archivo).
+## Servicios externos conectados
+
+Ya no queda esqueleto: las cuatro capas corren contra proveedores reales. Sin la key correspondiente, cada integración degrada (el canal aparece "no configurado" en el panel) en vez de tumbar el arranque.
+
+| Servicio | Para qué | Env var |
+|---|---|---|
+| Nous Portal | Todo el texto: propuestas, borradores, QA | `NOUS_PORTAL_API_KEY`, `AI_MODEL_DEFAULT` / `_COMPLEX` / `_QA` / `_FALLBACK` |
+| OpenRouter | Imágenes de portada | `OPENROUTER_API_KEY`, `AI_MODEL_IMAGE` |
+| Firecrawl | Scraping de medios regionales para RADAR | `FIRECRAWL_API_KEY` |
+| Perplexity Sonar | Fallback de detección de temas | `PERPLEXITY_API_KEY` |
+| ElevenLabs | Audio del newsletter | `ELEVENLABS_API_KEY` |
+| Resend | Envío del newsletter y doble opt-in | `RESEND_API_KEY` |
+| Telegram | Aprobaciones editoriales por chat | `TELEGRAM_BOT_TOKEN` |
+| Facebook Graph | Publicación y métricas | `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_ACCESS_TOKEN` |
+| WordPress | Publicación al sitio | `WORDPRESS_URL`, `WORDPRESS_USER`, `WORDPRESS_APP_PASSWORD` |
+
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` y `APIFY_API_TOKEN` siguen declarados en `.env.example` y en `config.apiKeys`, pero hoy **ningún módulo los lee** — quedaron de cuando se iba a llamar a Anthropic/Apify directo, antes de rutear todo por Nous Portal. Dejarlos vacíos no rompe nada.
+
+Detalle de política de modelos, costos y qué hacer cuando un proveedor se cae: [`docs/ia/`](./docs/ia/) — en particular [`politica-ia-y-gate-editorial.md`](./docs/ia/politica-ia-y-gate-editorial.md) y [`runbook-incidentes.md`](./docs/ia/runbook-incidentes.md).
+
+El competitor scraper (`apps/competitor-scraper/`) funciona contra Facebook con cookies reales — verificado en dev local (2026-07-29): sesión autenticada y scrape de una página pública sin login wall (ver `apps/competitor-scraper/README.md` sección "Operación" para el detalle y sección "Pitfall" si el archivo de cookies termina montado como directorio en vez de archivo).
