@@ -19,10 +19,15 @@ function pickerRow(p: Proposal, editable: boolean): string {
     ? `<img src="${esc(p.cover_image_url)}" alt="" class="padmin-picker-thumb" onerror="this.style.visibility='hidden';">`
     : '<div class="padmin-picker-thumb padmin-picker-thumb-empty">Sin<br>imagen</div>';
   const meta = [p.section || '', fecha, p.author_name || ''].filter(Boolean).join(' · ');
+  // El disparador por teclado es el título (botón real), no la fila: la fila lleva
+  // botones dentro y un role="button" en el contenedor los volvería presentacionales.
+  const title = editable
+    ? `<button type="button" class="padmin-row-title padmin-row-title-btn" data-action="open-editor" data-id="${p.id}">${esc(p.title)}</button>`
+    : `<p class="padmin-row-title">${esc(p.title)}</p>`;
   return `<div class="padmin-row${editable ? ` clickable" data-action="open-editor" data-id="${p.id}"` : '"'} style="gap:12px;">
     ${thumb}
     <div style="flex:1;min-width:0;">
-      <p class="padmin-row-title">${esc(p.title)}</p>
+      ${title}
       <p class="padmin-row-meta">${esc(meta)}${p.dek ? ' — ' + esc(String(p.dek).slice(0, 90)) : ''}</p>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
@@ -41,7 +46,7 @@ function renderPickerPreview(): string {
     <div class="padmin-modal" style="width:720px;padding:18px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <p style="font-size:11px;font-weight:600;color:var(--text-mute);letter-spacing:0.06em;margin:0;">VISTA PREVIA — ${esc(p.title || '')}</p>
-        <span class="padmin-drawer-close" data-action="close-picker-preview">Cerrar &times;</span>
+        <button type="button" class="padmin-drawer-close" data-action="close-picker-preview">Cerrar &times;</button>
       </div>
       <iframe srcdoc="${esc(buildNotaPreviewDoc(p))}" class="padmin-preview-frame"></iframe>
     </div>
@@ -124,7 +129,7 @@ function renderNotaPreview(): string {
   return `<div class="padmin-editor-card" style="margin-top:10px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <p style="font-size:11px;font-weight:600;color:var(--text-mute);letter-spacing:0.06em;margin:0;">VISTA PREVIA — así se vería publicada</p>
-      <span class="padmin-drawer-close" data-action="close-nota-preview">Cerrar &times;</span>
+      <button type="button" class="padmin-drawer-close" data-action="close-nota-preview">Cerrar &times;</button>
     </div>
     <iframe srcdoc="${esc(state.notaPreviewHtml)}" class="padmin-preview-frame"></iframe>
   </div>`;
@@ -197,7 +202,7 @@ function renderQaResult(): string {
   return `<div class="padmin-editor-card" style="margin-top:10px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <p style="font-size:14px;font-weight:600;color:${color};margin:0;">Score: ${q.score}/100</p>
-      <span class="padmin-drawer-close" data-action="close-qa">Cerrar &times;</span>
+      <button type="button" class="padmin-drawer-close" data-action="close-qa">Cerrar &times;</button>
     </div>
     <ul style="font-size:12px;color:var(--text-2);padding-left:18px;margin:0 0 10px;">${issues || '<li>Sin observaciones.</li>'}</ul>
     <p style="font-size:12px;color:var(--text-mute);margin:0;">${esc(q.summary || '')}</p>

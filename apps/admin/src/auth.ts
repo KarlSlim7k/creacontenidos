@@ -1,5 +1,5 @@
 // CREA Panel Admin — auth, login y navegación entre pantallas.
-import { state, setState, setData, adminApi, loadScreenData, type Screen, type ApiError, type ActivityEntry } from './store';
+import { state, setState, setData, adminApi, loadScreenData, initialData, type Screen, type ApiError, type ActivityEntry } from './store';
 import { landingFor, esc } from './util';
 import { hashFor, screenFromHash } from './hash-router';
 // Import circular con router.ts (router importa renderLogin de aquí): seguro porque
@@ -53,13 +53,7 @@ export function logout() {
   setState({
     user: null, allowedModules: [], screen: 'login', loginError: null,
     errorMsg: null, successMsg: null,
-    data: {
-      ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null,
-      socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null,
-      newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null,
-      distLog: null, distChannels: null, competitors: null, radarSources: null, radarStats: null,
-      topicSummary: null, siteMetrics: null, fbAccounts: null,
-    },
+    data: initialData(),
   });
 }
 

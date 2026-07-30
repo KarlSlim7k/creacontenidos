@@ -7,8 +7,8 @@ const PIPELINE_STAGES_ORDER = ['identificado', 'contactado', 'propuesta_enviada'
 function sponsorFieldsHtml(c: Client): string {
   return `<div style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--line-soft);">
     <p style="font-size:10px;color:var(--mute-2);margin:0 0 6px;">Datos de patrocinio (newsletter)</p>
-    <input type="text" id="sponsor-link-${c.id}" placeholder="Sitio web" value="${esc(c.website_url || '')}" style="width:100%;font-size:11px;padding:5px 7px;border:0.5px solid var(--line-soft);border-radius:5px;box-sizing:border-box;margin-bottom:6px;">
-    <input type="text" id="sponsor-copy-${c.id}" placeholder="Copy (ej. Todo lo que necesitas para tu hogar)" value="${esc(c.sponsor_copy || '')}" style="width:100%;font-size:11px;padding:5px 7px;border:0.5px solid var(--line-soft);border-radius:5px;box-sizing:border-box;margin-bottom:6px;">
+    <input type="text" id="sponsor-link-${c.id}" class="padmin-sponsor-input" placeholder="Sitio web" value="${esc(c.website_url || '')}">
+    <input type="text" id="sponsor-copy-${c.id}" class="padmin-sponsor-input" placeholder="Copy (ej. Todo lo que necesitas para tu hogar)" value="${esc(c.sponsor_copy || '')}">
     <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="save-sponsor-info" data-id="${c.id}">Guardar patrocinio</button>
     ${c.last_sponsored_at ? `<p style="font-size:10px;color:var(--mute-2);margin:6px 0 0;">Último newsletter: ${new Date(c.last_sponsored_at).toLocaleDateString('es-MX')}</p>` : ''}
   </div>`;
@@ -64,7 +64,7 @@ export function renderLeads(): string {
   const statuses = ['todos', 'nuevo', 'contactado', 'descartado'];
   const chips = statuses.map((st) => {
     const active = state.leadsStatus === st;
-    return `<span class="padmin-chip" data-action="set-leads-status" data-value="${st}" style="background:${active ? 'var(--brand)' : 'var(--surface)'};color:${active ? '#fff' : 'var(--text)'};border-color:${active ? 'var(--brand)' : 'var(--line-soft)'};">${st === 'todos' ? 'Todos' : STATUS_LABEL[st]}</span>`;
+    return `<button type="button" class="padmin-chip${active ? ' active' : ''}" data-action="set-leads-status" data-value="${st}">${st === 'todos' ? 'Todos' : STATUS_LABEL[st]}</button>`;
   }).join('');
   const filtered = leads.filter((l: Lead) => state.leadsStatus === 'todos' || l.status === state.leadsStatus);
   const nuevos = leads.filter((l: Lead) => l.status === 'nuevo').length;

@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantallas Producciones (social embeds) y Publicadas.
 import { state, type SocialPost, type Proposal } from '../store';
-import { esc, loadingCard, errorCard, relativeTime } from '../util';
+import { esc, loadingCard, errorCard, relativeTime, badge } from '../util';
 
 export function renderProducciones(): string {
   const posts = state.data.socialPosts;
@@ -28,14 +28,13 @@ export function renderProducciones(): string {
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-social"><span></span><span>RED</span><span>TÍTULO / URL</span><span>POSICIÓN</span><span>ESTADO</span><span></span></div>
       ${posts.length ? posts.map((p: SocialPost) => {
-        const pub = p.is_published ? { label: 'Publicado', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Borrador', bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
         const titleLine = p.title ? `<p class="padmin-row-title" style="margin:0 0 2px;">${esc(p.title)}</p>` : '<p class="padmin-row-title" style="margin:0 0 2px;color:var(--mute-2);">(sin título)</p>';
         return `<div class="padmin-table-row padmin-cols-social">
           ${p.thumbnail_url ? `<img src="${esc(p.thumbnail_url)}" alt="" style="width:42px;height:42px;object-fit:cover;border-radius:4px;background:var(--line-soft);">` : '<div style="width:42px;height:42px;background:var(--line-soft);border-radius:4px;"></div>'}
           <span style="font-size:12px;font-weight:600;color:var(--brand);text-transform:uppercase;">${esc(p.network)}</span>
           <div style="min-width:0;">${titleLine}<p class="padmin-row-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:380px;">${esc(p.external_url)}</p></div>
           <span style="font-size:12px;color:var(--text);">${p.position}</span>
-          <span class="padmin-badge" style="background:${pub.bg};color:${pub.color};width:fit-content;">${pub.label}</span>
+          ${badge(p.is_published ? 'publicado' : 'no_publicado')}
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="toggle-social" data-id="${p.id}" data-pub="${!p.is_published}">${p.is_published ? 'Despublicar' : 'Publicar'}</button>
             <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="refetch-social" data-id="${p.id}">Refetch</button>

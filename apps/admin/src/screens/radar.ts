@@ -1,24 +1,13 @@
 // CREA Panel Admin — pantalla RADAR (social listening + verificación editorial).
-import { state, type Topic, type CompetitorPost, type VerificationStatus, type RadarSource, type RadarStats } from '../store';
-import { esc, loadingCard, errorCard } from '../util';
+import { state, type Topic, type CompetitorPost, type RadarSource, type RadarStats } from '../store';
+import { esc, loadingCard, errorCard, badge, statusStyle } from '../util';
 
 function canManageRadar(): boolean {
   return state.user!.role === 'director' || state.user!.role === 'produccion';
 }
 
-const VERIFY_LABELS: Record<VerificationStatus, string> = {
-  verified: 'Verificado',
-  checking: 'En verificación',
-  signal: 'Señal',
-  risk: 'Riesgo alto',
-};
-
-function verificationStyle(v: VerificationStatus | null): { bg: string; color: string; label: string } {
-  if (v === 'verified') return { bg: 'var(--brand-soft)', color: 'var(--brand)', label: VERIFY_LABELS.verified };
-  if (v === 'checking') return { bg: 'var(--accent-soft)', color: 'var(--accent-text)', label: VERIFY_LABELS.checking };
-  if (v === 'signal') return { bg: 'var(--surface)', color: 'var(--text-mute)', label: VERIFY_LABELS.signal };
-  if (v === 'risk') return { bg: 'var(--danger-soft, #fae5e0)', color: 'var(--danger)', label: VERIFY_LABELS.risk };
-  return { bg: 'var(--bg-soft, #f3f4f2)', color: 'var(--text-mute)', label: 'Sin evaluar' };
+function verificationBadge(v: Topic['verification_status']): string {
+  return badge(v || 'sin_evaluar');
 }
 
 function confidenceBand(c: number | null): { className: string; text: string } {
@@ -32,9 +21,8 @@ function confidenceBand(c: number | null): { className: string; text: string } {
 function confidenceBadge(c: number | null): string {
   const b = confidenceBand(c);
   if (b.text === '—') return `<span style="font-size:12px;color:var(--text-mute);">—</span>`;
-  const bg = b.className === 'high' ? 'var(--brand-soft)' : b.className === 'mid' ? 'var(--accent-soft)' : 'var(--danger-soft, #fae5e0)';
-  const color = b.className === 'high' ? 'var(--brand)' : b.className === 'mid' ? 'var(--accent-text)' : 'var(--danger)';
-  return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:24px;border-radius:12px;font-size:12px;font-weight:700;background:${bg};color:${color};">${esc(b.text)}</span>`;
+  const st = statusStyle(b.className === 'high' ? 'high' : b.className === 'mid' ? 'medium' : 'low');
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:24px;border-radius:12px;font-size:12px;font-weight:700;background:${st.bg};color:${st.color};">${esc(b.text)}</span>`;
 }
 
 function evidenceList(topic: Topic): NonNullable<Topic['evidence']> {
@@ -53,7 +41,6 @@ function renderRadarDetail(): string {
   const topic = topics.filter((r: Topic) => r.id === state.selectedRadarId)[0];
   if (!topic) return '';
 
-  const vStyle = verificationStyle(topic.verification_status);
   const conf = topic.confidence != null ? `${Math.round(Number(topic.confidence))} / 100 de confianza` : 'Sin score de confianza';
   const evidence = evidenceList(topic);
   const flags = Array.isArray(topic.risk_flags) ? topic.risk_flags : [];
@@ -64,9 +51,9 @@ function renderRadarDetail(): string {
       const label = esc(ev.label || 'Fuente');
       const meta = [ev.kind, ev.url].filter(Boolean).map(String).join(' · ');
       const tags = [
-        ev.supports ? `<span class="padmin-badge" style="background:var(--bg-soft);color:var(--text-mute);font-size:10px;">${esc(String(ev.supports))}</span>` : '',
-        ev.reliable === true ? `<span class="padmin-badge" style="background:var(--brand-soft);color:var(--brand);font-size:10px;">Confiable</span>` : '',
-        ev.reliable === false ? `<span class="padmin-badge" style="background:var(--danger-soft, #fae5e0);color:var(--danger);font-size:10px;">Débil</span>` : '',
+        ev.supports ? badge('sin_evaluar', String(ev.supports)) : '',
+        ev.reliable === true ? badge('verified', 'Confiable') : '',
+        ev.reliable === false ? badge('risk', 'Débil') : '',
       ].join(' ');
       return `<div style="border:0.5px solid var(--line-soft);border-radius:6px;padding:10px;margin:6px 0;">
         <b style="display:block;font-size:12px;color:var(--text);">${label}</b>
@@ -87,10 +74,10 @@ function renderRadarDetail(): string {
   return `<div class="padmin-overlay">
     <div class="padmin-overlay-bg" data-action="close-radar"></div>
     <div class="padmin-drawer">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;"><p class="padmin-drawer-eyebrow">FICHA DE VERIFICACIÓN · RADAR</p><span class="padmin-drawer-close" data-action="close-radar">Cerrar &times;</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;"><p class="padmin-drawer-eyebrow">FICHA DE VERIFICACIÓN · RADAR</p><button type="button" class="padmin-drawer-close" data-action="close-radar">Cerrar &times;</button></div>
       <h2 style="font-size:16px;font-weight:600;color:var(--text);margin:0 0 12px;line-height:1.35;">${esc(topic.title)}</h2>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center;">
-        <span class="padmin-badge" style="background:${vStyle.bg};color:${vStyle.color};">${esc(vStyle.label)}</span>
+        ${verificationBadge(topic.verification_status)}
         <span style="font-size:11px;color:var(--text-mute);">${esc(conf)}</span>
         <span style="font-size:11px;color:var(--text-mute);">Workflow: <b style="color:var(--text);">${esc(topic.status)}</b></span>
       </div>
@@ -146,9 +133,7 @@ export function renderRadar(): string {
 }
 
 function trustBadge(trust: string): string {
-  if (trust === 'high') return '<span class="padmin-badge" style="background:var(--brand-soft);color:var(--brand);">Alta</span>';
-  if (trust === 'low') return '<span class="padmin-badge" style="background:var(--danger-soft,#fae5e0);color:var(--danger);">Baja</span>';
-  return '<span class="padmin-badge" style="background:var(--accent-soft);color:var(--accent-text);">Media</span>';
+  return badge(trust);
 }
 
 function renderRadarFuentes(): string {
@@ -159,15 +144,15 @@ function renderRadarFuentes(): string {
   return `<div>
     <p class="padmin-lede" style="margin-top:0;">Lista editorial de dominios. En la detección, evidence con host <b>alta</b> sube confianza; <b>baja</b> la penaliza. Activas: ${activeCount}.</p>
     <div class="padmin-card">
-      <div class="padmin-table-head" style="grid-template-columns:1.2fr 1.4fr 90px 90px 1fr 100px;min-width:640px;">
+      <div class="padmin-table-head padmin-cols-fuentes">
         <span>DOMINIO</span><span>ETIQUETA</span><span>TRUST</span><span>ESTADO</span><span>NOTAS</span><span>ACCIONES</span>
       </div>
       ${sources.length ? sources.map((s: RadarSource) => `
-        <div class="padmin-table-row" style="grid-template-columns:1.2fr 1.4fr 90px 90px 1fr 100px;min-width:640px;">
+        <div class="padmin-table-row padmin-cols-fuentes">
           <span style="font-size:13px;font-weight:600;color:var(--text);">${esc(s.domain)}</span>
           <span style="font-size:12px;color:var(--text);">${esc(s.label)}</span>
           <span>${trustBadge(s.trust)}</span>
-          <span class="padmin-badge" style="background:${s.active ? 'var(--brand-soft)' : 'var(--bg-soft)'};color:${s.active ? 'var(--brand)' : 'var(--text-mute)'};">${s.active ? 'Activa' : 'Off'}</span>
+          ${badge(s.active ? 'activo' : 'inactivo', s.active ? 'Activa' : 'Off')}
           <span style="font-size:11px;color:var(--text-mute);">${esc(s.notes || '—')}</span>
           <span>${canManage
             ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="toggle-radar-source" data-id="${s.id}" data-active="${s.active ? 'true' : 'false'}">${s.active ? 'Desactivar' : 'Activar'}</button>`
@@ -193,7 +178,6 @@ function renderRadarCompetencia(): string {
       <div class="padmin-table-head padmin-cols-competencia"><span>CUENTA</span><span>PUBLICACIÓN</span><span>FECHA</span><span>INTERACCIONES</span><span>ESTADO</span><span>ACCIONES</span></div>
       ${posts.length ? posts.map((p: CompetitorPost) => {
         const inter = (p.reactions || 0) + (p.comments || 0) + (p.shares || 0);
-        const st = p.analyzed ? { label: 'Analizado', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Nuevo', bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
         const text = String(p.post_text || '—');
         return `<div class="padmin-table-row padmin-cols-competencia">
           <div style="min-width:0;"><p class="padmin-row-title">${esc(p.source_account || '—')}</p><p class="padmin-row-meta" style="text-transform:uppercase;">${esc(p.source_platform || '')}</p></div>
@@ -201,7 +185,7 @@ function renderRadarCompetencia(): string {
             ${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener" style="display:block;font-size:11px;color:var(--accent-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(p.post_url)}</a>` : ''}</div>
           <span style="font-size:11px;color:var(--text-mute);">${p.post_date ? new Date(p.post_date).toLocaleDateString('es-MX') : '—'}</span>
           <span style="font-size:12px;font-weight:600;color:var(--text);">${inter}</span>
-          <span><span class="padmin-badge" style="background:${st.bg};color:${st.color};">${st.label}</span></span>
+          <span>${badge(p.analyzed ? 'analizado' : 'nuevo')}</span>
           <span style="display:flex;gap:4px;flex-wrap:wrap;">
             ${canManage ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" title="Crear idea en la bandeja a partir de esta publicación" data-action="competitor-to-idea" data-id="${p.id}">→ Idea</button>` : ''}
             ${canManage && !p.analyzed ? `<button type="button" class="padmin-icon-btn" title="Marcar analizado" data-action="analyze-competitor" data-id="${p.id}">✓</button>` : ''}
@@ -234,7 +218,7 @@ function renderCalibration(stats: RadarStats | null): string {
     if (state.radarStatsError) {
       return `<div style="margin:0 0 16px;padding:12px 14px;background:var(--surface);border:0.5px solid var(--line-soft);border-radius:7px;font-size:12px;color:var(--danger);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span>Calibración: ${esc(state.radarStatsError)}</span>
-        <span class="padmin-chip" data-action="retry-radar-stats" style="cursor:pointer;">Reintentar</span>
+        <button type="button" class="padmin-chip" data-action="retry-radar-stats">Reintentar</button>
       </div>`;
     }
     return `<div style="margin:0 0 16px;padding:12px 14px;background:var(--surface);border:0.5px solid var(--line-soft);border-radius:7px;font-size:12px;color:var(--text-mute);">Calibración: cargando stats…</div>`;
@@ -248,7 +232,7 @@ function renderCalibration(stats: RadarStats | null): string {
     return `${label}: ${row.count} (${row.pct}%${avg})`;
   };
   const dayChip = (d: number) =>
-    `<span class="padmin-chip" data-action="set-radar-stats-days" data-value="${d}" style="background:${days === d ? 'var(--brand)' : 'var(--surface)'};color:${days === d ? '#fff' : 'var(--text)'};border-color:${days === d ? 'var(--brand)' : 'var(--line-soft)'};cursor:pointer;">${d}d</span>`;
+    `<button type="button" class="padmin-chip${days === d ? ' active' : ''}" data-action="set-radar-stats-days" data-value="${d}">${d}d</button>`;
   const hints = (stats.hints || []).map((h) =>
     `<li style="margin:4px 0;font-size:12px;color:var(--text-2);">${esc(h)}</li>`
   ).join('');
@@ -289,12 +273,12 @@ function renderRadarTemas(): string {
     { id: 'risk', label: 'Con riesgo' },
     { id: 'none', label: 'Sin evaluar' },
   ];
-  const chip = (active: boolean, action: string, value: string, label: string, activeBg: string) =>
-    `<span class="padmin-chip" data-action="${action}" data-value="${esc(value)}" style="background:${active ? activeBg : 'var(--surface)'};color:${active ? '#fff' : 'var(--text)'};border-color:${active ? activeBg : 'var(--line-soft)'};">${esc(label)}</span>`;
+  const chip = (active: boolean, action: string, value: string, label: string, accent?: boolean) =>
+    `<button type="button" class="padmin-chip${active ? (accent ? ' active-accent' : ' active') : ''}" data-action="${action}" data-value="${esc(value)}">${esc(label)}</button>`;
 
-  const sourceChips = sources.map((src) => chip(state.radarSource === src, 'set-radar-source', src, src, 'var(--brand)')).join('');
-  const workflowChips = workflowStatuses.map((st) => chip(state.radarStatus === st, 'set-radar-status', st, st, 'var(--accent)')).join('');
-  const verifyChips = verifications.map((v) => chip(state.radarVerification === v.id, 'set-radar-verification', v.id, v.label, 'var(--brand)')).join('');
+  const sourceChips = sources.map((src) => chip(state.radarSource === src, 'set-radar-source', src, src)).join('');
+  const workflowChips = workflowStatuses.map((st) => chip(state.radarStatus === st, 'set-radar-status', st, st, true)).join('');
+  const verifyChips = verifications.map((v) => chip(state.radarVerification === v.id, 'set-radar-verification', v.id, v.label)).join('');
 
   return `${renderSummary()}
     ${renderCalibration(state.data.radarStats)}
@@ -311,17 +295,19 @@ function renderRadarTemas(): string {
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-radar"><span>TEMA</span><span>FUENTE</span><span>INTERÉS</span><span>CONFIANZA</span><span>VERIFICACIÓN</span><span>ACCIONES</span></div>
       ${topics.length ? topics.map((r: Topic) => {
-        const vStyle = verificationStyle(r.verification_status);
         const canManage = state.user!.role === 'director' || state.user!.role === 'produccion';
         const sub = r.known_facts
           ? esc(r.known_facts.slice(0, 90)) + (r.known_facts.length > 90 ? '…' : '')
           : (r.source_count != null ? `${r.source_count} fuente(s)` : '');
+        // Sin role="button" en la fila: contiene botones (👁 Ver, ✓ Aprobar) y los
+        // descendientes de role="button" son presentacionales para el lector de
+        // pantalla. El acceso por teclado a la ficha va por el botón 👁.
         return `<div class="padmin-table-row clickable padmin-cols-radar" data-action="open-radar" data-id="${r.id}">
           <div style="min-width:0;"><span style="font-size:13px;color:var(--text);display:block;">${esc(r.title)}</span>${sub ? `<span style="font-size:11px;color:var(--text-mute);display:block;margin-top:2px;">${sub}</span>` : ''}</div>
           <span style="font-size:12px;color:var(--text-mute);">${esc(r.source || '—')}</span>
           <span style="font-size:12px;color:var(--text);font-weight:600;">${r.mentions}</span>
           <span>${confidenceBadge(r.confidence)}</span>
-          <span class="padmin-badge" style="background:${vStyle.bg};color:${vStyle.color};width:fit-content;">${esc(vStyle.label)}</span>
+          ${verificationBadge(r.verification_status)}
           <span style="display:flex;gap:4px;">
             <button type="button" title="Ver" data-action="open-radar" data-id="${r.id}" class="padmin-icon-btn">👁</button>
             ${canManage ? `<button type="button" title="Aprobar" data-action="approve-topic" data-id="${r.id}" class="padmin-icon-btn" ${r.status === 'Revisado' ? 'disabled' : ''}>✓</button>` : ''}

@@ -31,276 +31,281 @@ function firstFieldError(err: ApiError): string {
 // ---------- click delegation ----------
 
 export function handleClick(e: MouseEvent) {
-  const el = (e.target as HTMLElement).closest('[data-action]');
-  if (!el) return;
-  const action = el.getAttribute('data-action');
-  switch (action) {
-    case 'logout': logout(); break;
-    case 'install-pwa': promptPwaInstall(); break;
-    case 'goto': goTo(attr(el, 'data-id') as Screen, el.getAttribute('data-pid') ? Number(el.getAttribute('data-pid')) : null); break;
-    case 'open-editor': goTo('editor', Number(attr(el, 'data-id'))); break;
-    case 'close-editor': setState({ editorProposalId: null, editorDraft: null }); break;
-    case 'toggle-notifications': {
-      const opening = !state.showNotifications;
-      setState({ showNotifications: opening });
-      if (opening) {
-        try { localStorage.setItem('crea-admin-last-notif-seen', new Date().toISOString()); } catch { /* modo privado */ }
-      }
-      break;
-    }
-    case 'toggle-sound': {
-      const muted = !isSoundMuted();
-      try { localStorage.setItem('crea-admin-sound-muted', muted ? '1' : '0'); } catch { /* modo privado */ }
-      setState({ soundMuted: muted });
-      break;
-    }
-    case 'dismiss-toast':
-      if (el.getAttribute('data-kind') === 'error') setState({ errorMsg: null });
-      else setState({ successMsg: null });
-      break;
-    case 'set-radar-source': setState({ radarSource: attr(el, 'data-value') }); loadRadarTopics(true); break;
-    case 'set-radar-status': setState({ radarStatus: attr(el, 'data-value') }); loadRadarTopics(true); break;
-    case 'set-radar-verification': setState({ radarVerification: attr(el, 'data-value') }); loadRadarTopics(true); break;
-    case 'load-more-topics': loadRadarTopics(false); break;
-    case 'refresh-radar':
-      loadRadarTopics(true);
-      loadRadarSummary();
-      loadRadarStats();
-      break;
-    case 'retry-radar-stats': setState({ radarStatsError: null }); loadRadarStats(); break;
-    case 'set-radar-stats-days': {
-      const days = Number(attr(el, 'data-value')) || 30;
-      setState({ radarStatsDays: days, radarStatsError: null });
-      loadRadarStats();
-      break;
-    }
-    case 'set-radar-tab': setState({ radarTab: attr(el, 'data-tab') as 'temas' | 'competencia' | 'fuentes' }); loadScreenData('radar'); break;
-    case 'toggle-radar-source': {
-      const id = Number(attr(el, 'data-id'));
-      const active = attr(el, 'data-active') !== 'true';
-      adminApi(`/api/listening/radar-sources/${id}`, { method: 'PATCH', body: { active } })
-        .then(() => adminApi('/api/listening/radar-sources'))
-        .then((rows) => { setData({ radarSources: rows as RadarSource[] }); })
-        .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
-      break;
-    }
-    case 'detect-competitors':
-      setState({ competitorsBusy: true });
-      adminApi('/api/listening/competitors/detect', { method: 'POST' })
-        .then(() => adminApi<CompetitorPost[]>('/api/listening/competitors'))
-        .then((posts) => {
-          state.data.competitors = posts;
-          setState({ competitorsBusy: false, successMsg: 'Exploración de competencia completada.' });
-        })
-        .catch((err: ApiError) => { setState({ competitorsBusy: false, errorMsg: err.message }); });
-      break;
-    case 'detect-competitors-fb':
-      setState({ competitorsBusy: true });
-      adminApi('/api/listening/competitors/detect', { method: 'POST', body: { source: 'facebook' } })
-        .then(() => adminApi<CompetitorPost[]>('/api/listening/competitors'))
-        .then((posts) => {
-          setState({ competitorsBusy: false, successMsg: 'Escaneo de Facebook completado.' });
-          setData({ competitors: posts });
-          loadRadarTopics(true);
-          loadRadarSummary();
-        })
-        .catch((err: ApiError) => { setState({ competitorsBusy: false, errorMsg: err.message }); });
-      break;
-    case 'analyze-competitor': submitAnalyzeCompetitor(Number(attr(el, 'data-id'))); break;
-    case 'delete-competitor': submitDeleteCompetitor(Number(attr(el, 'data-id'))); break;
-    case 'clear-competitors': submitClearCompetitors(); break;
-    case 'competitor-to-idea': submitCompetitorToIdea(Number(attr(el, 'data-id'))); break;
-    case 'set-leads-status': setState({ leadsStatus: attr(el, 'data-value') }); break;
-    case 'mark-lead': submitMarkLead(Number(attr(el, 'data-id')), attr(el, 'data-status')); break;
-    case 'convert-lead': submitConvertLead(Number(attr(el, 'data-id'))); break;
-    case 'delete-lead': submitDeleteLead(Number(attr(el, 'data-id'))); break;
-    case 'open-radar': setState({ selectedRadarId: Number(attr(el, 'data-id')) }); break;
-    case 'close-radar': setState({ selectedRadarId: null }); break;
-    case 'approve-topic': submitApproveTopic(Number(attr(el, 'data-id'))); break;
-    case 'delete-topic': submitDeleteTopic(Number(attr(el, 'data-id'))); break;
-    case 'clear-topics': submitClearTopics(); break;
-    case 'open-comentario': setState({ comentarioPieceId: Number(attr(el, 'data-id')), comentarioText: '' }); break;
-    case 'close-comentario': setState({ comentarioPieceId: null, comentarioText: '' }); break;
-    case 'confirm-comentario': submitReturn(Number(attr(el, 'data-id'))); break;
-    case 'set-transparency': setState({ transparency: mergeKey(state.transparency, attr(el, 'data-piece'), attr(el, 'data-label')) }); break;
-    case 'approve-piece': submitPublish(Number(attr(el, 'data-id'))); break;
-    case 'distribute': submitDistribute(attr(el, 'data-channel'), Number(attr(el, 'data-id'))); break;
-    case 'set-config-tab': setState({ configTab: attr(el, 'data-tab') }); loadScreenData('configuracion'); break;
-    case 'approve-propuesta': submitApproveProposal(Number(attr(el, 'data-id'))); break;
-    case 'start-reject-propuesta': setState({ propuestaRejecting: Number(attr(el, 'data-id')) }); break;
-    case 'confirm-reject-propuesta': submitRejectProposal(Number(attr(el, 'data-id'))); break;
-    case 'advance-client': submitAdvanceClient(Number(attr(el, 'data-id')), attr(el, 'data-stage')); break;
-    case 'delete-idea': submitDeleteIdea(Number(attr(el, 'data-id'))); break;
-    case 'open-client-form': setState({ clientFormOpen: true, clientFormError: null }); break;
-    case 'close-client-form': setState({ clientFormOpen: false, clientFormError: null }); break;
-    case 'delete-client': submitDeleteClient(Number(attr(el, 'data-id'))); break;
-    case 'delete-propuesta': submitDeleteProposal(Number(attr(el, 'data-id'))); break;
-    case 'save-draft': submitDraft(Number(attr(el, 'data-id')), false); break;
-    case 'submit-review': submitDraft(Number(attr(el, 'data-id')), true); break;
-    case 'open-new-user': setState({ newUserOpen: true, newUserError: null, editingUserId: null }); break;
-    case 'open-edit-user': setState({ newUserOpen: true, newUserError: null, editingUserId: Number(attr(el, 'data-id')) }); break;
-    case 'close-new-user': setState({ newUserOpen: false, newUserError: null, editingUserId: null }); break;
-    case 'toggle-user-active': submitToggleUser(Number(attr(el, 'data-id')), attr(el, 'data-active') === 'true'); break;
-    case 'open-new-service': setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: null }); break;
-    case 'edit-service': setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: Number(attr(el, 'data-id')) }); break;
-    case 'close-service-form': setState({ serviceFormOpen: false, serviceFormError: null, editingServiceId: null }); break;
-    case 'delete-service': submitDeleteService(Number(attr(el, 'data-id'))); break;
-    case 'open-new-fb-account': setState({ fbAccountFormOpen: true, fbAccountFormError: null, editingFbAccountId: null }); break;
-    case 'edit-fb-account': setState({ fbAccountFormOpen: true, fbAccountFormError: null, editingFbAccountId: Number(attr(el, 'data-id')) }); break;
-    case 'close-fb-account-form': setState({ fbAccountFormOpen: false, fbAccountFormError: null, editingFbAccountId: null }); break;
-    case 'delete-fb-account': submitDeleteFbAccount(Number(attr(el, 'data-id'))); break;
-    case 'generate-draft':
-      if (!state.editorProposalId) break;
-      state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
-      setState({ generatingDraft: true });
-      adminApi<{ body: string }>('/api/content/generate-draft', { method: 'POST', body: { proposal_id: state.editorProposalId } })
-        .then((res) => {
-          if (state.editorDraft) state.editorDraft.body = res.body;
-          setState({ generatingDraft: false });
-        })
-        .catch((err: ApiError) => { setState({ generatingDraft: false, errorMsg: err.message }); });
-      break;
-    case 'preview-piece': {
-      const ppid = Number(attr(el, 'data-id'));
-      const ppLists = (state.data.proposalsByKey.borrador || []).concat(state.data.proposalsByKey.en_revision || []);
-      const pp = ppLists.filter((p: Proposal) => p.id === ppid)[0];
-      if (pp) setState({ pickerPreview: pp });
-      break;
-    }
-    case 'close-picker-preview': setState({ pickerPreview: null }); break;
-    case 'toggle-mobile-nav': setState({ mobileNavOpen: !state.mobileNavOpen }); break;
-    case 'delete-borrador': submitDeleteBorrador(Number(attr(el, 'data-id'))); break;
-    case 'reopen-published': submitReopenPublished(Number(attr(el, 'data-id'))); break;
-    case 'delete-published': submitDeletePublished(Number(attr(el, 'data-id')), attr(el, 'data-title')); break;
-    case 'generate-image': {
-      if (!state.editorProposalId) break;
-      state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
-      const imgPrompt = (document.getElementById('editor-image-prompt') as HTMLTextAreaElement).value;
-      if (!imgPrompt.trim()) { setState({ errorMsg: 'Escribe un prompt para generar la imagen.' }); break; }
-      setState({ generatingImage: true, editorImagePrompt: imgPrompt });
-      adminApi<{ cover_image_url: string }>('/api/content/generate-image', { method: 'POST', body: { proposal_id: state.editorProposalId, prompt: imgPrompt } })
-        .then((res) => {
-          if (state.editorDraft) state.editorDraft.cover_image_url = res.cover_image_url;
-          setState({ generatingImage: false, successMsg: 'Imagen de portada generada.' });
-        })
-        .catch((err: ApiError) => { setState({ generatingImage: false, errorMsg: err.message }); });
-      break;
-    }
-    case 'run-qa':
-      if (!state.editorProposalId) break;
-      setState({ qaBusy: true, qaResult: null });
-      adminApi<QaResult>('/api/content/qa-check', { method: 'POST', body: { proposal_id: state.editorProposalId } })
-        .then((res) => { setState({ qaBusy: false, qaResult: res }); })
-        .catch((err: ApiError) => { setState({ qaBusy: false, errorMsg: err.message }); });
-      break;
-    case 'close-qa': setState({ qaResult: null }); break;
-    case 'preview-nota': {
-      if (!state.editorDraft) break;
-      const previewFields = readEditorForm();
-      state.editorDraft = Object.assign({}, state.editorDraft, previewFields) as EditorDraft;
-      setState({ notaPreviewHtml: buildNotaPreviewDoc(previewFields) });
-      break;
-    }
-    case 'close-nota-preview': setState({ notaPreviewHtml: null }); break;
-    case 'generate-newsletter':
-    case 'regenerate-newsletter':
-      setState({ newsletterBusy: true, errorMsg: null });
-      adminApi<NewsletterContent>('/api/newsletter/generate', { method: 'POST' })
-        .then((content) => { setState({ newsletterBusy: false, newsletterContent: content, newsletterPreview: null, newsletterAudioUrl: null }); })
-        .catch((err: ApiError) => { setState({ newsletterBusy: false, errorMsg: err.message }); });
-      break;
-    case 'preview-newsletter':
-      adminApi<{ html: string }>('/api/newsletter/preview', { method: 'POST', body: readNewsletterForm() })
-        .then((res) => { setState({ newsletterPreview: res.html, errorMsg: null }); })
-        .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
-      break;
-    case 'close-newsletter-preview': setState({ newsletterPreview: null }); break;
-    case 'generate-newsletter-audio':
-      setState({ newsletterAudioBusy: true, errorMsg: null });
-      adminApiBlob('/api/newsletter/audio', { method: 'POST', body: readNewsletterForm() })
-        .then((blob) => {
-          setState({ newsletterAudioBusy: false, newsletterAudioUrl: URL.createObjectURL(blob) });
-        })
-        .catch((err: ApiError) => { setState({ newsletterAudioBusy: false, errorMsg: err.message }); });
-      break;
-    case 'send-newsletter':
-      if (!confirm('¿Enviar el newsletter a todos los suscriptores activos? Esta acción no se puede deshacer.')) break;
-      setState({ newsletterSending: true, errorMsg: null });
-      adminApi('/api/newsletter/send', { method: 'POST', body: readNewsletterForm() })
-        .then(() => {
-          setState({ newsletterSending: false, newsletterContent: null, newsletterPreview: null, newsletterAudioUrl: null, successMsg: 'Newsletter enviado a los suscriptores.' });
-        })
-        .catch((err: ApiError) => { setState({ newsletterSending: false, errorMsg: err.message }); });
-      break;
-    case 'detect-radar':
-      setState({ radarBusy: true });
-      adminApi('/api/listening/topics/detect', { method: 'POST' })
-        .then(() => {
-          setState({ radarBusy: false, successMsg: 'Detección completada.' });
-          loadRadarTopics(true);
-          loadRadarSummary();
-          loadRadarStats();
-        })
-        .catch((err: ApiError) => { setState({ radarBusy: false, errorMsg: err.message }); });
-      break;
-    case 'generate-proposal-from-topic': {
-      const topicId = Number(attr(el, 'data-id'));
-      const forceRisk = attr(el, 'data-force-risk') === '1';
-      if (forceRisk) {
-        const ok = window.confirm(
-          'Este tema está en riesgo editorial alto (rumor, clickbait o fuente débil).\n\n¿Forzar generación de propuesta de todas formas?'
-        );
-        if (!ok) break;
-      }
-      const format = document.getElementById('proposal-format-' + topicId) as HTMLSelectElement | null;
-      setState({ generatingProposal: true });
-      const body: { topic_id: number; format: string; force?: boolean } = {
-        topic_id: topicId,
-        format: format ? format.value : 'nota',
-      };
-      if (forceRisk) body.force = true;
-      adminApi<Proposal & { warnings?: string[] }>('/api/content/generate-proposal', { method: 'POST', body })
-        .then((proposal) => {
-          state.data.proposalsByKey = {};
-          const warn = Array.isArray(proposal.warnings) && proposal.warnings.length
-            ? ' — ' + proposal.warnings.join(' ')
-            : '';
-          setState({
-            generatingProposal: false,
-            selectedRadarId: null,
-            successMsg: 'Propuesta creada: ' + proposal.title + warn,
-          });
-        })
-        .catch((err: ApiError) => { setState({ generatingProposal: false, errorMsg: err.message }); });
-      break;
-    }
-    case 'open-social-form': setState({ socialFormOpen: true, socialFormError: null }); break;
-    case 'close-social-form': setState({ socialFormOpen: false, socialFormError: null, socialBusy: false }); break;
-    case 'toggle-social': submitToggleSocial(Number(attr(el, 'data-id')), attr(el, 'data-pub') === 'true'); break;
-    case 'refetch-social': submitRefetchSocial(Number(attr(el, 'data-id'))); break;
-    case 'delete-social': submitDeleteSocial(Number(attr(el, 'data-id'))); break;
-    case 'delete-newsletter-event': {
-      const evId = Number(attr(el, 'data-id'));
-      adminApi('/api/newsletter/events/' + evId, { method: 'DELETE' })
-        .then(() => { setData({ newsletterEvents: (state.data.newsletterEvents || []).filter((ev: NewsletterEvent) => ev.id !== evId) }); })
-        .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
-      break;
-    }
-    case 'save-sponsor-info': {
-      const spId = Number(attr(el, 'data-id'));
-      adminApi<Client>('/api/commercial/clients/' + spId, { method: 'PATCH', body: {
-        website_url: (document.getElementById('sponsor-link-' + spId) as HTMLInputElement).value.trim(),
-        sponsor_copy: (document.getElementById('sponsor-copy-' + spId) as HTMLInputElement).value.trim(),
-      } })
-        .then((updated) => {
-          setData({ clients: (state.data.clients || []).map((c) => c.id === spId ? Object.assign({}, c, updated) : c) });
-        })
-        .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
-      break;
-    }
-    default: break;
+  const target = e.target as HTMLElement;
+  // Click fuera del panel de notificaciones (otra sección, otro botón, el fondo)
+  // lo cierra. Se resuelve DESPUÉS del handler: setState re-renderiza, y algunos
+  // handlers leen valores que solo viven en el DOM (el prompt de imagen, los
+  // campos del newsletter) — cerrarlo antes los borraría.
+  const closeNotifs = state.showNotifications && !target.closest('.padmin-bell-wrap');
+  const el = target.closest('[data-action]');
+  if (el) {
+    const action = el.getAttribute('data-action') || '';
+    // hasOwn: sin él, data-action="toString"/"constructor" resolvería contra
+    // Object.prototype y llamaría a una función que no es un handler.
+    if (Object.hasOwn(clickHandlers, action)) clickHandlers[action](el);
   }
+  if (closeNotifs) setState({ showNotifications: false });
 }
+
+function generateNewsletter() {
+  setState({ newsletterBusy: true, errorMsg: null });
+  adminApi<NewsletterContent>('/api/newsletter/generate', { method: 'POST' })
+    .then((content) => { setState({ newsletterBusy: false, newsletterContent: content, newsletterPreview: null, newsletterAudioUrl: null }); })
+    .catch((err: ApiError) => { setState({ newsletterBusy: false, errorMsg: err.message }); });
+}
+
+// Mapa acción → handler: una acción nueva es una entrada aquí, no un case más.
+// Las mutaciones con lógica propia viven en las funciones submit* de abajo.
+const clickHandlers: Record<string, (el: Element) => void> = {
+  'logout': () => logout(),
+  'install-pwa': () => promptPwaInstall(),
+  'goto': (el) => goTo(attr(el, 'data-id') as Screen, el.getAttribute('data-pid') ? Number(el.getAttribute('data-pid')) : null),
+  'open-editor': (el) => goTo('editor', Number(attr(el, 'data-id'))),
+  'close-editor': () => setState({ editorProposalId: null, editorDraft: null }),
+  'toggle-notifications': () => {
+    const opening = !state.showNotifications;
+    setState({ showNotifications: opening });
+    if (opening) {
+      try { localStorage.setItem('crea-admin-last-notif-seen', new Date().toISOString()); } catch { /* modo privado */ }
+    }
+  },
+  'toggle-sound': () => {
+    const muted = !isSoundMuted();
+    try { localStorage.setItem('crea-admin-sound-muted', muted ? '1' : '0'); } catch { /* modo privado */ }
+    setState({ soundMuted: muted });
+  },
+  'dismiss-toast': (el) => {
+    if (el.getAttribute('data-kind') === 'error') setState({ errorMsg: null });
+    else setState({ successMsg: null });
+  },
+  'set-radar-source': (el) => { setState({ radarSource: attr(el, 'data-value') }); loadRadarTopics(true); },
+  'set-radar-status': (el) => { setState({ radarStatus: attr(el, 'data-value') }); loadRadarTopics(true); },
+  'set-radar-verification': (el) => { setState({ radarVerification: attr(el, 'data-value') }); loadRadarTopics(true); },
+  'load-more-topics': () => loadRadarTopics(false),
+  'refresh-radar': () => {
+    loadRadarTopics(true);
+    loadRadarSummary();
+    loadRadarStats();
+  },
+  'retry-radar-stats': () => { setState({ radarStatsError: null }); loadRadarStats(); },
+  'set-radar-stats-days': (el) => {
+    const days = Number(attr(el, 'data-value')) || 30;
+    setState({ radarStatsDays: days, radarStatsError: null });
+    loadRadarStats();
+  },
+  'set-radar-tab': (el) => { setState({ radarTab: attr(el, 'data-tab') as 'temas' | 'competencia' | 'fuentes' }); loadScreenData('radar'); },
+  'toggle-radar-source': (el) => {
+    const id = Number(attr(el, 'data-id'));
+    const active = attr(el, 'data-active') !== 'true';
+    adminApi(`/api/listening/radar-sources/${id}`, { method: 'PATCH', body: { active } })
+      .then(() => adminApi('/api/listening/radar-sources'))
+      .then((rows) => { setData({ radarSources: rows as RadarSource[] }); })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
+  'detect-competitors': () => {
+    setState({ competitorsBusy: true });
+    adminApi('/api/listening/competitors/detect', { method: 'POST' })
+      .then(() => adminApi<CompetitorPost[]>('/api/listening/competitors'))
+      .then((posts) => {
+        state.data.competitors = posts;
+        setState({ competitorsBusy: false, successMsg: 'Exploración de competencia completada.' });
+      })
+      .catch((err: ApiError) => { setState({ competitorsBusy: false, errorMsg: err.message }); });
+  },
+  'detect-competitors-fb': () => {
+    setState({ competitorsBusy: true });
+    adminApi('/api/listening/competitors/detect', { method: 'POST', body: { source: 'facebook' } })
+      .then(() => adminApi<CompetitorPost[]>('/api/listening/competitors'))
+      .then((posts) => {
+        setState({ competitorsBusy: false, successMsg: 'Escaneo de Facebook completado.' });
+        setData({ competitors: posts });
+        loadRadarTopics(true);
+        loadRadarSummary();
+      })
+      .catch((err: ApiError) => { setState({ competitorsBusy: false, errorMsg: err.message }); });
+  },
+  'analyze-competitor': (el) => submitAnalyzeCompetitor(Number(attr(el, 'data-id'))),
+  'delete-competitor': (el) => submitDeleteCompetitor(Number(attr(el, 'data-id'))),
+  'clear-competitors': () => submitClearCompetitors(),
+  'competitor-to-idea': (el) => submitCompetitorToIdea(Number(attr(el, 'data-id'))),
+  'set-leads-status': (el) => setState({ leadsStatus: attr(el, 'data-value') }),
+  'mark-lead': (el) => submitMarkLead(Number(attr(el, 'data-id')), attr(el, 'data-status')),
+  'convert-lead': (el) => submitConvertLead(Number(attr(el, 'data-id'))),
+  'delete-lead': (el) => submitDeleteLead(Number(attr(el, 'data-id'))),
+  'open-radar': (el) => setState({ selectedRadarId: Number(attr(el, 'data-id')) }),
+  'close-radar': () => setState({ selectedRadarId: null }),
+  'approve-topic': (el) => submitApproveTopic(Number(attr(el, 'data-id'))),
+  'delete-topic': (el) => submitDeleteTopic(Number(attr(el, 'data-id'))),
+  'clear-topics': () => submitClearTopics(),
+  'open-comentario': (el) => setState({ comentarioPieceId: Number(attr(el, 'data-id')), comentarioText: '' }),
+  'close-comentario': () => setState({ comentarioPieceId: null, comentarioText: '' }),
+  'confirm-comentario': (el) => submitReturn(Number(attr(el, 'data-id'))),
+  'set-transparency': (el) => setState({ transparency: mergeKey(state.transparency, attr(el, 'data-piece'), attr(el, 'data-label')) }),
+  'approve-piece': (el) => submitPublish(Number(attr(el, 'data-id'))),
+  'distribute': (el) => submitDistribute(attr(el, 'data-channel'), Number(attr(el, 'data-id'))),
+  'set-config-tab': (el) => { setState({ configTab: attr(el, 'data-tab') }); loadScreenData('configuracion'); },
+  'approve-propuesta': (el) => submitApproveProposal(Number(attr(el, 'data-id'))),
+  'start-reject-propuesta': (el) => setState({ propuestaRejecting: Number(attr(el, 'data-id')) }),
+  'confirm-reject-propuesta': (el) => submitRejectProposal(Number(attr(el, 'data-id'))),
+  'advance-client': (el) => submitAdvanceClient(Number(attr(el, 'data-id')), attr(el, 'data-stage')),
+  'delete-idea': (el) => submitDeleteIdea(Number(attr(el, 'data-id'))),
+  'open-client-form': () => setState({ clientFormOpen: true, clientFormError: null }),
+  'close-client-form': () => setState({ clientFormOpen: false, clientFormError: null }),
+  'delete-client': (el) => submitDeleteClient(Number(attr(el, 'data-id'))),
+  'delete-propuesta': (el) => submitDeleteProposal(Number(attr(el, 'data-id'))),
+  'save-draft': (el) => submitDraft(Number(attr(el, 'data-id')), false),
+  'submit-review': (el) => submitDraft(Number(attr(el, 'data-id')), true),
+  'open-new-user': () => setState({ newUserOpen: true, newUserError: null, editingUserId: null }),
+  'open-edit-user': (el) => setState({ newUserOpen: true, newUserError: null, editingUserId: Number(attr(el, 'data-id')) }),
+  'close-new-user': () => setState({ newUserOpen: false, newUserError: null, editingUserId: null }),
+  'toggle-user-active': (el) => submitToggleUser(Number(attr(el, 'data-id')), attr(el, 'data-active') === 'true'),
+  'open-new-service': () => setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: null }),
+  'edit-service': (el) => setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: Number(attr(el, 'data-id')) }),
+  'close-service-form': () => setState({ serviceFormOpen: false, serviceFormError: null, editingServiceId: null }),
+  'delete-service': (el) => submitDeleteService(Number(attr(el, 'data-id'))),
+  'open-new-fb-account': () => setState({ fbAccountFormOpen: true, fbAccountFormError: null, editingFbAccountId: null }),
+  'edit-fb-account': (el) => setState({ fbAccountFormOpen: true, fbAccountFormError: null, editingFbAccountId: Number(attr(el, 'data-id')) }),
+  'close-fb-account-form': () => setState({ fbAccountFormOpen: false, fbAccountFormError: null, editingFbAccountId: null }),
+  'delete-fb-account': (el) => submitDeleteFbAccount(Number(attr(el, 'data-id'))),
+  'generate-draft': () => {
+    if (!state.editorProposalId) return;
+    state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
+    setState({ generatingDraft: true });
+    adminApi<{ body: string }>('/api/content/generate-draft', { method: 'POST', body: { proposal_id: state.editorProposalId } })
+      .then((res) => {
+        if (state.editorDraft) state.editorDraft.body = res.body;
+        setState({ generatingDraft: false });
+      })
+      .catch((err: ApiError) => { setState({ generatingDraft: false, errorMsg: err.message }); });
+  },
+  'preview-piece': (el) => {
+    const ppid = Number(attr(el, 'data-id'));
+    const ppLists = (state.data.proposalsByKey.borrador || []).concat(state.data.proposalsByKey.en_revision || []);
+    const pp = ppLists.filter((p: Proposal) => p.id === ppid)[0];
+    if (pp) setState({ pickerPreview: pp });
+  },
+  'close-picker-preview': () => setState({ pickerPreview: null }),
+  'toggle-mobile-nav': () => setState({ mobileNavOpen: !state.mobileNavOpen }),
+  'delete-borrador': (el) => submitDeleteBorrador(Number(attr(el, 'data-id'))),
+  'reopen-published': (el) => submitReopenPublished(Number(attr(el, 'data-id'))),
+  'delete-published': (el) => submitDeletePublished(Number(attr(el, 'data-id')), attr(el, 'data-title')),
+  'generate-image': () => {
+    if (!state.editorProposalId) return;
+    state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
+    const imgPrompt = (document.getElementById('editor-image-prompt') as HTMLTextAreaElement).value;
+    if (!imgPrompt.trim()) { setState({ errorMsg: 'Escribe un prompt para generar la imagen.' }); return; }
+    setState({ generatingImage: true, editorImagePrompt: imgPrompt });
+    adminApi<{ cover_image_url: string }>('/api/content/generate-image', { method: 'POST', body: { proposal_id: state.editorProposalId, prompt: imgPrompt } })
+      .then((res) => {
+        if (state.editorDraft) state.editorDraft.cover_image_url = res.cover_image_url;
+        setState({ generatingImage: false, successMsg: 'Imagen de portada generada.' });
+      })
+      .catch((err: ApiError) => { setState({ generatingImage: false, errorMsg: err.message }); });
+  },
+  'run-qa': () => {
+    if (!state.editorProposalId) return;
+    setState({ qaBusy: true, qaResult: null });
+    adminApi<QaResult>('/api/content/qa-check', { method: 'POST', body: { proposal_id: state.editorProposalId } })
+      .then((res) => { setState({ qaBusy: false, qaResult: res }); })
+      .catch((err: ApiError) => { setState({ qaBusy: false, errorMsg: err.message }); });
+  },
+  'close-qa': () => setState({ qaResult: null }),
+  'preview-nota': () => {
+    if (!state.editorDraft) return;
+    const previewFields = readEditorForm();
+    state.editorDraft = Object.assign({}, state.editorDraft, previewFields) as EditorDraft;
+    setState({ notaPreviewHtml: buildNotaPreviewDoc(previewFields) });
+  },
+  'close-nota-preview': () => setState({ notaPreviewHtml: null }),
+  'generate-newsletter': () => generateNewsletter(),
+  'regenerate-newsletter': () => generateNewsletter(),
+  'preview-newsletter': () => {
+    adminApi<{ html: string }>('/api/newsletter/preview', { method: 'POST', body: readNewsletterForm() })
+      .then((res) => { setState({ newsletterPreview: res.html, errorMsg: null }); })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
+  'close-newsletter-preview': () => setState({ newsletterPreview: null }),
+  'generate-newsletter-audio': () => {
+    setState({ newsletterAudioBusy: true, errorMsg: null });
+    adminApiBlob('/api/newsletter/audio', { method: 'POST', body: readNewsletterForm() })
+      .then((blob) => {
+        setState({ newsletterAudioBusy: false, newsletterAudioUrl: URL.createObjectURL(blob) });
+      })
+      .catch((err: ApiError) => { setState({ newsletterAudioBusy: false, errorMsg: err.message }); });
+  },
+  'send-newsletter': () => {
+    if (!confirm('¿Enviar el newsletter a todos los suscriptores activos? Esta acción no se puede deshacer.')) return;
+    setState({ newsletterSending: true, errorMsg: null });
+    adminApi('/api/newsletter/send', { method: 'POST', body: readNewsletterForm() })
+      .then(() => {
+        setState({ newsletterSending: false, newsletterContent: null, newsletterPreview: null, newsletterAudioUrl: null, successMsg: 'Newsletter enviado a los suscriptores.' });
+      })
+      .catch((err: ApiError) => { setState({ newsletterSending: false, errorMsg: err.message }); });
+  },
+  'detect-radar': () => {
+    setState({ radarBusy: true });
+    adminApi('/api/listening/topics/detect', { method: 'POST' })
+      .then(() => {
+        setState({ radarBusy: false, successMsg: 'Detección completada.' });
+        loadRadarTopics(true);
+        loadRadarSummary();
+        loadRadarStats();
+      })
+      .catch((err: ApiError) => { setState({ radarBusy: false, errorMsg: err.message }); });
+  },
+  'generate-proposal-from-topic': (el) => {
+    const topicId = Number(attr(el, 'data-id'));
+    const forceRisk = attr(el, 'data-force-risk') === '1';
+    if (forceRisk) {
+      const ok = window.confirm(
+        'Este tema está en riesgo editorial alto (rumor, clickbait o fuente débil).\n\n¿Forzar generación de propuesta de todas formas?'
+      );
+      if (!ok) return;
+    }
+    const format = document.getElementById('proposal-format-' + topicId) as HTMLSelectElement | null;
+    setState({ generatingProposal: true });
+    const body: { topic_id: number; format: string; force?: boolean } = {
+      topic_id: topicId,
+      format: format ? format.value : 'nota',
+    };
+    if (forceRisk) body.force = true;
+    adminApi<Proposal & { warnings?: string[] }>('/api/content/generate-proposal', { method: 'POST', body })
+      .then((proposal) => {
+        state.data.proposalsByKey = {};
+        const warn = Array.isArray(proposal.warnings) && proposal.warnings.length
+          ? ' — ' + proposal.warnings.join(' ')
+          : '';
+        setState({
+          generatingProposal: false,
+          selectedRadarId: null,
+          successMsg: 'Propuesta creada: ' + proposal.title + warn,
+        });
+      })
+      .catch((err: ApiError) => { setState({ generatingProposal: false, errorMsg: err.message }); });
+  },
+  'open-social-form': () => setState({ socialFormOpen: true, socialFormError: null }),
+  'close-social-form': () => setState({ socialFormOpen: false, socialFormError: null, socialBusy: false }),
+  'toggle-social': (el) => submitToggleSocial(Number(attr(el, 'data-id')), attr(el, 'data-pub') === 'true'),
+  'refetch-social': (el) => submitRefetchSocial(Number(attr(el, 'data-id'))),
+  'delete-social': (el) => submitDeleteSocial(Number(attr(el, 'data-id'))),
+  'delete-newsletter-event': (el) => {
+    const evId = Number(attr(el, 'data-id'));
+    adminApi('/api/newsletter/events/' + evId, { method: 'DELETE' })
+      .then(() => { setData({ newsletterEvents: (state.data.newsletterEvents || []).filter((ev: NewsletterEvent) => ev.id !== evId) }); })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
+  'save-sponsor-info': (el) => {
+    const spId = Number(attr(el, 'data-id'));
+    adminApi<Client>('/api/commercial/clients/' + spId, { method: 'PATCH', body: {
+      website_url: (document.getElementById('sponsor-link-' + spId) as HTMLInputElement).value.trim(),
+      sponsor_copy: (document.getElementById('sponsor-copy-' + spId) as HTMLInputElement).value.trim(),
+    } })
+      .then((updated) => {
+        setData({ clients: (state.data.clients || []).map((c) => c.id === spId ? Object.assign({}, c, updated) : c) });
+      })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
+};
 
 // ---------- write actions ----------
 

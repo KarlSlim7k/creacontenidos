@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantallas Hermes (actividad) y Pipeline "Buenos días, Perote".
 import { state, type ActivityEntry, type PipelineStep } from '../store';
-import { esc, loadingCard, errorCard, relativeTime } from '../util';
+import { esc, loadingCard, errorCard, relativeTime, badge } from '../util';
 
 export function renderHermes(): string {
   const activity = state.data.activity;
@@ -10,12 +10,12 @@ export function renderHermes(): string {
   const skills = Object.keys(skillCounts).map((k) => ({ name: k, count: skillCounts[k] })).sort((a, b) => b.count - a.count);
   return `<div>
     <h1 class="padmin-h1">Estado del agente Hermes</h1>
-    <p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 12px;">Actividad reciente</p>
+    <p class="padmin-section-title">Actividad reciente</p>
     ${activity.length ? `<div class="padmin-hermes-log">${activity.map((h: ActivityEntry) => {
       const ok = h.status === 'exito';
-      return `<div class="padmin-hermes-row"><span class="padmin-hermes-time">${esc(relativeTime(h.created_at))}</span><span class="padmin-hermes-task">${esc(h.detail || h.action)}</span><span style="color:${ok ? '#7CB084' : '#D98A7A'};flex-shrink:0;">${ok ? '✓ éxito' : '✕ falló'}</span></div>`;
+      return `<div class="padmin-hermes-row"><span class="padmin-hermes-time">${esc(relativeTime(h.created_at))}</span><span class="padmin-hermes-task">${esc(h.detail || h.action)}</span><span class="${ok ? 'padmin-hermes-status-ok' : 'padmin-hermes-status-fail'}">${ok ? '✓ éxito' : '✕ falló'}</span></div>`;
     }).join('')}</div>` : '<p class="padmin-lede">Sin actividad registrada todavía.</p>'}
-    ${skills.length ? `<p style="font-size:12px;font-weight:600;color:var(--text);margin:20px 0 4px;">Skills generados desde tareas repetidas</p>
+    ${skills.length ? `<p class="padmin-section-title" style="margin-top:20px;margin-bottom:4px;">Skills generados desde tareas repetidas</p>
       <div class="padmin-card">${skills.map((sk) =>
         `<div class="padmin-row"><span style="font-size:13px;color:var(--text);">${esc(sk.name)}</span><span style="font-size:12px;font-weight:600;color:var(--text-mute);">${sk.count} usos</span></div>`
       ).join('')}</div>` : ''}
@@ -23,9 +23,9 @@ export function renderHermes(): string {
 }
 
 function pipelineStepStyle(st: PipelineStep) {
-  if (st.status === 'completado') return { dotColor: 'var(--brand)', ringColor: 'var(--brand)', badgeBg: 'var(--brand-soft)', badgeColor: 'var(--brand)', badgeLabel: '✅ Automático completado', textColor: 'var(--text)', weight: 500 };
-  if (st.status === 'esperando') return { dotColor: 'var(--accent)', ringColor: 'var(--accent)', badgeBg: 'var(--accent-soft)', badgeColor: 'var(--accent-text)', badgeLabel: '⏳ Esperando aprobación', textColor: 'var(--text)', weight: 600 };
-  return { dotColor: '#fff', ringColor: 'var(--line-soft)', badgeBg: 'var(--bg-soft)', badgeColor: 'var(--mute-2)', badgeLabel: 'Pendiente — sin automatización', textColor: 'var(--mute-2)', weight: 400 };
+  if (st.status === 'completado') return { dotColor: 'var(--brand)', ringColor: 'var(--brand)', badgeKey: 'activo', badgeLabel: '✅ Automático completado', textColor: 'var(--text)', weight: 500 };
+  if (st.status === 'esperando') return { dotColor: 'var(--accent)', ringColor: 'var(--accent)', badgeKey: 'en_revision', badgeLabel: '⏳ Esperando aprobación', textColor: 'var(--text)', weight: 600 };
+  return { dotColor: '#fff', ringColor: 'var(--line-soft)', badgeKey: 'inactivo', badgeLabel: 'Pendiente — sin automatización', textColor: 'var(--mute-2)', weight: 400 };
 }
 
 export function renderPipeline(): string {
@@ -40,7 +40,7 @@ export function renderPipeline(): string {
         <div class="padmin-pipeline-rail"><span class="padmin-pipeline-dot" style="background:${sty.dotColor};border-color:${sty.ringColor};"></span><span class="padmin-pipeline-line"></span></div>
         <div class="padmin-pipeline-body">
           <div class="padmin-pipeline-head"><p style="font-size:14px;font-weight:${sty.weight};color:${sty.textColor};margin:0;">${esc(st.label)}</p><span style="font-size:11px;color:var(--mute-2);">${esc(st.at ? relativeTime(st.at) : '—')}</span></div>
-          <span class="padmin-badge" style="background:${sty.badgeBg};color:${sty.badgeColor};">${sty.badgeLabel}</span>
+          ${badge(sty.badgeKey, sty.badgeLabel)}
         </div>
       </div>`;
     }).join('')}</div>
@@ -79,7 +79,7 @@ function renderNewsletterCard(): string {
 
   if (!state.newsletterContent) {
     return `<div class="padmin-card" style="max-width:640px;margin-top:28px;padding:20px;">
-      <p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 10px;">Newsletter del día</p>
+      <p class="padmin-section-title" style="margin-bottom:10px;">Newsletter del día</p>
       ${countHtml}
       <button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-newsletter" ${state.newsletterBusy ? 'disabled' : ''}>${state.newsletterBusy ? 'Generando…' : 'Generar contenido con IA'}</button>
       ${state.errorMsg ? `<p style="font-size:12px;color:var(--danger);margin:10px 0 0;">${esc(state.errorMsg)}</p>` : ''}
@@ -89,7 +89,7 @@ function renderNewsletterCard(): string {
   const c = state.newsletterContent;
   const enBreveText = (c.enBreve || []).join('\n');
   return `<div class="padmin-card" style="max-width:640px;margin-top:28px;padding:20px;">
-    <p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 10px;">Newsletter del día — ${esc(c.weekday)} ${esc(c.date)}</p>
+    <p class="padmin-section-title" style="margin-bottom:10px;">Newsletter del día — ${esc(c.weekday)} ${esc(c.date)}</p>
     ${countHtml}
     <div class="padmin-field"><label>El clima</label><input id="nl-clima" type="text" value="${esc(c.clima)}"></div>
     <div class="padmin-field"><label>La nota del día — título</label><input id="nl-nota-titulo" type="text" value="${esc(c.notaDelDia.titulo)}"></div>
@@ -117,7 +117,7 @@ function renderNewsletterCard(): string {
 function renderNewsletterPreview(): string {
   if (!state.newsletterPreview) return '';
   return `<div style="margin-top:16px;border-top:1px solid var(--line-soft);padding-top:14px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><p style="font-size:11px;font-weight:600;color:var(--text);margin:0;">VISTA PREVIA</p><span class="padmin-drawer-close" data-action="close-newsletter-preview">Cerrar &times;</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><p style="font-size:11px;font-weight:600;color:var(--text);margin:0;">VISTA PREVIA</p><button type="button" class="padmin-drawer-close" data-action="close-newsletter-preview">Cerrar &times;</button></div>
     <iframe srcdoc="${esc(state.newsletterPreview)}" class="padmin-preview-frame"></iframe>
   </div>`;
 }

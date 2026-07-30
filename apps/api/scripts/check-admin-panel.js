@@ -29,7 +29,7 @@ async function main() {
 
   // ---------- stubs mínimos de navegador ----------
   const listeners = {};
-  const appEl = { innerHTML: '', addEventListener(ev, fn) { listeners[ev] = fn; } };
+  const appEl = { innerHTML: '', addEventListener(ev, fn) { listeners[ev] = fn; }, querySelectorAll: () => [] };
   const fakeInput = { value: '', checked: false, focus() {}, style: {} };
   globalThis.document = {
     querySelector: (sel) => (sel.startsWith('meta') ? { content: 'http://localhost:3000' } : fakeInput),
@@ -113,6 +113,33 @@ async function main() {
   state.editorDraft = { title: 't', body: 'b', section: 'Local', dek: '', slug: '', cover_image_url: '', author_name: 'Ana', is_sponsored: false, sponsor_name: '', image_prompt: '' };
   render();
   console.log('✓ render editor (pieza abierta)');
+
+  // ---------- cierre de capas: Escape y click fuera ----------
+  // Escape con overlay abierto: click en el fondo del último overlay (que ya lleva
+  // el data-action de cierre), y las notificaciones NO se tocan.
+  let backdropClicks = 0;
+  appEl.querySelectorAll = () => [{ click() { backdropClicks++; } }];
+  state.showNotifications = true;
+  listeners['doc:keydown']({ key: 'Escape' });
+  assert(backdropClicks === 1, 'Escape no cerró el overlay de arriba');
+  assert(state.showNotifications === true, 'Escape con overlay abierto también cerró las notificaciones');
+
+  // Sin overlay, Escape cierra el panel de notificaciones.
+  appEl.querySelectorAll = () => [];
+  listeners['doc:keydown']({ key: 'Escape' });
+  assert(state.showNotifications === false, 'Escape no cerró el panel de notificaciones');
+
+  // Click fuera del panel lo cierra; dentro de la campana no.
+  const clickAt = (insideBell) => ({
+    target: { closest: (sel) => (sel === '.padmin-bell-wrap' && insideBell ? {} : null) },
+    preventDefault() {},
+  });
+  state.showNotifications = true;
+  actions.handleClick(clickAt(true));
+  assert(state.showNotifications === true, 'click dentro de la campana cerró el panel');
+  actions.handleClick(clickAt(false));
+  assert(state.showNotifications === false, 'click fuera no cerró el panel de notificaciones');
+  console.log('✓ Escape y click fuera cierran overlay / notificaciones');
 
   // ---------- delegación de eventos: logout no debe lanzar ----------
   const fakeEvent = (action) => ({ target: { closest: () => ({ getAttribute: (a) => (a === 'data-action' ? action : null) }) }, preventDefault() {} });

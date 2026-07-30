@@ -41,9 +41,9 @@ export function renderMetricas(): string {
         </div>
       </div>
     </div>
-    <p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 12px;">Piezas publicadas por semana</p>
+    <p class="padmin-section-title">Piezas publicadas por semana</p>
     <div class="padmin-card" style="padding:20px;margin-bottom:24px;">${chartHtml}</div>
-    <p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 12px;">Crecimiento por canal</p>
+    <p class="padmin-section-title">Crecimiento por canal</p>
     <div class="padmin-card" style="padding:20px;">
       ${topSections.length ? (
         '<p style="font-size:11px;font-weight:600;color:var(--text-mute);margin:0 0 10px;">TOP SECCIONES</p>' +

@@ -21,14 +21,29 @@ export function initialsOf(name: string | null | undefined): string {
   return String(name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 }
 
+// Mapa único estado → colores del badge. Cualquier pastilla de estado del panel
+// sale de aquí (o de badge()): no hand-rollar bg/color inline en las pantallas.
+const STYLE_NEUTRAL = { bg: 'var(--bg-soft)', color: 'var(--text-mute)' };
+const STYLE_ACCENT = { bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
+const STYLE_BRAND = { bg: 'var(--brand-soft)', color: 'var(--brand)' };
+const STYLE_DANGER = { bg: 'var(--danger-soft)', color: 'var(--danger)' };
+const STYLE_OFF = { bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
+
+const STATUS_STYLE_MAP: Record<string, { bg: string; color: string }> = {
+  borrador: STYLE_NEUTRAL, nueva: STYLE_NEUTRAL, identificado: STYLE_NEUTRAL,
+  nuevo: STYLE_ACCENT, en_revision: STYLE_ACCENT, en_analisis: STYLE_ACCENT,
+  aprobada: STYLE_BRAND, propuesta_enviada: STYLE_BRAND, contactado: STYLE_BRAND,
+  published: { bg: 'var(--brand)', color: '#fff' }, cerrado: { bg: 'var(--brand)', color: '#fff' },
+  descartada: STYLE_OFF, rechazada: STYLE_OFF, descartado: STYLE_OFF,
+  activo: STYLE_BRAND, publicado: STYLE_BRAND, analizado: STYLE_BRAND,
+  inactivo: STYLE_OFF, no_publicado: STYLE_ACCENT,
+  verified: STYLE_BRAND, checking: STYLE_ACCENT, signal: { bg: 'var(--surface)', color: 'var(--text-mute)' },
+  risk: STYLE_DANGER, sin_evaluar: STYLE_NEUTRAL,
+  high: STYLE_BRAND, medium: STYLE_ACCENT, low: STYLE_DANGER,
+};
+
 export function statusStyle(label: string): { bg: string; color: string } {
-  if (label === 'borrador' || label === 'nueva' || label === 'identificado') return { bg: 'var(--bg-soft)', color: 'var(--text-mute)' };
-  if (label === 'nuevo') return { bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
-  if (label === 'en_revision' || label === 'en_analisis') return { bg: 'var(--accent-soft)', color: 'var(--accent-text)' };
-  if (label === 'aprobada' || label === 'propuesta_enviada' || label === 'contactado') return { bg: 'var(--brand-soft)', color: 'var(--brand)' };
-  if (label === 'published' || label === 'cerrado') return { bg: 'var(--brand)', color: '#fff' };
-  if (label === 'descartada' || label === 'rechazada' || label === 'descartado') return { bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
-  return { bg: 'var(--bg-soft)', color: 'var(--text-mute)' };
+  return STATUS_STYLE_MAP[label] || STYLE_NEUTRAL;
 }
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -36,12 +51,14 @@ export const STATUS_LABEL: Record<string, string> = {
   nueva: 'Nueva', en_analisis: 'En análisis', aprobada: 'Aprobada', descartada: 'Descartada',
   identificado: 'Identificado', contactado: 'Contactado', propuesta_enviada: 'Propuesta enviada', cerrado: 'Cerrado',
   nuevo: 'Nuevo', descartado: 'Descartado',
+  activo: 'Activo', inactivo: 'Inactivo', publicado: 'Publicado', no_publicado: 'Borrador', analizado: 'Analizado',
+  verified: 'Verificado', checking: 'En verificación', signal: 'Señal', risk: 'Riesgo alto', sin_evaluar: 'Sin evaluar',
+  high: 'Alta', medium: 'Media', low: 'Baja',
 };
 
-export function badge(statusKey: string): string {
+export function badge(statusKey: string, label?: string): string {
   const st = statusStyle(statusKey);
-  const label = STATUS_LABEL[statusKey] || statusKey;
-  return `<span class="padmin-badge" style="background:${st.bg};color:${st.color};">${esc(label)}</span>`;
+  return `<span class="padmin-badge" style="background:${st.bg};color:${st.color};">${esc(label || STATUS_LABEL[statusKey] || statusKey)}</span>`;
 }
 
 export function loadingCard(label?: string): string {

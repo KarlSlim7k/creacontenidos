@@ -7,7 +7,7 @@ const sensColorMap: Record<string, string> = { verde: 'var(--brand)', amarillo: 
 function renderPropuestasRechazadas(): string {
   const rechazadas = state.data.proposalsByKey.rechazada;
   if (!rechazadas || !rechazadas.length || state.user!.role !== 'director') return '';
-  return `<p style="font-size:12px;font-weight:600;color:var(--text);margin:24px 0 12px;">Rechazadas</p>
+  return `<p class="padmin-section-title" style="margin-top:24px;">Rechazadas</p>
     <div class="padmin-card">${rechazadas.map((p: Proposal) =>
       `<div class="padmin-row"><div><p class="padmin-row-title">${esc(p.title)}</p><p class="padmin-row-meta">${esc(p.review_comment || '')}</p></div>
         <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-propuesta" data-id="${p.id}">Eliminar</button></div>`

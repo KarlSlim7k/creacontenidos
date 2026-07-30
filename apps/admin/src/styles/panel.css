@@ -14,11 +14,15 @@
   --accent-2: #C9932F;
   --brand-soft: #E1E8DD;
   --accent-soft: #F3E4D4;
+  --danger-soft: #FAE5E0;
   --bg-soft: #F0EFEA;
   font-family: var(--font-body);
   background: var(--bg-admin);
   color: var(--text);
+  /* 100dvh tras 100vh: fallback por cascada. La toolbar dinámica de iOS Safari
+     hace que 100vh desborde; dvh sigue la altura visible real (Safari 15.4+). */
   min-height: 100vh;
+  min-height: 100dvh;
 }
 .padmin a { color: inherit; text-decoration: none; }
 .padmin p { margin: 0; }
@@ -26,7 +30,7 @@
 
 /* ---------- login ---------- */
 .padmin-login-screen {
-  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
   background: var(--bg-admin); padding: 24px;
 }
 .padmin-login-card { width: 100%; max-width: 360px; background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 10px; padding: 32px; }
@@ -40,7 +44,7 @@
 .padmin-role-chip { font-size: 11px; padding: 6px 10px; border-radius: 20px; border: 0.5px solid var(--line-soft); color: var(--text); cursor: pointer; }
 
 /* ---------- shell: sidebar + content ---------- */
-.padmin-shell { display: flex; min-height: 100vh; }
+.padmin-shell { display: flex; min-height: 100vh; min-height: 100dvh; }
 .padmin-sidebar { width: 220px; flex-shrink: 0; background: var(--surface); border-right: 0.5px solid var(--line-soft); display: flex; flex-direction: column; padding: 20px 0; }
 .padmin-sidebar-brand { padding: 0 20px 20px; display: flex; align-items: center; gap: 8px; }
 .padmin-sidebar-brand img { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; }
@@ -55,11 +59,11 @@
 .padmin-account-name { font-size: 12px; font-weight: 500; color: var(--text); margin: 0 0 2px; }
 .padmin-account-role { font-size: 11px; color: var(--text-mute); margin: 0; }
 .padmin-account-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.padmin-sound-toggle { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.8; transition: background .15s ease, opacity .15s ease; color: var(--text-2); }
+.padmin-sound-toggle { width: 24px; height: 24px; border-radius: 6px; padding: 0; border: none; background: none; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.8; transition: background .15s ease, opacity .15s ease; color: var(--text-2); }
 .padmin-sound-toggle:hover { background: var(--bg-soft); opacity: 1; }
 .padmin-sound-toggle.muted { opacity: 0.45; color: var(--mute-2); }
 .padmin-bell-wrap { position: relative; flex-shrink: 0; }
-.padmin-bell { position: relative; width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--bg-admin); transition: background .15s ease, transform .1s ease; color: var(--text-2); }
+.padmin-bell { position: relative; width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; padding: 0; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--bg-admin); transition: background .15s ease, transform .1s ease; color: var(--text-2); }
 .padmin-bell:hover { background: #EEEDE8; }
 .padmin-bell:active { transform: scale(0.94); }
 .padmin-bell.has-unread { background: var(--accent-soft); }
@@ -95,7 +99,17 @@
 .padmin-lede { font-size: 13px; color: var(--text-mute); margin: 0 0 22px; }
 
 /* ---------- shared primitives ---------- */
-.padmin-card { background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 8px; overflow-x: auto; }
+.padmin-card {
+  border: 0.5px solid var(--line-soft); border-radius: 8px; overflow-x: auto;
+  /* Sombra en el borde derecho solo cuando hay más columnas por hacer scroll
+     (técnica de Lea Verou: cover con attachment local cubre la sombra fija al
+     llegar al final o cuando no hay overflow). Sin esto, en móvil la tabla
+     parece cortada sin indicio de que continúa. */
+  background:
+    linear-gradient(to left, var(--surface) 70%, rgba(255,255,255,0)) right / 30px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, rgba(31,42,34,0.12), rgba(31,42,34,0)) right / 10px 100% no-repeat scroll,
+    var(--surface);
+}
 .padmin-stat-card { background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 8px; padding: 18px; }
 .padmin-stat-label { font-size: 11px; color: var(--text-mute); margin: 0 0 8px; }
 .padmin-stat-value { font-weight: 700; font-size: 26px; color: var(--text); margin: 0; }
@@ -103,9 +117,14 @@
 .padmin-row:last-child { border-bottom: none; }
 .padmin-row.clickable { cursor: pointer; }
 .padmin-row-title { font-size: 13px; font-weight: 500; color: var(--text); margin: 0 0 2px; }
+/* Título de fila que es el disparador real de la acción (ver pickerRow del editor). */
+.padmin-row-title-btn { display: block; width: 100%; text-align: left; background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; }
 .padmin-row-meta { font-size: 11px; color: var(--text-mute); margin: 0; }
-.padmin-badge { font-size: 10px; font-weight: 600; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+.padmin-badge { font-size: 10px; font-weight: 600; padding: 4px 8px; border-radius: 4px; display: inline-block; width: fit-content; }
 .padmin-chip { font-size: 11px; font-weight: 500; padding: 6px 12px; border-radius: 20px; cursor: pointer; border: 1px solid var(--line-soft); background: var(--surface); color: var(--text); }
+.padmin-chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+.padmin-chip.active-accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+.padmin-section-title { font-size: 12px; font-weight: 600; color: var(--text); margin: 0 0 12px; }
 .padmin-btn { font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 6px; cursor: pointer; background: var(--accent); color: #fff; border: none; display: inline-block; }
 .padmin-btn-outline { font-size: 13px; font-weight: 500; padding: 10px 20px; border-radius: 6px; cursor: pointer; border: 0.5px solid var(--line-soft); color: var(--text); background: var(--surface); display: inline-block; }
 .padmin-btn-brand { background: var(--brand); color: #fff; }
@@ -143,7 +162,9 @@
 .padmin-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
 .padmin-grid4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
 @media (max-width: 900px) { .padmin-grid4 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-@media (max-width: 640px) { .padmin-grid2, .padmin-grid4 { grid-template-columns: 1fr; } }
+/* grid4 (stat cards compactas) se queda en 2 columnas en teléfono: bajar a 1
+   apilaba 4 tarjetas de ancho completo y alargaba el scroll sin ganar nada. */
+@media (max-width: 640px) { .padmin-grid2 { grid-template-columns: 1fr; } }
 
 /* ---------- kanban ---------- */
 .padmin-kanban { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
@@ -180,6 +201,8 @@
 .padmin-cols-services { grid-template-columns: 2fr 1fr 90px 130px; min-width: 540px; }
 .padmin-cols-leads { grid-template-columns: 80px 1fr 110px 2fr 100px 170px; min-width: 760px; }
 .padmin-cols-competencia { grid-template-columns: 140px 2fr 90px 110px 90px 140px; min-width: 760px; }
+/* Dominio | Etiqueta | Confianza | Activa | Notas | Acciones */
+.padmin-cols-fuentes { grid-template-columns: 1.2fr 1.4fr 90px 90px 1fr 100px; min-width: 640px; }
 
 /* ---------- editor picker ---------- */
 .padmin-picker-thumb { width: 56px; height: 40px; object-fit: cover; border-radius: 5px; flex-shrink: 0; border: 0.5px solid var(--line-soft); }
@@ -221,7 +244,18 @@
   .padmin-sidebar.nav-open .padmin-account { display: block; border-top: 0.5px solid var(--line-soft); margin-top: 8px; padding: 12px 4px 0; }
   .padmin-content { padding: 20px 16px; }
   .padmin-editor-grid2 { grid-template-columns: 1fr; }
-  .padmin-toast-stack { right: 16px; bottom: 16px; left: 16px; max-width: none; }
+  /* safe-area: el home indicator del iPhone tapaba el toast más bajo. */
+  .padmin-toast-stack { right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 16px; max-width: none; }
+  /* iOS Safari hace auto-zoom al enfocar inputs < 16px; subir la fuente en
+     móvil lo evita sin bloquear el pinch-zoom (accesibilidad). */
+  .padmin-field input, .padmin-field textarea, .padmin-field select,
+  .padmin-body-textarea, .padmin-modal-textarea, .padmin-sponsor-input { font-size: 16px; }
+  /* Touch targets ~36px. Techo conocido: no es 44px (HIG) en chips/tabs porque
+     reventaría las filas de filtros; subir si hay quejas de usabilidad. */
+  .padmin-icon-btn { min-width: 36px; min-height: 36px; padding: 6px 8px; }
+  .padmin-chip, .padmin-tab { padding: 8px 14px; }
+  .padmin-btn-sm { padding: 9px 12px; }
+  .padmin-hermes-row { padding-left: 12px; padding-right: 12px; }
 }
 
 /* ---------- proposals ---------- */
@@ -231,13 +265,30 @@
 @media (max-width: 900px) { .padmin-propuestas-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 640px) { .padmin-propuestas-grid { grid-template-columns: 1fr; } }
 
+/* ---------- aprobación ---------- */
+.padmin-review-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.padmin-review-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.padmin-modal-textarea {
+  width: 100%; min-height: 100px; border: 0.5px solid var(--line-soft); border-radius: 6px;
+  background: var(--bg-admin); padding: 10px 12px; font-size: 13px; font-family: inherit;
+  box-sizing: border-box; resize: vertical; margin-bottom: 16px;
+}
+.padmin-sponsor-input {
+  width: 100%; font-size: 11px; padding: 5px 7px; border: 0.5px solid var(--line-soft);
+  border-radius: 5px; box-sizing: border-box; margin-bottom: 6px;
+}
+@media (max-width: 640px) {
+  .padmin-review-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .padmin-review-actions { justify-content: flex-end; }
+}
+
 /* ---------- modal / drawer ---------- */
 .padmin-overlay { position: fixed; inset: 0; z-index: 200; }
 .padmin-overlay-bg { position: absolute; inset: 0; background: rgba(31,42,34,0.35); }
 .padmin-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 420px; max-width: calc(100vw - 32px); background: var(--surface); border-radius: 10px; padding: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
 .padmin-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100vw; background: var(--surface); box-shadow: -8px 0 24px rgba(0,0,0,0.14); padding: 28px 28px 32px; overflow: auto; }
 .padmin-drawer-eyebrow { font-size: 10px; font-weight: 600; color: var(--mute-2); letter-spacing: 0.06em; margin: 0; }
-.padmin-drawer-close { cursor: pointer; font-size: 13px; color: var(--text-mute); }
+.padmin-drawer-close { cursor: pointer; font-size: 13px; color: var(--text-mute); background: none; border: none; padding: 0; }
 .padmin-drawer-section-title { font-size: 11px; font-weight: 600; color: var(--text); letter-spacing: 0.06em; margin: 0 0 8px; }
 .padmin-drawer-section-body { font-size: 13px; color: var(--text-2); line-height: 1.5; margin: 0 0 20px; }
 @media (max-width: 640px) {
@@ -251,6 +302,8 @@
 .padmin-hermes-row:last-child { border-bottom: none; }
 .padmin-hermes-time { color: #7CB084; flex-shrink: 0; width: 62px; white-space: nowrap; }
 .padmin-hermes-task { color: #F2EFE6; flex: 1; }
+.padmin-hermes-status-ok { color: #7CB084; flex-shrink: 0; }
+.padmin-hermes-status-fail { color: #D98A7A; flex-shrink: 0; }
 
 /* ---------- pipeline ---------- */
 .padmin-pipeline-step { display: flex; gap: 16px; }

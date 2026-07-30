@@ -436,16 +436,22 @@ export const CREA_API_BASE = (function () {
   return (meta && meta.getAttribute('content')) || 'http://localhost:3000';
 })();
 
-export const state: State = {
-  token: null, user: null, allowedModules: [],
-  screen: 'login', loginError: null,
-  data: {
+// Factory (no constante): logout() necesita una copia fresca — compartir el
+// literal haría que un logout dejara referencias vivas del usuario anterior.
+export function initialData(): AdminData {
+  return {
     ideas: null, proposalsByKey: {}, clients: null, topics: null, users: null, metrics: null,
     socialPosts: null, activity: null, integrations: null, pipeline: null, notifications: null,
     newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null,
     distLog: null, distChannels: null, competitors: null, radarSources: null, radarStats: null,
     topicSummary: null, siteMetrics: null, fbAccounts: null,
-  },
+  };
+}
+
+export const state: State = {
+  token: null, user: null, allowedModules: [],
+  screen: 'login', loginError: null,
+  data: initialData(),
   distBusy: null,
   radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos', radarBusy: false,
   radarTab: 'temas', competitorsBusy: false, radarStatsDays: 30,

@@ -40,10 +40,13 @@ export function renderBellAndNotifs(): string {
     }).join('');
     panel = `<div class="padmin-notif-panel"><div class="padmin-notif-title-row"><p class="padmin-notif-title">Notificaciones</p>${count > 0 ? `<span class="padmin-notif-count">${count} nueva${count === 1 ? '' : 's'}</span>` : ''}</div><div class="padmin-notif-list">${itemsHtml}</div></div>`;
   }
-  return `<span class="padmin-bell-wrap"><span class="padmin-bell${count > 0 ? ' has-unread' : ''}" data-action="toggle-notifications" title="Notificaciones">` +
+  // <button> real (no span con role): nombre accesible por aria-label porque el
+  // contenido es solo SVG, y aria-expanded para el panel que despliega.
+  const bellLabel = `Notificaciones${count > 0 ? ` (${count} sin leer)` : ''}`;
+  return `<span class="padmin-bell-wrap"><button type="button" class="padmin-bell${count > 0 ? ' has-unread' : ''}" data-action="toggle-notifications" title="Notificaciones" aria-label="${bellLabel}" aria-expanded="${state.showNotifications ? 'true' : 'false'}">` +
     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 3h16l-2-3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 21a2.5 2.5 0 0 0 5 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' +
     badgeHtml +
-    `</span>${panel}</span>`;
+    `</button>${panel}</span>`;
 }
 
 export function renderSoundToggle(): string {
@@ -51,7 +54,8 @@ export function renderSoundToggle(): string {
   const icon = muted
     ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M18 9l4 6M22 9l-4 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
     : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
-  return `<span class="padmin-sound-toggle${muted ? ' muted' : ''}" data-action="toggle-sound" title="${muted ? 'Activar sonido de avisos' : 'Silenciar sonido de avisos'}">${icon}</span>`;
+  const label = muted ? 'Activar sonido de avisos' : 'Silenciar sonido de avisos';
+  return `<button type="button" class="padmin-sound-toggle${muted ? ' muted' : ''}" data-action="toggle-sound" title="${label}" aria-label="${label}" aria-pressed="${muted ? 'true' : 'false'}">${icon}</button>`;
 }
 
 export function renderSidebar(): string {

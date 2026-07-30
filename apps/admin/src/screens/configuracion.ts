@@ -1,7 +1,7 @@
 // CREA Panel Admin — pantalla Configuración (tabs: usuarios, permisos, integraciones,
 // newsletter, servicios, cuentas FB, métricas del sitio).
 import { state, type AdminUser, type Integration, type NewsletterEvent, type Service, type FbAccount } from '../store';
-import { esc, loadingCard, errorCard, relativeTime, roleLabels, navItemsAll } from '../util';
+import { esc, loadingCard, errorCard, relativeTime, roleLabels, navItemsAll, badge } from '../util';
 import { isPwaInstalled, isIosDevice } from '../pwa';
 
 function renderPwaInstallCard(): string {
@@ -43,11 +43,10 @@ export function renderConfigUsuarios(): string {
   return formHtml + `<div class="padmin-card" style="max-width:760px;">
     <div class="padmin-table-head padmin-cols-users"><span>NOMBRE</span><span>ROL</span><span>ESTADO</span><span></span></div>
     ${users.map((u: AdminUser) => {
-      const st = u.active ? { label: 'Activo', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Inactivo', bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
       return `<div class="padmin-table-row padmin-cols-users">
         <span style="font-size:13px;color:var(--text);">${esc(u.name)}</span>
         <span style="font-size:12px;color:var(--text-mute);">${esc(roleLabels[u.role] || u.role)}</span>
-        <span class="padmin-badge" style="background:${st.bg};color:${st.color};width:fit-content;">${st.label}</span>
+        ${badge(u.active ? 'activo' : 'inactivo')}
         <span style="display:flex;gap:4px;flex-wrap:wrap;">
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="open-edit-user" data-id="${u.id}">Editar</button>
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="toggle-user-active" data-id="${u.id}" data-active="${!u.active}">${u.active ? 'Desactivar' : 'Activar'}</button>
@@ -76,8 +75,8 @@ export function renderConfigIntegraciones(): string {
   return renderPwaInstallCard() +
     '<p class="padmin-lede" style="margin-bottom:14px;">Solo lectura — refleja las variables de entorno configuradas en el servidor.</p>' +
     `<div class="padmin-integraciones-grid">${integrations.map((i: Integration) => {
-      const st = i.connected ? { label: 'Conectado', bg: 'var(--brand-soft)', color: 'var(--brand)', dot: 'var(--brand)' } : { label: 'Desconectado', bg: 'var(--bg-soft)', color: 'var(--mute-2)', dot: 'var(--line)' };
-      return `<div class="padmin-integracion-card"><div style="display:flex;align-items:center;gap:10px;"><span class="padmin-dot" style="background:${st.dot};"></span><div><p style="font-size:13px;font-weight:500;color:var(--text);margin:0 0 2px;">${esc(i.name)}</p><p style="font-size:11px;color:var(--text-mute);margin:0;">${esc(i.desc)}</p></div></div><span class="padmin-badge" style="background:${st.bg};color:${st.color};">${st.label}</span></div>`;
+      const dot = i.connected ? 'var(--brand)' : 'var(--line)';
+      return `<div class="padmin-integracion-card"><div style="display:flex;align-items:center;gap:10px;"><span class="padmin-dot" style="background:${dot};"></span><div><p style="font-size:13px;font-weight:500;color:var(--text);margin:0 0 2px;">${esc(i.name)}</p><p style="font-size:11px;color:var(--text-mute);margin:0;">${esc(i.desc)}</p></div></div>${badge(i.connected ? 'activo' : 'inactivo', i.connected ? 'Conectado' : 'Desconectado')}</div>`;
     }).join('')}</div>`;
 }
 
@@ -107,7 +106,7 @@ export function renderConfigNewsletter(): string {
 export function renderConfigAgenda(): string {
   const events = state.data.newsletterEvents;
   return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-top:16px;">
-    <p style="font-size:12px;font-weight:600;color:var(--text);margin:0 0 10px;">Agenda del newsletter</p>
+    <p class="padmin-section-title" style="margin-bottom:10px;">Agenda del newsletter</p>
     <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Eventos reales del día (cortes de agua, eventos culturales, partidos, trámites). Sin esto, la sección "Agenda" del newsletter queda vacía — nunca se inventa.</p>
     <form data-action="submit-newsletter-event" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
       <input id="ne-date" type="date" required style="flex:0 0 150px;">
@@ -145,11 +144,10 @@ export function renderConfigServicios(): string {
   return formHtml + `<div class="padmin-card" style="max-width:780px;">
     <div class="padmin-table-head padmin-cols-services"><span>NOMBRE</span><span>PRECIO</span><span>ESTADO</span><span></span></div>
     ${services.length ? services.map((s: Service) => {
-      const st = s.active ? { label: 'Activo', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Inactivo', bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
       return `<div class="padmin-table-row padmin-cols-services">
         <span style="font-size:13px;color:var(--text);">${esc(s.name)}</span>
         <span style="font-size:12px;color:var(--text-mute);">${esc(s.price_label)}</span>
-        <span class="padmin-badge" style="background:${st.bg};color:${st.color};width:fit-content;">${st.label}</span>
+        ${badge(s.active ? 'activo' : 'inactivo')}
         <span style="display:flex;gap:6px;">
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="edit-service" data-id="${s.id}">Editar</button>
           <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-service" data-id="${s.id}">Borrar</button>
@@ -180,11 +178,10 @@ export function renderConfigCuentasFb(): string {
     formHtml + `<div class="padmin-card" style="max-width:760px;">
     <div class="padmin-table-head padmin-cols-services"><span>MEDIO</span><span>CUENTA</span><span>ESTADO</span><span></span></div>
     ${accounts.length ? accounts.map((a: FbAccount) => {
-      const st = a.active ? { label: 'Activa', bg: 'var(--brand-soft)', color: 'var(--brand)' } : { label: 'Inactiva', bg: 'var(--bg-soft)', color: 'var(--mute-2)' };
       return `<div class="padmin-table-row padmin-cols-services">
         <span style="font-size:13px;color:var(--text);">${esc(a.label)}</span>
         <span style="font-size:12px;color:var(--text-mute);">${esc(a.handle_or_url)}</span>
-        <span class="padmin-badge" style="background:${st.bg};color:${st.color};width:fit-content;">${st.label}</span>
+        ${badge(a.active ? 'activo' : 'inactivo', a.active ? 'Activa' : 'Inactiva')}
         <span style="display:flex;gap:6px;">
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="edit-fb-account" data-id="${a.id}">Editar</button>
           <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-fb-account" data-id="${a.id}">Borrar</button>
