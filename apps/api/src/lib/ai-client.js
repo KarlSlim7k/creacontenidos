@@ -11,8 +11,7 @@ const MODELS = {
   qa: config.aiModelQa,
 };
 
-async function chatComplete(systemPrompt, userMessage, modelKey) {
-  modelKey = modelKey || 'default';
+async function requestNousCompletion(model, systemPrompt, userMessage) {
   const res = await fetch(`${NOUS_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -20,7 +19,7 @@ async function chatComplete(systemPrompt, userMessage, modelKey) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: MODELS[modelKey],
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
@@ -31,12 +30,38 @@ async function chatComplete(systemPrompt, userMessage, modelKey) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Nous Portal respondió ${res.status}: ${text.slice(0, 300)}`);
+    throw new Error(`Nous Portal (${model}) respondió ${res.status}: ${text.slice(0, 300)}`);
   }
   const json = await res.json();
   const content = json.choices[0].message.content;
-  if (!content) throw new Error('Nous Portal no devolvió contenido (posible límite de tokens de razonamiento agotado)');
+  if (!content) throw new Error(`Nous Portal (${model}) no devolvió contenido (posible límite de tokens de razonamiento agotado)`);
   return { content, usage: json.usage || null };
+}
+
+// Fallback de modelo (gap documentado en docs/ia/politica-ia-y-gate-editorial.md §1.2 y
+// docs/ia/runbook-incidentes.md §1): si el modelo primario falla (caída de proveedor,
+// modelo retirado, rate limit), reintenta UNA vez contra AI_MODEL_FALLBACK antes de
+// propagar el error — mismo Nous Portal, mismo formato, solo cambia `model`. No es
+// fallback de proveedor (eso seguiría requiriendo Hermes/Portal completo), es la mejora
+// acotada que sí cabe sin nueva infraestructura.
+// ponytail: un solo modelo de respaldo, sin cadena de N proveedores — si aiModelFallback
+// también cae, se propaga el error combinado. Suficiente para el volumen actual; si se
+// necesita más resiliencia, ahí sí aplica una cadena de fallback real (Hermes/Portal).
+async function chatComplete(systemPrompt, userMessage, modelKey) {
+  modelKey = modelKey || 'default';
+  const primaryModel = MODELS[modelKey];
+  try {
+    const result = await requestNousCompletion(primaryModel, systemPrompt, userMessage);
+    return { ...result, model: primaryModel, usedFallback: false };
+  } catch (primaryErr) {
+    if (!config.aiModelFallback || config.aiModelFallback === primaryModel) throw primaryErr;
+    try {
+      const result = await requestNousCompletion(config.aiModelFallback, systemPrompt, userMessage);
+      return { ...result, model: config.aiModelFallback, usedFallback: true, fallbackReason: primaryErr.message };
+    } catch (fallbackErr) {
+      throw new Error(`Nous Portal falló con modelo primario y de respaldo. Primario: ${primaryErr.message} | Respaldo: ${fallbackErr.message}`);
+    }
+  }
 }
 
 function parseJson(text) {
@@ -113,8 +138,8 @@ En evidence.url usa solo URLs que aparezcan en el markdown de entrada (o la URL 
 ${VERIFICATION_JSON_SPEC}
 
 Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics. Si el markdown no trae temas útiles, devuelve [].`;
-  const { content, usage } = await chatComplete(system, user, 'default');
-  return { topics: parseJson(content), usage, model: MODELS.default, provider: 'firecrawl' };
+  const { content, usage, model, usedFallback } = await chatComplete(system, user, 'default');
+  return { topics: parseJson(content), usage, model, usedFallback, provider: 'firecrawl' };
 }
 
 // Radar de competencia: publicaciones recientes de medios competidores de la región,
@@ -160,8 +185,8 @@ async function generateProposal(context, format, angle, competitorPosts) {
     ? `\n\nCobertura reciente de competencia sobre temas similares (SOLO para elegir un ángulo distinto — NO copies ni parafrasees su texto):\n${JSON.stringify(competitorPosts.map((p) => ({ medio: p.source_account, texto: String(p.post_text || '').slice(0, 300) })))}`
     : '';
   const user = `Tema: ${context.title}\nDescripción: ${context.description || ''}\nAntecedentes: ${context.antecedentes || ''}\nActores: ${context.actores || ''}\nÁngulos sugeridos: ${context.angulos || ''}\nAudiencia: ${context.audiencia || ''}\nFormato pedido: ${format}\nÁngulo editorial: ${angle || 'libre'}${competitorBlock}\n\nGenera una propuesta de contenido. Devuelve SOLO un JSON con: title, body (resumen de 2-3 párrafos), dek (subtítulo de 1 línea), section (una de: ${SECTIONS.join(', ')}), angulo, sensibilidad (verde/amarillo/rojo).`;
-  const { content, usage } = await chatComplete(system, user, modelKey);
-  return { proposal: parseJson(content), usage, model: MODELS[modelKey] };
+  const { content, usage, model, usedFallback } = await chatComplete(system, user, modelKey);
+  return { proposal: parseJson(content), usage, model, usedFallback };
 }
 
 async function generateDraft(proposal, instructions) {

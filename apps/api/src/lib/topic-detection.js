@@ -229,6 +229,7 @@ async function detectAndSaveTopics(query, userId, trigger) {
   let usage;
   let model;
   let provider;
+  let usedFallback = false;
   let metaExtra = {};
   let scrapeUrls = [];
 
@@ -238,6 +239,7 @@ async function detectAndSaveTopics(query, userId, trigger) {
       detected = viaFc.topics;
       usage = viaFc.usage;
       model = viaFc.model;
+      usedFallback = Boolean(viaFc.usedFallback);
       provider = 'firecrawl';
       scrapeUrls = viaFc.sourcesUsed || [];
       metaExtra = {
@@ -290,6 +292,7 @@ async function detectAndSaveTopics(query, userId, trigger) {
     trust_sources_active: trustSources.length,
     provider,
     model,
+    used_fallback: usedFallback,
     usage,
     verification_breakdown: byStatus,
     ...metaExtra,

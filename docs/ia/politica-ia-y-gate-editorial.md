@@ -17,6 +17,8 @@ Por `apps/api/src/modules/{listening,content-engine}/README.md` y la skill `full
 
 [`../CREA_Stack_IA_Actualizado_v1.md`](../CREA_Stack_IA_Actualizado_v1.md) (Julio 2026, vigente) define que para el mes de pruebas el punto de entrada de IA es **Hermes Agent + Nous Portal + MiniMax como modelo primario**, con un modelo de razonamiento superior reservado para piezas sensibles/branded content de alto valor. Esa decisión **no cambia el schema ni los límites de los módulos** — solo determina qué proveedor y qué variables de entorno llama el código de `listening`/`content-engine` cuando se implementen. Antes de escribir el cliente HTTP de esas capas, confirmar contra ese documento si se llama a Anthropic/Perplexity directo o vía Nous Portal — es una decisión de una línea de configuración, no de arquitectura.
 
+**Fallback de modelo (implementado, acotado)**: `apps/api/src/lib/ai-client.js` reintenta **una** vez contra `AI_MODEL_FALLBACK` cuando falla el modelo primario (`AI_MODEL_DEFAULT`/`_COMPLEX`/`_QA`). Es el mismo Nous Portal con otro `model`, no una cadena de proveedores: si también falla, se propaga un error que nombra los dos. Vacío = sin fallback (comportamiento anterior). La cadena de fallback nativa de Hermes/Portal sigue siendo la mejora mayor pendiente; ver [`runbook-incidentes.md`](./runbook-incidentes.md) §1.
+
 ### 1.3 Reglas de ruteo por tipo de tarea (heredadas de v1, siguen aplicando)
 
 | Tarea | Modelo recomendado |

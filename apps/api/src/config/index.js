@@ -32,6 +32,9 @@ module.exports = {
   aiModelDefault: process.env.AI_MODEL_DEFAULT || 'deepseek/deepseek-v4-flash',
   aiModelComplex: process.env.AI_MODEL_COMPLEX || 'minimax/minimax-m3',
   aiModelQa: process.env.AI_MODEL_QA || 'openai/gpt-5-nano',
+  // Fallback de modelo si el primario falla (gap de docs/ia/politica-ia-y-gate-editorial.md
+  // §1.2 y runbook-incidentes.md §1). Vacío = sin fallback, se propaga el error como antes.
+  aiModelFallback: process.env.AI_MODEL_FALLBACK || '',
   // Imagen vía OpenRouter (docs/ia/generacion-imagenes.md): Nano Banana Pro para portadas.
   openrouterKey: process.env.OPENROUTER_API_KEY,
   aiModelImage: process.env.AI_MODEL_IMAGE || 'google/gemini-3-pro-image',
