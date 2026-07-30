@@ -21,6 +21,7 @@ const { variant = 'block', title, idPrefix } = Astro.props;
         <input id={`${idPrefix}-website`} name="website" type="text" tabindex="-1" autocomplete="off">
       </div>
       <button type="submit" class="btn btn-brand">Suscribirme</button>
+      <p style="font-size:10px;color:var(--text-mute);margin:6px 0 0;">Al suscribirte aceptas nuestro <a href="/privacidad" style="color:var(--brand);">aviso de privacidad</a>.</p>
       <p data-form-note role="status" aria-live="polite" tabindex="-1"></p>
     </form>
   </details>
@@ -36,6 +37,7 @@ const { variant = 'block', title, idPrefix } = Astro.props;
       <input id={`${idPrefix}-website`} name="website" type="text" tabindex="-1" autocomplete="off">
     </div>
     <button type="submit" class="btn btn-brand">Suscribirme</button>
+    <p style="font-size:10px;color:var(--text-mute);margin:6px 0 0;">Al suscribirte aceptas nuestro <a href="/privacidad" style="color:var(--brand);">aviso de privacidad</a>.</p>
     <p data-form-note role="status" aria-live="polite" tabindex="-1" style="font-size:12px;color:var(--brand);margin-top:12px;outline:none;"></p>
   </form>
 )}

@@ -1,0 +1,93 @@
+---
+import EditorialLayout from '../layouts/EditorialLayout.astro';
+import FooterEditorial from '../components/editorial/FooterEditorial.astro';
+
+const LAST_UPDATE = '30 de julio de 2026';
+---
+<EditorialLayout
+  title="Aviso de privacidad"
+  description="Aviso de privacidad de CREA Contenidos: qué datos personales recabamos, para qué los usamos y cómo ejercer tus derechos ARCO."
+>
+  <main class="container" style="padding-top:32px;padding-bottom:40px;max-width:760px;">
+    <div class="eyebrow" style="margin-bottom:8px;">AVISO DE PRIVACIDAD</div>
+    <h1 style="font-size:30px;margin:0 0 6px;">Aviso de privacidad</h1>
+    <p class="card-dek" style="margin:0 0 28px;">Última actualización: {LAST_UPDATE}</p>
+
+    <div style="font-size:14px;line-height:1.7;color:var(--text);">
+      <p>
+        <strong>CREA Contenidos</strong> ("CREA", "nosotros"), con domicilio operativo en Perote,
+        Veracruz, México, es responsable del tratamiento de los datos personales que nos
+        proporcionas a través de <a href="https://crea-contenidos.com" style="color:var(--brand);">crea-contenidos.com</a>
+        y sus subdominios, de conformidad con la Ley Federal de Protección de Datos Personales en
+        Posesión de los Particulares (LFPDPPP) y su Reglamento.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">¿Qué datos personales recabamos?</h2>
+      <p>Recabamos datos personales únicamente cuando tú decides proporcionarlos, a través de:</p>
+      <ul style="padding-left:20px;margin:0 0 16px;">
+        <li><strong>Formulario de contacto comercial (Estudio)</strong>: nombre, correo electrónico, nombre de tu negocio o marca, tipo de interés y el mensaje que escribas.</li>
+        <li><strong>Formulario "Envía tu idea" (Comunidad)</strong>: nombre, correo electrónico, sección de interés y el texto de tu idea.</li>
+        <li><strong>Suscripción al boletín "Buenos días, Perote"</strong>: tu dirección de correo electrónico.</li>
+      </ul>
+      <p>No recabamos datos financieros, de salud, ni ninguna categoría de dato sensible. No pedimos ni almacenamos contraseñas de otros servicios ni datos de tarjetas de pago en este sitio.</p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">¿Para qué usamos tus datos? (finalidades)</h2>
+      <ul style="padding-left:20px;margin:0 0 16px;">
+        <li>Responder a tu mensaje o solicitud comercial en un plazo razonable.</li>
+        <li>Evaluar y, en su caso, dar seguimiento a ideas o temas que nos compartas para cobertura editorial.</li>
+        <li>Enviarte el boletín diario "Buenos días, Perote" si te suscribiste, exclusivamente al correo que confirmaste (usamos doble confirmación: te mandamos un correo y el envío del boletín no inicia hasta que confirmas el enlace).</li>
+      </ul>
+      <p>No usamos tus datos para fines distintos a los anteriores, no los vendemos ni los rentamos a terceros, y no elaboramos perfiles publicitarios con ellos.</p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">¿Con quién compartimos tus datos?</h2>
+      <p>
+        Usamos proveedores de servicio que procesan datos por nuestra cuenta, bajo sus propias
+        políticas de seguridad, únicamente para operar el sitio y el boletín:
+      </p>
+      <ul style="padding-left:20px;margin:0 0 16px;">
+        <li><strong>Resend</strong> (envío de correo): gestiona el envío y la confirmación de suscripción al boletín.</li>
+        <li><strong>Cloudflare</strong>: red de entrega de contenido y protección del sitio.</li>
+      </ul>
+      <p>No compartimos tus datos con ningún tercero para fines de mercadotecnia ajenos a CREA.</p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Derechos ARCO</h2>
+      <p>
+        Tienes derecho a Acceder, Rectificar y Cancelar tus datos personales, así como a Oponerte al
+        uso de los mismos (derechos ARCO), y a revocar tu consentimiento en cualquier momento. Para
+        ejercerlos, escríbenos a
+        <a href="mailto:contacto@crea-contenidos.com" style="color:var(--brand);">contacto@crea-contenidos.com</a>
+        indicando tu nombre, el dato que quieres ejercer y el correo con el que nos contactaste.
+        Responderemos en un plazo máximo de 20 días hábiles.
+      </p>
+      <p>
+        Si te suscribiste al boletín, también puedes darte de baja directamente desde el enlace
+        "Cancelar suscripción" que aparece en cada correo, sin necesidad de escribirnos.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;" id="cookies">Cookies y tecnologías similares</h2>
+      <p>
+        Este sitio no utiliza cookies propias ni de terceros con fines de análisis, publicidad o
+        rastreo. Las únicas conexiones a servicios externos son a Google Fonts (para cargar
+        tipografías) y a Cloudflare (para la operación del sitio), que no instalan cookies de
+        seguimiento en tu navegador desde esta página. Si en el futuro incorporamos cookies
+        analíticas o de publicidad, actualizaremos este aviso y te lo notificaremos con un banner
+        de consentimiento antes de activarlas.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Cambios a este aviso</h2>
+      <p>
+        Podemos actualizar este aviso de privacidad. Cualquier cambio se publicará en esta misma
+        página con su fecha de actualización.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Contacto</h2>
+      <p>
+        Dudas sobre este aviso: <a href="mailto:contacto@crea-contenidos.com" style="color:var(--brand);">contacto@crea-contenidos.com</a>.
+      </p>
+    </div>
+  </main>
+
+  <Fragment slot="footer">
+    <FooterEditorial />
+  </Fragment>
+</EditorialLayout>

@@ -31,6 +31,9 @@ const isComunidad = variant === 'comunidad';
   {isComunidad && (
     <div class="checkbox-row"><input type="checkbox" id="soy-comunidad" required><label for="soy-comunidad">Soy parte de la comunidad de Perote o el corredor</label></div>
   )}
+  <p style="font-size:11px;color:var(--text-mute);margin:0 0 10px;">
+    Al enviar este formulario aceptas nuestro <a href="/privacidad" style="color:var(--brand);">aviso de privacidad</a>.
+  </p>
   <button type="submit" class={`btn ${isComunidad ? 'btn-brand' : 'btn-accent'}`} style={!isComunidad ? 'align-self:flex-start;margin-top:6px;' : undefined}>
     {isComunidad ? 'Enviar idea' : 'Enviar mensaje'}
   </button>

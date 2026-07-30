@@ -1,0 +1,81 @@
+---
+import EditorialLayout from '../layouts/EditorialLayout.astro';
+import FooterEditorial from '../components/editorial/FooterEditorial.astro';
+
+const LAST_UPDATE = '30 de julio de 2026';
+---
+<EditorialLayout
+  title="Términos de uso"
+  description="Términos de uso de crea-contenidos.com: condiciones de acceso al contenido editorial y a los servicios comerciales del Estudio CREA."
+>
+  <main class="container" style="padding-top:32px;padding-bottom:40px;max-width:760px;">
+    <div class="eyebrow" style="margin-bottom:8px;">TÉRMINOS DE USO</div>
+    <h1 style="font-size:30px;margin:0 0 6px;">Términos de uso</h1>
+    <p class="card-dek" style="margin:0 0 28px;">Última actualización: {LAST_UPDATE}</p>
+
+    <div style="font-size:14px;line-height:1.7;color:var(--text);">
+      <p>
+        Al usar <a href="https://crea-contenidos.com" style="color:var(--brand);">crea-contenidos.com</a>
+        aceptas estos términos. Si no estás de acuerdo, te pedimos no usar el sitio.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Contenido editorial</h2>
+      <p>
+        CREA Contenidos es un medio digital local de Perote, Veracruz, y el corredor
+        Perote–Xalapa–Puebla. Todo el contenido publicado pasa por revisión editorial humana antes
+        de salir al aire — ninguna nota se publica automáticamente sin esa aprobación. Puedes leer
+        y compartir nuestras notas citando la fuente y enlazando de vuelta a este sitio. No está
+        permitido reproducir el contenido completo en otro medio sin autorización previa por
+        escrito; escríbenos a
+        <a href="mailto:contacto@crea-contenidos.com" style="color:var(--brand);">contacto@crea-contenidos.com</a>.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Contenido patrocinado</h2>
+      <p>
+        Cuando una nota, sección o formato tiene patrocinio comercial, lo identificamos claramente
+        como tal (etiqueta "Patrocinado" o "Branded content"). El patrocinio nunca compra la línea
+        editorial de nuestras notas informativas: mantenemos ambos contenidos separados.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Formularios y envío de información</h2>
+      <p>
+        Al usar el formulario de contacto comercial, el de "Envía tu idea" o al suscribirte al
+        boletín, aceptas que tratemos tus datos conforme a nuestro
+        <a href="/privacidad" style="color:var(--brand);">aviso de privacidad</a>. Nos reservamos
+        el derecho de no responder o de descartar mensajes que consideremos spam, ofensivos o
+        ajenos al propósito del formulario.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Servicios comerciales (Estudio CREA)</h2>
+      <p>
+        Los precios, formatos y condiciones publicados en <a href="/estudio" style="color:var(--brand);">/estudio</a>
+        son informativos y pueden cambiar sin previo aviso. Un acuerdo comercial concreto
+        (patrocinio, branded content, publicidad) se formaliza únicamente por escrito entre CREA y
+        el cliente, y las condiciones de ese acuerdo prevalecen sobre lo publicado en el sitio.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Limitación de responsabilidad</h2>
+      <p>
+        Hacemos nuestro mejor esfuerzo por verificar la información que publicamos, pero no
+        garantizamos que el contenido esté libre de errores en todo momento. Si detectas un error,
+        escríbenos y lo corregimos. CREA no es responsable por el contenido de sitios externos a
+        los que enlazamos (fuentes, redes sociales, comunicados oficiales).
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Cambios a estos términos</h2>
+      <p>
+        Podemos actualizar estos términos. Cualquier cambio se publicará en esta misma página con
+        su fecha de actualización.
+      </p>
+
+      <h2 style="font-size:18px;margin:28px 0 10px;">Contacto</h2>
+      <p>
+        Dudas sobre estos términos: <a href="mailto:contacto@crea-contenidos.com" style="color:var(--brand);">contacto@crea-contenidos.com</a>.
+      </p>
+    </div>
+  </main>
+
+  <Fragment slot="footer">
+    <FooterEditorial />
+  </Fragment>
+</EditorialLayout>

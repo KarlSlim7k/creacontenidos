@@ -64,7 +64,7 @@ app.get('/sitemap.xml', async (req, res, next) => {
     const { rows } = await pool.query(
       "SELECT slug, published_at FROM content_proposals WHERE status = 'published' ORDER BY published_at DESC LIMIT 5000"
     );
-    const urls = ['/', '/comunidad', '/producciones']
+    const urls = ['/', '/comunidad', '/producciones', '/privacidad', '/terminos']
       .concat(SECTIONS.map((s) => '/seccion/' + encodeURIComponent(s)))
       .map((p) => `<url><loc>${xmlEsc(base + p)}</loc></url>`);
     for (const r of rows) {

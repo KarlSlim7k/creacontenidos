@@ -7,12 +7,17 @@ const { links = [
   { href: '/estudio/media-kit', label: 'Media kit' },
   { href: '/estudio/contacto', label: 'Contacto' },
 ] } = Astro.props;
+const legalLinks = [
+  { href: '/privacidad', label: 'Aviso de privacidad' },
+  { href: '/terminos', label: 'Términos de uso' },
+];
 ---
 <div class="container">
   <footer class="site-footer">
     <span>CREA Contenidos &middot; Perote, Veracruz</span>
     <span class="links">
       {links.map((l) => <a href={l.href}>{l.label}</a>)}
+      {legalLinks.map((l) => <a href={l.href}>{l.label}</a>)}
     </span>
   </footer>
 </div>
