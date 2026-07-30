@@ -44,7 +44,9 @@ app.use(helmet({
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
       'connect-src': ["'self'", 'https://api.open-meteo.com'],
       'img-src': ["'self'", 'data:', 'https:'], // miniaturas oEmbed vienen de CDNs variables
+      'media-src': ["'self'", 'blob:'], // preview de audio/video subido en el pipeline usa blob: URLs
       'frame-src': ['https://www.tiktok.com', 'https://www.youtube.com', 'https://www.facebook.com'],
+      'script-src': ["'self'", 'https://static.cloudflareinsights.com'], // beacon de Cloudflare Web Analytics
     },
   },
 }));
