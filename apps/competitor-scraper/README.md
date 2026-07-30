@@ -57,6 +57,37 @@ de Brave/Chrome) en el contenedor del scraper.
 Las cookies expiran cada 30-90 días. Si ves muchos `Login wall detected` en
 los logs, es hora de rotar.
 
+### Pitfall: Docker crea un directorio si el archivo de cookies no existe
+
+Si `FB_COOKIES_PATH` (host) no existe **como archivo** la primera vez que se
+levanta el servicio, Docker interpreta el bind mount como directorio y crea
+`fb_cookies.txt/` (carpeta vacía) en vez de fallar. El contenedor arranca,
+pero `resolveFacebookCookies()` hace `readFile()` sobre esa ruta y explota con
+`EISDIR: illegal operation on a directory, read` — reinicio en loop
+(`restart: unless-stopped` lo reintenta indefinidamente sin arreglarse solo).
+
+**Síntoma**: `docker ps` muestra el contenedor en `Restarting` constante;
+`docker logs` repite el `EISDIR` de `cookies.js:resolveFacebookCookies`.
+
+**Fix**:
+1. Verificar el tipo real del mount: `file secrets/fb_cookies.txt` (o el path
+   que apunte `FB_COOKIES_PATH`). Si dice `directory`, ese es el problema.
+2. Borrar el directorio y crear el archivo real (el dueño queda `root` porque
+   lo creó el daemon de Docker, así que se hace desde un contenedor):
+   ```bash
+   docker run --rm -v "$(pwd)/secrets:/secrets" busybox sh -c \
+     "rmdir /secrets/fb_cookies.txt && touch /secrets/fb_cookies.txt && chown $(id -u):$(id -g) /secrets/fb_cookies.txt"
+   ```
+3. Pegar el export real de cookies (formato Netscape) en ese archivo.
+4. Un `restart` normal **no alcanza** — el rootfs del contenedor ya tiene el
+   mount viejo resuelto. Hay que recrearlo: `docker compose up -d --force-recreate competitor-scraper`.
+5. Confirmar en `docker logs`: `Loaded N cookie(s) from file:...` y
+   `GET /health` con `cookies.authenticated: true`.
+
+**Prevención**: antes del primer `docker compose up`, asegurar que el archivo
+exista con `touch` (aunque esté vacío) en la ruta de `FB_COOKIES_PATH` —
+así Docker monta un archivo desde el inicio y nunca crea el directorio.
+
 ## Configuración (env vars)
 
 | Variable           | Default | Descripción                                                                                       |
@@ -129,6 +160,15 @@ local, no requiere el scraper real levantado).
 - **Sin cookies** = solo scrapea páginas 100% públicas (casi siempre el
   muro de login aparece a los pocos posts).
 - **APIs externas**: ninguna. No usa Perplexity/Claude/Apify — solo Playwright.
+- **Estado verificado en dev local (2026-07-29)**: cookies reales cargadas en
+  `secrets/fb_cookies.txt` (7 cookies, incluye `c_user`+`xs`), contenedor
+  `healthy`, `GET /health` reporta `cookies.authenticated: true`. Scrape de
+  prueba contra una página pública regional confirmó `Session check OK. You
+  appear to be logged in.` y devolvió posts reales (no login wall) — el
+  servicio funciona end-to-end para scraping autenticado de Facebook, no solo
+  el esqueleto. Pendiente: rotar cookies cada 30-90 días (ver arriba) y correr
+  el flujo completo vía `POST /api/listening/competitors/detect` en vez de
+  pegarle al scraper directo.
 
 ## Por qué self-hosted (no Apify Cloud)
 

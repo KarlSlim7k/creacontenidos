@@ -95,4 +95,4 @@ cd apps/web && npm install && npm run dev   # Astro SSR, http://localhost:4000 (
 cd apps/admin && npm install && npm run dev # Vite SPA, http://localhost:4001 (proxy /api -> :3000)
 ```
 
-Ningún módulo de IA (Perplexity, Claude, OpenAI) está conectado todavía — solo el esqueleto de arquitectura con datos de prueba. El competitor scraper funciona contra Facebook con cookies reales (ver `apps/competitor-scraper/README.md` para rotación).
+Ningún módulo de IA (Perplexity, Claude, OpenAI) está conectado todavía — solo el esqueleto de arquitectura con datos de prueba. El competitor scraper (`apps/competitor-scraper/`) funciona contra Facebook con cookies reales — verificado en dev local (2026-07-29): sesión autenticada y scrape de una página pública sin login wall (ver `apps/competitor-scraper/README.md` sección "Operación" para el detalle y sección "Pitfall" si el archivo de cookies termina montado como directorio en vez de archivo).

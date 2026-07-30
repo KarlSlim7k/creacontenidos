@@ -107,6 +107,12 @@ services:
       # apuntar a una ruta fuera del repo (ej. /home/karol/creacontenidos-work/
       # secrets/fb_cookies.txt), seteada en el .env de Dokploy. Si el archivo
       # no existe, el servicio arranca igual pero solo scrapea páginas públicas.
+      #
+      # ⚠️ Si el archivo NO existe como archivo antes del primer `up`, Docker
+      # monta el bind como directorio vacío en vez de fallar — el contenedor
+      # entra en restart-loop (EISDIR en cookies.js). `touch` el archivo antes
+      # de levantar el servicio. Fix si ya pasó: apps/competitor-scraper/README.md
+      # sección "Pitfall: Docker crea un directorio si el archivo no existe".
       - ${FB_COOKIES_PATH:-./secrets/fb_cookies.txt}:/secrets/fb_cookies.txt:ro
     expose:
       - "3015"
