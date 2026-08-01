@@ -60,6 +60,7 @@ services:
       WORDPRESS_APP_PASSWORD: ${WORDPRESS_APP_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET (definila en .env)}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
       # Microservicio de scraping de Facebook (apps/competitor-scraper/).
       # Si está vacío, /api/listening/competitors/detect cae a Perplexity-only.
       COMPETITOR_SCRAPER_URL: ${COMPETITOR_SCRAPER_URL:-}

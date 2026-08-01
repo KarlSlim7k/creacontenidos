@@ -1,3 +1,4 @@
+const { Sentry } = require('./instrument');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -126,6 +127,7 @@ async function main() {
   app.use('/_astro', express.static(path.join(webClientDir, '_astro'), { maxAge: '1y', immutable: true }));
   app.use(express.static(webClientDir, { maxAge: '1d' }));
   app.use((req, res, next) => astroHandler(req, res, next, { cspNonce: res.locals.cspNonce }));
+  Sentry.setupExpressErrorHandler(app);
   app.use(errorHandler);
 
   app.listen(config.port, () => {

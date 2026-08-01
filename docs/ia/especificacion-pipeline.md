@@ -4,8 +4,8 @@
 > (v1) a lo que cada módulo Express de v2 debe hacer. v1 lo implementaba como skills markdown de
 > Hermes Agent sobre tablas en español (`ideas`, `piezas_contenido`, `publicaciones`); v2 lo
 > implementa como cron jobs (`node-cron`) + rutas Express sobre el schema real
-> (`topics`, `content_proposals`, `published_content`). No hay agente persistente, no hay
-> Telegram, no hay microservicios — cada capa es un router en el mismo proceso Express, y se
+> (`topics`, `content_proposals`, `published_content`). No hay agente persistente ni broker de
+> eventos; Telegram y el scraper de Facebook son integraciones acotadas. Cada capa principal es un router en el mismo proceso Express y se
 > comunican leyendo/escribiendo las tablas compartidas (ver skill `automation-pipeline`).
 
 ## Flujo end-to-end
@@ -21,7 +21,7 @@ panel admin    → editorial: aprobar/rechazar/editar/publicar (YA IMPLEMENTADO)
                        ↓
 apps/web/public → lee status='published' (YA IMPLEMENTADO, Fase 1 de PLAN_v1.md)
                        ↓
-cron every 5m  → distribution: publica en Facebook / genera link WhatsApp, guarda published_content
+panel admin    → distribution: publica en canales externos y guarda cada intento en published_content
 ```
 
 ## `listening` (capa 1)
@@ -31,7 +31,7 @@ cron every 5m  → distribution: publica en Facebook / genera link WhatsApp, gua
 **Cron**: `node-cron`, `every 6h` (registrado dentro de `apps/api/src/modules/listening`, no en `server.js` — ver skill `automation-pipeline`).
 
 **Procedimiento**:
-1. Llamar Perplexity Sonar API (`sonar-pro`) con queries de Perote/Veracruz — o el proveedor que determine [`politica-ia-y-gate-editorial.md`](./politica-ia-y-gate-editorial.md) §1.2. RSS de Google News como fuente complementaria/fallback (sin costo, útil si la key de Perplexity falla — ver [`runbook-incidentes.md`](./runbook-incidentes.md)).
+1. Si existen `FIRECRAWL_API_KEY` y `FIRECRAWL_SOURCE_URLS`, obtener markdown público con Firecrawl y clasificarlo con Nous. Si esa ruta no está configurada o falla, usar Perplexity Sonar (`sonar-pro`) como fallback — ver [`runbook-incidentes.md`](./runbook-incidentes.md).
 2. Clasificar sentimiento (`sentiment`) con el modelo económico de la política de ruteo.
 3. **Deduplicar antes de insertar** — es la regla no negociable de `automation-pipeline`: un cron debe ser idempotente. v1 dedupeaba contra el título de los últimos 14 días; en v2, dado que `topics` no tiene columna `source_url` ni constraint único, dedupear por `title` exacto o similitud simple contra `topics` de los últimos N días antes de insertar (`WHERE NOT EXISTS (...)`, mismo patrón que `apps/api/src/db/seeds/001_dev_seed.sql`).
 4. `INSERT INTO topics (title, source, mentions, sentiment, status) VALUES (..., 'new')`.
@@ -62,14 +62,14 @@ Ver [`politica-ia-y-gate-editorial.md`](./politica-ia-y-gate-editorial.md) §2.1
 
 **Propósito**: publicar `content_proposals` con `status='published'` en canales externos y registrar el resultado en `published_content`.
 
-**Cron**: `every 5m`, revisa `content_proposals WHERE status='published' AND NOT EXISTS (SELECT 1 FROM published_content WHERE proposal_id = content_proposals.id AND platform='facebook')` (evita republicar).
+**Disparo**: manual desde el panel, mediante rutas `POST` protegidas para rol `director`. No existe cron de distribución.
 
-**Procedimiento** (Facebook, único canal en el alcance inicial — igual que v1 Fase 1/4, antes de Instagram/TikTok):
-1. `POST` a Facebook Graph API (`/{page_id}/feed`) con el `title`/`body` de la propuesta.
-2. `INSERT INTO published_content (proposal_id, platform, published_at, url)` con la respuesta.
-3. Si falla: reintentar con backoff simple (2-3 intentos); si sigue fallando, dejarlo pendiente para el siguiente ciclo del cron — ver [`runbook-incidentes.md`](./runbook-incidentes.md) §3. No construir una dead-letter queue para este volumen.
+**Procedimiento**:
+1. Elegir Facebook, WhatsApp o WordPress desde el panel. Facebook usa Graph API; WhatsApp devuelve un enlace compartible; WordPress usa su REST API.
+2. `INSERT INTO published_content` con plataforma, estado, detalle y URL cuando exista. Los intentos fallidos también se registran.
+3. Si falla, corregir la causa y reintentar manualmente — ver [`runbook-incidentes.md`](./runbook-incidentes.md) §5. No construir una cola ni reintentos automáticos para este volumen.
 4. `platform='web'` ya está cubierto automáticamente por `apps/api/src/modules/public` (lee `status='published'` directo) — `distribution` no necesita "publicar" al sitio, solo a redes/WhatsApp.
-5. WhatsApp: en el alcance inicial es un link compartible (`https://wa.me/?text=...`) generado en el frontend/panel, no una integración de API — igual que v1 lo dejaba para fases posteriores.
+5. WhatsApp es un link compartible (`https://wa.me/?text=...`), no una integración de Business API.
 
 ## Ideas fuera de alcance (documentadas para no perderlas, no para construir ahora)
 
