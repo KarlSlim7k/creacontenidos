@@ -91,6 +91,10 @@ alerta a un correo operativo. Guardar su URL únicamente en:
 El archivo debe pertenecer a `karol:karol` y tener modo `600`. No registrar la
 URL en Git, logs, comandos compartidos ni variables del compose.
 
+Evidencia del 1 de agosto de 2026, 22:15 UTC: archivo instalado con propietario
+`karol:karol` y modo `600`; el backup generó un dump válido de 8.7 MiB y el ping
+de éxito respondió correctamente. La URL no se conserva en este documento.
+
 ## Recuperación real
 
 Ante pérdida o corrupción, detener primero las escrituras y conservar una copia

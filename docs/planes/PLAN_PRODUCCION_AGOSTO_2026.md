@@ -1,6 +1,6 @@
 # PLAN — Cierre de producción y lanzamiento de agosto 2026
 
-Estado: en ejecución desde el 1 de agosto de 2026; Fase 1 completada en producción.  
+Estado: en ejecución desde el 1 de agosto de 2026; Fases 1–3 completadas en producción.
 Alcance: portal público, Command Center, API, despliegue Dokploy/VPS y continuidad de IA.  
 Fuera de alcance: aumentar la cantidad de notas publicadas.
 
@@ -89,7 +89,13 @@ Aceptación: DNS público visible, Resend continúa `verified`, DMARC pasa y el 
 
 Referencia: [Resend — Implementing DMARC](https://resend.com/docs/dashboard/domains/dmarc).
 
-### Fase 3 — Backup recuperable y fuera del VPS (P1, 1 día)
+### Fase 3 — Backup recuperable y fuera del VPS (P1, completada el 1 de agosto de 2026)
+
+Evidencia de cierre: backup local endurecido y validado, tarea diaria de Dokploy con retención 14,
+objeto de 9,114,120 bytes presente en Cloudflare R2 y restaurado directamente con `pg_restore` en
+Postgres 16 aislado. Coincidieron tablas, migraciones, notas publicadas, usuarios, leads e imágenes.
+El contenedor temporal se eliminó. El heartbeat externo respondió solo después de generar y validar
+un dump nuevo; RPO 24 h y RTO inicial 2 h quedan documentados en `docs/operacion-backups.md`.
 
 - Endurecer el script actual con `umask 077`, directorio `700` y dumps/logs `600`; los backups
   actuales están demasiado abiertos (`664`).
