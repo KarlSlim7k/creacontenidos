@@ -41,12 +41,18 @@ Después de guardarlo, ejecutar **Test/Manual Backup** y confirmar que Dokploy
 lista el objeto en el bucket. No se considera configurado solo porque exista la
 tarea: debe existir y poder descargarse al menos un objeto.
 
+Objeto verificado el 1 de agosto de 2026:
+`creacontenidosapp-creacontenidos-909nii_db/creacontenidos/postgres/2026-08-01T22-05-38-378Z.sql.gz`
+(9,114,120 bytes). Se descargó desde R2, pasó `gzip -t` y se restauró completo.
+
 ## Restauración aislada
 
 1. Elegir el dump más reciente y validar `gzip -t`.
 2. Crear un contenedor `postgres:16` sin red y con `/var/lib/postgresql/data` en
    `tmpfs`. No montar el volumen de producción.
-3. Restaurar con `psql -v ON_ERROR_STOP=1`.
+3. Detectar el formato descomprimido con `file`. El script local genera SQL
+   plano y se restaura con `psql -v ON_ERROR_STOP=1`; Dokploy genera un dump
+   custom (`PGDMP`) y se restaura con `pg_restore --exit-on-error`.
 4. Comparar producción y restauración: tablas públicas, `schema_migrations`,
    notas publicadas en `content_proposals`, usuarios, leads e imágenes.
 5. Leer el tamaño y los primeros bytes de una fila de `generated_images`.
@@ -68,6 +74,10 @@ Dump restaurado: `crea_command_center_20260801_205929.sql.gz` (8.7 MiB).
 La imagen más reciente se leyó como JPEG, 1,062,711 bytes y cabecera
 `ffd8ffe0`. El restore usó `network=none` y `tmpfs`; el contenedor temporal se
 eliminó y su ausencia se comprobó al finalizar.
+
+La misma comparación pasó al restaurar directamente el objeto externo de R2
+con `pg_restore`: los seis conteos y la lectura de imagen coincidieron con
+producción. El contenedor aislado de esta segunda prueba también se eliminó.
 
 ## Heartbeat
 
