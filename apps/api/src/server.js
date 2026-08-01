@@ -2,6 +2,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const path = require('path');
+const { randomBytes } = require('node:crypto');
 
 const config = require('./config');
 const { errorHandler } = require('./middleware/error-handler');
@@ -31,6 +32,13 @@ const app = express();
 // trust proxy solo fija req.ip como fallback razonable en dev/sin CF.
 app.set('trust proxy', 1);
 
+// Nonce distinto por respuesta. Astro lo recibe como local para sus dos scripts
+// dinámicos; los scripts estáticos salen como archivos /_astro del mismo origen.
+app.use((req, res, next) => {
+  res.locals.cspNonce = randomBytes(16).toString('base64');
+  next();
+});
+
 // helmet/cors ANTES de los estáticos: express.static termina la respuesta al
 // encontrar el archivo y nunca llama a next(), así que si helmet va después las
 // páginas HTML (sitio + panel admin) se sirven sin CSP/X-Frame-Options/nosniff.
@@ -46,7 +54,11 @@ app.use(helmet({
       'img-src': ["'self'", 'data:', 'https:'], // miniaturas oEmbed vienen de CDNs variables
       'media-src': ["'self'", 'blob:'], // preview de audio/video subido en el pipeline usa blob: URLs
       'frame-src': ['https://www.tiktok.com', 'https://www.youtube.com', 'https://www.facebook.com'],
-      'script-src': ["'self'", 'https://static.cloudflareinsights.com'], // beacon de Cloudflare Web Analytics
+      'script-src': [
+        "'self'",
+        'https://static.cloudflareinsights.com', // beacon de Cloudflare Web Analytics
+        (req, res) => `'nonce-${res.locals.cspNonce}'`,
+      ],
     },
   },
 }));
@@ -113,7 +125,7 @@ async function main() {
   // cache corto: si se reemplaza el archivo, los visitantes lo ven en <1 día.
   app.use('/_astro', express.static(path.join(webClientDir, '_astro'), { maxAge: '1y', immutable: true }));
   app.use(express.static(webClientDir, { maxAge: '1d' }));
-  app.use(astroHandler);
+  app.use((req, res, next) => astroHandler(req, res, next, { cspNonce: res.locals.cspNonce }));
   app.use(errorHandler);
 
   app.listen(config.port, () => {

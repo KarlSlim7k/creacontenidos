@@ -8,6 +8,7 @@ import { notaHref, perfilHref, seccionHref, initials, fechaLarga } from '../../l
 import { newsArticleJsonLd } from '../../lib/jsonld';
 
 const slug = Astro.params.slug || '';
+const cspNonce = (Astro.locals as { cspNonce?: string }).cspNonce;
 
 let article: Article | null = null;
 let fail: { title: string; body: string } | null = null;
@@ -56,7 +57,7 @@ const jsonLd = article ? newsArticleJsonLd(article, image) : null;
   noJsWarning="CREA Contenidos necesita JavaScript para mostrar esta nota. Actívalo para leerla completa."
 >
   <Fragment slot="head">
-    {jsonLd && <script type="application/ld+json" set:html={jsonLd} is:inline />}
+    {jsonLd && <script type="application/ld+json" set:html={jsonLd} is:inline nonce={cspNonce} />}
   </Fragment>
 
   <main class="container narrow" style="padding-top:28px;">
@@ -102,7 +103,7 @@ const jsonLd = article ? newsArticleJsonLd(article, image) : null;
           </div>
         </a>
 
-        <script define:vars={{ slug: article.slug }} is:inline>
+        <script define:vars={{ slug: article.slug }} is:inline nonce={cspNonce}>
           // Fire-and-forget: cuenta la vista para "lo más leído". Si falla, no afecta la lectura.
           fetch('/api/public/articles/' + encodeURIComponent(slug) + '/view', { method: 'POST' }).catch(() => {});
         </script>
