@@ -222,8 +222,8 @@ AI_TEXT_TIMEOUT_MS=45000
 - La cuenta OpenRouter tiene más de USD 8 de saldo restante; al haber comprado al menos USD 10,
   la documentación vigente indica hasta 1000 solicitudes free/día, sujeto a disponibilidad.
 
-El benchmark versionado usa 10 casos sintéticos: propuesta, aviso, QA, newsletter, JSON con
-acentos, rechazo de invención y contenido sensible. Ling obtuvo 10/10 JSON, 10/10 fidelidad y
+El benchmark versionado usa 10 casos sintéticos y la taxonomía real de `lib/sections`: propuesta,
+aviso, QA, newsletter, JSON con acentos, rechazo de invención y contenido sensible. Ling obtuvo 10/10 JSON, 10/10 fidelidad y
 9/10 tono tanto por Nous (~3.9 s promedio) como por OpenRouter (~3.9 s). Gemma 26B obtuvo 9/10
 en fidelidad por atribuir a “autoridades” un dato no entregado; Gemma 31B no estuvo disponible;
 Nemotron y GPT-OSS agregaron detalles o texto impropio en revisión manual. Por eso Ling queda

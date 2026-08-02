@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Benchmark sintético y versionado. No usa temas, prompts ni contenido de producción.
 const { requestNousCompletion, requestOpenRouterTextCompletion } = require('../src/lib/ai-client');
+const { SECTIONS } = require('../src/lib/sections');
 
-const SECTIONS = new Set(['Perote', 'Veracruz', 'México', 'Mundo', 'Cultura', 'Deportes', 'Tecnología', 'Opinión', 'Comunidad', 'Economía']);
+const VALID_SECTIONS = new Set(SECTIONS);
 const CASES = [
   { name: 'propuesta-local', facts: 'El taller será en Perote el 8 de agosto de 2026. Entrada gratuita.', task: 'Redacta una propuesta informativa.', required: ['Perote', '8 de agosto'], forbidden: ['abierta a todo público', 'busca fomentar'], numbers: ['8', '2026'] },
   { name: 'aviso-servicio', facts: 'La biblioteca cerrará el lunes por mantenimiento y reabrirá el martes.', task: 'Redacta un aviso de servicio claro.', required: ['biblioteca', 'martes'] },
@@ -28,7 +29,7 @@ function evaluate(test, raw) {
     const match = raw.match(/\{[\s\S]*\}/);
     const value = JSON.parse(match ? match[0] : raw);
     result.value = value;
-    result.json = ['titulo', 'texto', 'seccion', 'sensibilidad'].every((key) => typeof value[key] === 'string') && SECTIONS.has(value.seccion);
+    result.json = ['titulo', 'texto', 'seccion', 'sensibilidad'].every((key) => typeof value[key] === 'string') && VALID_SECTIONS.has(value.seccion);
     const combined = `${value.titulo} ${value.texto}`;
     const normalized = combined.toLocaleLowerCase('es-MX');
     const required = test.required.every((term) => normalized.includes(term.toLocaleLowerCase('es-MX')));
@@ -50,7 +51,7 @@ async function main() {
     throw new Error('uso: benchmark-ai-fallback.js --provider nous|openrouter --model ID [--show-output]');
   }
   const request = options.provider === 'nous' ? requestNousCompletion : requestOpenRouterTextCompletion;
-  const system = 'Eres editor de CREA Contenidos. Usa exclusivamente los hechos dados, sin inferir nombres, fechas, cifras ni resultados. Español mexicano sobrio, sin clickbait ni Markdown. Devuelve SOLO JSON válido con strings: titulo, texto, seccion (Perote, Veracruz, México, Mundo, Cultura, Deportes, Tecnología, Opinión, Comunidad o Economía), sensibilidad (verde, amarillo o rojo).';
+  const system = `Eres editor de CREA Contenidos. Usa exclusivamente los hechos dados, sin inferir nombres, fechas, cifras ni resultados. Español mexicano sobrio, sin clickbait ni Markdown. Devuelve SOLO JSON válido con strings: titulo, texto, seccion (una de: ${SECTIONS.join(', ')}), sensibilidad (verde, amarillo o rojo).`;
   const results = [];
   for (const test of CASES) {
     const startedAt = Date.now();
