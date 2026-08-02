@@ -1,7 +1,8 @@
 # PLAN — Cierre de producción y lanzamiento de agosto 2026
 
-Estado: en ejecución desde el 1 de agosto de 2026; Fases 1–6 completadas en producción. Fase 7
-pendiente de observación final.
+Estado: en ejecución desde el 1 de agosto de 2026; Fases 1–6 completadas en producción. El gate
+técnico de la Fase 7 pasó y la observación final de 24 horas está activa desde el 1 de agosto a
+las 20:45 CST (2 de agosto, 02:45 UTC).
 Alcance: portal público, Command Center, API, despliegue Dokploy/VPS y continuidad de IA.  
 Fuera de alcance: aumentar la cantidad de notas publicadas.
 
@@ -263,6 +264,10 @@ Referencias:
 
 ### Fase 7 — Gate final y despliegue (P0, 0.5 día + 24 h de observación)
 
+Estado: **GO provisional**. El gate técnico y el redeploy terminaron el 1 de agosto de 2026; la
+decisión GO definitiva se toma al concluir la observación el 2 de agosto a las 20:45 CST
+(3 de agosto, 02:45 UTC), siempre que no aparezca un P0/P1.
+
 - Trabajar cada fase en un commit independiente para rollback selectivo.
 - Ejecutar web `astro check` + build, admin test + build y API `test:all`.
 - Construir la imagen Docker desde cero y levantarla con una base aislada.
@@ -278,6 +283,42 @@ Referencias:
   - fallback OpenRouter controlado.
 - Revisar móvil 375 px, tablet 768 px y escritorio 1280 px, consola y red.
 - Observar 24 horas: uptime, 5xx, crons, backup, Resend y actividad IA.
+
+#### Evidencia del gate técnico
+
+- Commits desplegados: `1c2e195` y `b5e5f06`. Dokploy reemplazó API y scraper; API, scraper y
+  Postgres quedaron `healthy`. El `.env` generado por Dokploy se reendureció a modo `600`.
+- Web: `astro check` reportó 43 archivos sin errores, warnings ni hints; build de Astro 7 exitoso.
+  Admin: build exitoso y 12/12 pruebas Playwright. API: 15/15 grupos de `test:all`, incluida la
+  regla que impide publicar contenido sensible rojo sin revisión documentada.
+- La imagen Docker se construyó desde cero. Los `npm audit --audit-level=high` de raíz, API, web y
+  admin reportaron cero vulnerabilidades. La actualización siguió la
+  [guía oficial de Astro 7](https://docs.astro.build/en/guides/upgrade-to/v7/) y conservó CSP sin
+  `unsafe-inline`; el check verifica nonce dinámico, contador de vistas externo y menú compilado.
+- Navegación real en producción: portada, Comunidad, legales, Estudio, contacto y nota devolvieron
+  200 a 375, 768 y 1280 px; las 21 combinaciones tuvieron cero desbordamiento horizontal. El menú
+  móvil abre, bloquea el fondo, cierra con Escape, restaura foco y actualiza `aria-expanded`.
+  Consola: cero errores y cero warnings.
+- Lighthouse de portada móvil pasó de 74/90/100/100 a 92/100/100/100 en
+  rendimiento/accesibilidad/buenas prácticas/SEO; la transferencia bajó de 6.7 MiB a ~1.0 MiB.
+  Portada escritorio quedó 91/100/100/100 y LCP de laboratorio 1.7 s. La nota móvil quedó
+  87/100/100/100, sin bloqueo de hilo principal y LCP de laboratorio 3.8 s.
+- Las imágenes internas aceptan únicamente variantes WebP de 640 o 1200 px y mantienen caché
+  inmutable. Una portada de muestra bajó de 1,062,711 a 56,094 bytes en 640 px; un ancho fuera de
+  lista devuelve 400. La imagen LCP de las notas usa `srcset`, carga eager y `fetchpriority=high`.
+- Producción mantuvo redirección `www` 301 al apex y todas las rutas públicas comprobadas en 200.
+  La propuesta sintética `#25` del fallback continúa como `borrador`; no se publicó ni distribuyó.
+- VPS: cookie Facebook modo `600`, montada `ro` y legible por el scraper; backup más reciente de
+  9,094,220 bytes, modo `600` y `gzip -t` válido; un solo cron de backup; cero coincidencias de
+  error crítico en los logs del API desde el redeploy. Sentry, Firecrawl, scraper, OpenRouter,
+  Resend y Telegram están configurados sin exponer sus secretos.
+
+#### Observación activa
+
+Durante la ventana se revisan UptimeRobot, Healthchecks, Sentry, 5xx, estado de contenedores,
+ejecuciones RADAR/Telegram, entrega Resend y la siguiente ejecución del backup. No se publicará la
+propuesta sintética ni se enviará un newsletter real para convertir una comprobación en tráfico.
+El responsable alterno continúa como riesgo aceptado y pendiente por decisión del propietario.
 
 Go/no-go:
 
