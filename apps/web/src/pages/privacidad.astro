@@ -2,7 +2,7 @@
 import EditorialLayout from '../layouts/EditorialLayout.astro';
 import FooterEditorial from '../components/editorial/FooterEditorial.astro';
 
-const LAST_UPDATE = '30 de julio de 2026';
+const LAST_UPDATE = '1 de agosto de 2026';
 ---
 <EditorialLayout
   title="Aviso de privacidad"
@@ -46,7 +46,9 @@ const LAST_UPDATE = '30 de julio de 2026';
       </p>
       <ul style="padding-left:20px;margin:0 0 16px;">
         <li><strong>Resend</strong> (envío de correo): gestiona el envío y la confirmación de suscripción al boletín.</li>
-        <li><strong>Cloudflare</strong>: red de entrega de contenido y protección del sitio.</li>
+        <li><strong>Cloudflare</strong>: entrega, protección y medición técnica del sitio.</li>
+        <li><strong>Google Fonts</strong>: entrega las tipografías utilizadas por el sitio.</li>
+        <li><strong>Sentry</strong>: recibe diagnósticos técnicos de errores de la API. La configuración de CREA excluye usuarios, direcciones IP, solicitudes, encabezados, cuerpos, correos, cookies y contenido generado.</li>
       </ul>
       <p>No compartimos tus datos con ningún tercero para fines de mercadotecnia ajenos a CREA.</p>
 
@@ -66,12 +68,20 @@ const LAST_UPDATE = '30 de julio de 2026';
 
       <h2 style="font-size:18px;margin:28px 0 10px;" id="cookies">Cookies y tecnologías similares</h2>
       <p>
-        Este sitio no utiliza cookies propias ni de terceros con fines de análisis, publicidad o
-        rastreo. Las únicas conexiones a servicios externos son a Google Fonts (para cargar
-        tipografías) y a Cloudflare (para la operación del sitio), que no instalan cookies de
-        seguimiento en tu navegador desde esta página. Si en el futuro incorporamos cookies
-        analíticas o de publicidad, actualizaremos este aviso y te lo notificaremos con un banner
-        de consentimiento antes de activarlas.
+        CREA no instala cookies propias con fines de análisis, publicidad o rastreo. Al abrir una
+        página, tu navegador se conecta con Cloudflare para recibir y proteger el sitio y con
+        Google Fonts para descargar las tipografías; esos proveedores reciben los datos técnicos
+        necesarios para atender la solicitud, como la dirección IP y el navegador.
+      </p>
+      <p>
+        Los videos de TikTok, YouTube, Facebook o Instagram no se conectan con esas plataformas al
+        mostrar la página. Primero verás un aviso y un botón. Solo al elegir “Cargar video” se
+        activará el reproductor del proveedor, que podrá aplicar sus propias cookies o tecnologías
+        conforme a su política. También puedes abrir el enlace directamente en la red social.
+      </p>
+      <p>
+        Si en el futuro incorporamos cookies analíticas o de publicidad propias, actualizaremos
+        este aviso y solicitaremos consentimiento antes de activarlas cuando corresponda.
       </p>
 
       <h2 style="font-size:18px;margin:28px 0 10px;">Cambios a este aviso</h2>

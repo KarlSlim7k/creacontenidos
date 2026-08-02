@@ -69,6 +69,23 @@ function parseJson(text) {
   return JSON.parse(match ? match[0] : text);
 }
 
+function stripLeadingDuplicateTitle(body, title) {
+  const text = String(body || '').replace(/^\uFEFF/, '');
+  const lines = text.split(/\r?\n/);
+  const first = lines.findIndex((line) => line.trim());
+  if (first === -1 || !title) return text;
+
+  let heading = lines[first].trim().replace(/^#{1,6}\s+/, '').trim();
+  const emphasis = heading.match(/^(\*\*|__)([\s\S]+)\1$/);
+  if (emphasis) heading = emphasis[2].trim();
+  const comparable = (value) => String(value).normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase('es-MX');
+  if (comparable(heading) !== comparable(title)) return text;
+
+  let next = first + 1;
+  while (next < lines.length && !lines[next].trim()) next++;
+  return lines.slice(next).join('\n').trimEnd();
+}
+
 // Búsqueda real de tendencias vía Perplexity Sonar Pro (tiene acceso a web
 // en vivo). Nous Portal/Hermes NO buscaba nada — solo alucinaba desde su
 // corte de entrenamiento, por eso salían notas fechadas en 2024.
@@ -190,10 +207,10 @@ async function generateProposal(context, format, angle, competitorPosts) {
 }
 
 async function generateDraft(proposal, instructions) {
-  const system = 'Eres un redactor para CREA Contenidos, medio digital en Perote, Veracruz. Escribes artículos completos en español mexicano, tono profesional pero accesible. NO uses emojis. NO uses caracteres CJK o no latinos.';
-  const user = `Título: ${proposal.title}\nDek: ${proposal.dek || ''}\nSección: ${proposal.section || ''}\nÁngulo: ${proposal.angulo || ''}\nCuerpo actual: ${proposal.body || ''}\nInstrucciones del editor: ${instructions || 'ninguna'}\n\nEscribe el cuerpo completo del artículo.`;
+  const system = 'Eres un redactor para CREA Contenidos, medio digital en Perote, Veracruz. Escribes artículos completos en español mexicano, tono profesional pero accesible. Devuelve texto plano, sin Markdown. NO repitas el título al inicio. NO uses emojis. NO uses caracteres CJK o no latinos.';
+  const user = `Título: ${proposal.title}\nDek: ${proposal.dek || ''}\nSección: ${proposal.section || ''}\nÁngulo: ${proposal.angulo || ''}\nCuerpo actual: ${proposal.body || ''}\nInstrucciones del editor: ${instructions || 'ninguna'}\n\nEscribe únicamente el cuerpo completo del artículo, sin repetir el título.`;
   const { content } = await chatComplete(system, user, 'default');
-  return content;
+  return stripLeadingDuplicateTitle(content, proposal.title);
 }
 
 async function qaCheck(title, body) {
@@ -255,4 +272,4 @@ async function logActivity(pool, action, detail, userId, status, metadata) {
   );
 }
 
-module.exports = { chatComplete, detectTopics, detectTopicsFromMarkdown, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity };
+module.exports = { chatComplete, detectTopics, detectTopicsFromMarkdown, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity, stripLeadingDuplicateTitle };

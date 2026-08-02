@@ -92,9 +92,7 @@ const prodPreview = await creaApiSafe<SocialPost[]>('/api/public/social?network=
         <div class="prod-promo-preview">
           {prodPreview.length === 0 ? null : prodPreview.map((p) => (
             <a href="/producciones" style="display:block;width:100px;height:140px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#000;">
-              {p.thumbnail_url
-                ? <img src={p.thumbnail_url} alt="" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async">
-                : <div style="width:100%;height:100%;background:#2F5233;"></div>}
+              <div style="width:100%;height:100%;background:#2F5233;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;text-transform:uppercase;letter-spacing:.06em;">{p.network}</div>
             </a>
           ))}
         </div>

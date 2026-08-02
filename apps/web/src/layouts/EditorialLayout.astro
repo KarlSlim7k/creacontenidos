@@ -21,7 +21,7 @@ const {
   noJsWarning = 'CREA Contenidos necesita JavaScript para mostrar el contenido. Actívalo para leer las notas.',
 } = Astro.props;
 
-const ogUrl = new URL(Astro.url.pathname, 'https://crea-contenidos.com').toString();
+const canonicalUrl = new URL(Astro.url.pathname, 'https://crea-contenidos.com').toString();
 const fullTitle = title.includes('CREA Contenidos') ? title : `${title} · CREA Contenidos`;
 ---
 <!doctype html>
@@ -31,11 +31,12 @@ const fullTitle = title.includes('CREA Contenidos') ? title : `${title} · CREA 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{fullTitle}</title>
 <meta name="description" content={description}>
+<link rel="canonical" href={canonicalUrl}>
 <meta property="og:type" content={ogType}>
 <meta property="og:site_name" content="CREA Contenidos">
 <meta property="og:title" content={fullTitle}>
 <meta property="og:description" content={description}>
-<meta property="og:url" content={ogUrl}>
+<meta property="og:url" content={canonicalUrl}>
 <meta property="og:image" content={ogImage}>
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">

@@ -33,6 +33,15 @@ const app = express();
 // trust proxy solo fija req.ip como fallback razonable en dev/sin CF.
 app.set('trust proxy', 1);
 
+// Un solo host indexable. Destino fijo para no convertir Host/X-Forwarded-Host
+// en un open redirect; originalUrl conserva ruta y query.
+app.use((req, res, next) => {
+  if (req.hostname.toLowerCase() === 'www.crea-contenidos.com') {
+    return res.redirect(301, `https://crea-contenidos.com${req.originalUrl}`);
+  }
+  next();
+});
+
 // Nonce distinto por respuesta. Astro lo recibe como local para sus dos scripts
 // dinámicos; los scripts estáticos salen como archivos /_astro del mismo origen.
 app.use((req, res, next) => {
@@ -75,15 +84,19 @@ app.get('/sitemap.xml', async (req, res, next) => {
     const base = config.publicSiteUrl.replace(/\/$/, '');
     const xmlEsc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
     const { rows } = await pool.query(
-      "SELECT slug, published_at FROM content_proposals WHERE status = 'published' ORDER BY published_at DESC LIMIT 5000"
+      "SELECT slug, published_at, author_name FROM content_proposals WHERE status = 'published' ORDER BY published_at DESC LIMIT 5000"
     );
-    const urls = ['/', '/comunidad', '/producciones', '/privacidad', '/terminos']
+    const urls = ['/', '/comunidad', '/producciones', '/privacidad', '/terminos', '/patrocinado',
+      '/estudio', '/estudio/servicios', '/estudio/tercer-tiempo', '/estudio/media-kit', '/estudio/contacto']
       .concat(SECTIONS.map((s) => '/seccion/' + encodeURIComponent(s)))
       .map((p) => `<url><loc>${xmlEsc(base + p)}</loc></url>`);
     for (const r of rows) {
       const loc = xmlEsc(base + '/notas/' + encodeURIComponent(r.slug));
       const lastmod = r.published_at ? `<lastmod>${new Date(r.published_at).toISOString()}</lastmod>` : '';
       urls.push(`<url><loc>${loc}</loc>${lastmod}</url>`);
+    }
+    for (const author of new Set(rows.map((r) => r.author_name).filter(Boolean))) {
+      urls.push(`<url><loc>${xmlEsc(base + '/perfil/' + encodeURIComponent(author))}</loc></url>`);
     }
     res.type('application/xml').send(
       `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`

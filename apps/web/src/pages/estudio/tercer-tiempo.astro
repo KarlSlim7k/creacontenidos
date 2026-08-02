@@ -1,11 +1,6 @@
 ---
 import EstudioLayout from '../../layouts/EstudioLayout.astro';
-import StatCards from '../../components/estudio/StatCards.astro';
 import TercerTiempoEpisodes from '../../components/TercerTiempoEpisodes.astro';
-import { creaApiSafe, getSponsors, type SiteMetrics } from '../../lib/api';
-
-const metrics = await creaApiSafe<SiteMetrics | null>('/api/public/site-metrics', null);
-const sponsors = await getSponsors();
 ---
 <EstudioLayout
   title="Tercer Tiempo"
@@ -30,8 +25,6 @@ const sponsors = await getSponsors();
         <img class="tt-logo-img tt-logo-in-right" src="/assets/img/logo-tercer-tiempo.png" alt="Tercer Tiempo">
       </div>
     </div>
-
-    <StatCards metrics={metrics} activeBrands={sponsors.length} />
 
     <div style="margin-bottom:26px;">
       <div class="eyebrow" style="color:var(--text-mute);margin-bottom:14px;">FORMATOS DE PATROCINIO DISPONIBLES</div>

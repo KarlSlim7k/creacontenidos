@@ -1,10 +1,8 @@
 ---
 import EstudioLayout from '../../layouts/EstudioLayout.astro';
-import StatCards from '../../components/estudio/StatCards.astro';
-import { creaApiSafe, getSponsors, type SiteMetrics } from '../../lib/api';
+import { getSponsors } from '../../lib/api';
 import { notaHref } from '../../lib/format';
 
-const metrics = await creaApiSafe<SiteMetrics | null>('/api/public/site-metrics', null);
 const sponsors = await getSponsors();
 ---
 <EstudioLayout title="Estudio CREA · Producción, campañas y medios propios" description="Patrocinios, branded content y producción audiovisual para negocios del corredor Perote–Xalapa–Puebla, con el respaldo editorial de CREA.">
@@ -19,8 +17,6 @@ const sponsors = await getSponsors();
   </main>
 
   <div class="container">
-    <StatCards metrics={metrics} activeBrands={sponsors.length} />
-
     <div style="margin-bottom:28px;">
       <div class="eyebrow" style="color:var(--text-mute);margin-bottom:16px;">MARCAS QUE YA CONFÍAN EN CREA</div>
       {sponsors.length > 0 && (
