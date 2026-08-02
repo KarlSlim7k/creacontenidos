@@ -9,7 +9,7 @@ const { activeSection } = Astro.props;
 ---
 <div class="ed-header-simple">
   <div class="left">
-    <a href="/" class="logo"><img src="/assets/img/logo-crea.png" alt="CREA"></a>
+    <a href="/" class="logo"><img src="/assets/img/logo-crea.png" alt="CREA" width="48" height="28"></a>
     <nav class="ed-nav desktop-only" style="border-bottom:none;padding:0;">
       {SECTIONS.map((s) => (
         <a href={seccionHref(s)} data-section={s} class={activeSection === s ? 'active' : undefined}>{s}</a>

@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const sharp = require('sharp');
 const pool = require('../../db/pool');
 const config = require('../../config');
 const { addContact, updateContact, sendEmail } = require('../../lib/resend-client');
@@ -284,17 +285,23 @@ router.get('/newsletter/confirm', async (req, res, next) => {
 router.get('/images/:id', async (req, res, next) => {
   try {
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).json({ error: 'Imagen no encontrada' });
-    const etag = `"${req.params.id}"`;
+    const requestedWidth = Number(req.query.w);
+    const width = [640, 1200].includes(requestedWidth) ? requestedWidth : null;
+    if (req.query.w !== undefined && !width) return res.status(400).json({ error: 'Ancho de imagen inválido' });
+    const etag = `"${req.params.id}${width ? `-w${width}-webp` : ''}"`;
     // Contenido inmutable por UUID: si el cliente/proxy ya lo tiene, 304 sin leer
     // el BYTEA de Postgres (ahorra la lectura completa ante revalidaciones).
     if (req.headers['if-none-match'] === etag) return res.status(304).end();
     const { rows } = await pool.query('SELECT mime_type, data FROM generated_images WHERE id = $1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Imagen no encontrada' });
-    res.set('Content-Type', rows[0].mime_type);
+    const data = width
+      ? await sharp(rows[0].data).resize({ width, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer()
+      : rows[0].data;
+    res.set('Content-Type', width ? 'image/webp' : rows[0].mime_type);
     res.set('ETag', etag);
     // Inmutable: cada generación crea una fila nueva con UUID nuevo, nunca se reescribe.
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
-    res.send(rows[0].data);
+    res.send(data);
   } catch (err) {
     next(err);
   }

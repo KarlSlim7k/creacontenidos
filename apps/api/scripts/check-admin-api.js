@@ -28,6 +28,7 @@ async function main() {
   const server = startApi({ port: PORT });
 
   let proposalId;
+  let sensitiveProposalId;
   try {
     await waitForHealth(BASE);
 
@@ -156,6 +157,34 @@ async function main() {
       body: JSON.stringify({ origin: '100% humano' }),
     })).json();
     assert.strictEqual(p.status, 'published', 'debe poder republicarse tras reabrir y corregir');
+
+    // 6c. Sensibilidad roja exige una devolución previa con comentario documentado.
+    const { rows: [sensitive] } = await pool.query(
+      `INSERT INTO content_proposals (format, title, body, status, section, slug, sensibilidad)
+       VALUES ('nota', '[check] sensible', 'cuerpo de prueba', 'en_revision', 'Local', 'check-sensible-review', 'rojo')
+       RETURNING id`
+    );
+    sensitiveProposalId = sensitive.id;
+    let sensitivePublish = await fetch(`${BASE}/api/editorial/proposals/${sensitiveProposalId}/publish`, {
+      method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin: '100% humano' }),
+    });
+    assert.strictEqual(sensitivePublish.status, 400, 'sensibilidad roja sin revisión documentada no debe publicarse');
+    assert.ok((await sensitivePublish.json()).fields.review_comment);
+    p = await (await fetch(`${BASE}/api/editorial/proposals/${sensitiveProposalId}/return`, {
+      method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comment: '[check] revisión sensible documentada' }),
+    })).json();
+    assert.strictEqual(p.status, 'borrador');
+    p = await (await fetch(`${BASE}/api/editorial/proposals/${sensitiveProposalId}/submit-review`, {
+      method: 'PATCH', headers: auth(produccionToken),
+    })).json();
+    assert.strictEqual(p.status, 'en_revision');
+    p = await (await fetch(`${BASE}/api/editorial/proposals/${sensitiveProposalId}/publish`, {
+      method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin: '100% humano' }),
+    })).json();
+    assert.strictEqual(p.status, 'published', 'la pieza sensible puede publicarse después de documentar la revisión');
 
     // 7. RADAR: solo lectura, filtro por fuente.
     const topics = await (await fetch(`${BASE}/api/listening/topics?source=Facebook`, { headers: auth(directorToken) })).json();
@@ -286,6 +315,7 @@ async function main() {
         [proposalId]
       );
     }
+    if (sensitiveProposalId) await pool.query('DELETE FROM content_proposals WHERE id = $1', [sensitiveProposalId]);
     await pool.end();
   }
 }

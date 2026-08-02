@@ -314,9 +314,9 @@ body.theme-estudio .eyebrow { color: var(--accent); }
 .tt-promo-copy p { font-size: 14px; line-height: 1.6; margin: 0 0 14px; max-width: 440px; color: var(--text-mute); }
 .tt-promo-preview { flex: 1; min-width: 260px; gap: 14px; }
 .tt-promo-preview article { font-size: 0; }
-.prod-badge--youtube { background: #FF0000; }
-.prod-badge--facebook { background: #1877F2; }
-.prod-badge--instagram { background: #E4405F; }
+.prod-badge--youtube { background: #C00000; }
+.prod-badge--facebook { background: #0B57D0; }
+.prod-badge--instagram { background: #B02646; }
 
 .most-read-item {
   display: flex; gap: 10px; padding-bottom: 12px; margin-bottom: 12px;
@@ -362,7 +362,7 @@ body.theme-estudio .eyebrow { color: var(--accent); }
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
   flex-wrap: wrap; font-size: 11px; color: var(--text-mute);
 }
-.site-footer .links { display: flex; gap: 18px; }
+.site-footer .links { display: flex; gap: 18px; flex-wrap: wrap; }
 
 /* ---------- stat / testimonial / service cards ---------- */
 .stat-card { background: var(--bg-2); border-radius: 8px; padding: 16px; text-align: center; }

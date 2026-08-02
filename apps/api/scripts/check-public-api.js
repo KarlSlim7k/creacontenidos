@@ -30,7 +30,11 @@ async function main() {
     "SELECT count(*)::int AS count FROM content_proposals WHERE status = 'published'"
   );
   assert.strictEqual(publishedCount, 30, `seed idempotente: esperaba 30 publicados (24 + 6 patrocinados), hay ${publishedCount}`);
-  await pool.end();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  const { rows: [image] } = await pool.query(
+    "INSERT INTO generated_images (prompt, mime_type, data) VALUES ('[check]', 'image/png', $1) RETURNING id",
+    [png]
+  );
 
   const server = startApi({ port: PORT });
   try {
@@ -81,6 +85,13 @@ async function main() {
     assert.ok(authors.length >= 1, 'no hay autores con notas publicadas para el check');
     assert.ok(authors.every((a) => a.article_count >= 1 && Array.isArray(a.sections)));
 
+    // 5c. La variante usada por las tarjetas reduce y convierte a WebP; el UUID sigue inmutable.
+    const optimizedImage = await fetch(`${BASE}/api/public/images/${image.id}?w=640`);
+    assert.strictEqual(optimizedImage.status, 200);
+    assert.strictEqual(optimizedImage.headers.get('content-type'), 'image/webp');
+    assert.ok((optimizedImage.headers.get('cache-control') || '').includes('immutable'));
+    assert.strictEqual((await fetch(`${BASE}/api/public/images/${image.id}?w=999`)).status, 400);
+
     // 6. Rate limit: ráfaga hasta pasar 300 req/15min → 429. (Va al final:
     // deja la IP limitada en este proceso de server, que muere al salir.)
     const statuses = await Promise.all(
@@ -91,6 +102,8 @@ async function main() {
     console.log('OK: API pública verificada (listado, sección, slug, autor, gate editorial, 404, 429).');
   } finally {
     await stopApi(server);
+    await pool.query('DELETE FROM generated_images WHERE id = $1', [image.id]).catch(() => {});
+    await pool.end();
   }
 }
 

@@ -15,7 +15,7 @@ body.theme-editorial {
   --line: #C9C6B8;     /* Stone line */
   --brand: #2F5233;    /* Pine */
   --accent: #C77D2E;   /* Ochre */
-  --accent-text: #7A4A18; /* Ochre dark */
+  --accent-text: #3B220A; /* Ochre dark; AA sobre papel y sobre --accent */
   --sponsor: #8C9D6B;  /* Sage */
   --card-2: #D7D3C4;
 }

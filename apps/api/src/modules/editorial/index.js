@@ -244,6 +244,9 @@ router.patch('/proposals/:id/publish', requireAuth, requireRole('director'), asy
     res.json(await publishProposal(pool, req.params.id, origin));
   } catch (err) {
     if (err.status === 400 && err.message === 'Origen del contenido requerido') return res.status(400).json({ error: 'Datos inválidos', fields: { origin: err.message } });
+    if (err.status === 400 && err.message === 'Revisión documentada requerida para contenido sensible') {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { review_comment: err.message } });
+    }
     next(err);
   }
 });

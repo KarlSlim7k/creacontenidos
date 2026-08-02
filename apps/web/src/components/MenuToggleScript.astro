@@ -6,16 +6,22 @@
   const toggle = document.querySelector<HTMLButtonElement>('[data-menu-toggle]');
   const menu = document.querySelector<HTMLElement>('.mobile-menu');
   if (toggle && menu) {
+    const close = () => {
+      menu.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+      toggle.focus();
+    };
     toggle.setAttribute('aria-expanded', 'false');
     toggle.addEventListener('click', () => {
       menu.classList.add('open');
       toggle.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+      menu.querySelector<HTMLElement>('[data-menu-close]')?.focus();
     });
-    menu.querySelectorAll<HTMLElement>('[data-menu-close]').forEach((el) => {
-      el.addEventListener('click', () => {
-        menu.classList.remove('open');
-        toggle.setAttribute('aria-expanded', 'false');
-      });
+    menu.querySelectorAll<HTMLElement>('[data-menu-close]').forEach((el) => el.addEventListener('click', close));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && menu.classList.contains('open')) close();
     });
   }
 </script>

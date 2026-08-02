@@ -60,7 +60,7 @@ const jsonLd = article ? newsArticleJsonLd(article, image) : null;
     {jsonLd && <script type="application/ld+json" set:html={jsonLd} is:inline nonce={cspNonce} />}
   </Fragment>
 
-  <main class="container narrow" style="padding-top:28px;">
+  <main class="container narrow" style="padding-top:28px;" data-article-slug={article?.slug}>
     {fail ? (
       <EmptyState title={fail.title} body={fail.body} cta={{ href: '/', label: 'Volver a portada' }} />
     ) : article && (
@@ -76,7 +76,7 @@ const jsonLd = article ? newsArticleJsonLd(article, image) : null;
           </div>
         </div>
 
-        <Cover coverUrl={article.cover_image_url} section={article.section} class="featured ratio-16-9" style="margin-bottom:24px;" alt={article.title} />
+        <Cover coverUrl={article.cover_image_url} section={article.section} class="featured ratio-16-9" style="margin-bottom:24px;" alt={article.title} imageWidth={1200} imageHeight={675} />
 
         {paras.map((p, i) => (
           <>
@@ -103,9 +103,10 @@ const jsonLd = article ? newsArticleJsonLd(article, image) : null;
           </div>
         </a>
 
-        <script define:vars={{ slug: article.slug }} is:inline nonce={cspNonce}>
+        <script>
+          const slug = document.querySelector('[data-article-slug]')?.getAttribute('data-article-slug');
           // Fire-and-forget: cuenta la vista para "lo más leído". Si falla, no afecta la lectura.
-          fetch('/api/public/articles/' + encodeURIComponent(slug) + '/view', { method: 'POST' }).catch(() => {});
+          if (slug) fetch('/api/public/articles/' + encodeURIComponent(slug) + '/view', { method: 'POST' }).catch(() => {});
         </script>
       </>
     )}

@@ -7,8 +7,8 @@ export default defineConfig({
   adapter: node({ mode: 'middleware' }),
   vite: {
     plugins: [tailwindcss()],
-    // CSP: los scripts estáticos deben salir como /_astro/*.js; solo los dos
-    // scripts dinámicos de la nota necesitan nonce por respuesta.
+    // CSP: los scripts estáticos deben salir como /_astro/*.js; el JSON-LD
+    // dinámico de la nota conserva nonce por respuesta.
     build: { assetsInlineLimit: 0 },
     // En prod Astro se monta en el mismo Express que /api (mismo origen). En
     // `astro dev` standalone (:4000) contra apps/api (:3000), sin esto los

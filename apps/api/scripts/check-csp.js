@@ -41,11 +41,11 @@ function inspectPage(response, html, pathname) {
   assert.ok(headerNonce, `${pathname} no tiene nonce en script-src`);
   assert.ok(!scriptSrc.includes("'unsafe-inline'"), `${pathname} permite unsafe-inline`);
 
-  const scripts = [...html.matchAll(/<script\b([^>]*)>[\s\S]*?<\/script>/gi)];
-  for (const [, attrs] of scripts) {
+  const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+  for (const [, attrs, body] of scripts) {
     if (/\bsrc\s*=/i.test(attrs)) continue;
     const tagNonce = attrs.match(/\bnonce="([^"]+)"/i)?.[1];
-    assert.strictEqual(tagNonce, headerNonce, `${pathname} tiene un script inline sin el nonce de la cabecera`);
+    assert.strictEqual(tagNonce, headerNonce, `${pathname} tiene un script inline sin el nonce de la cabecera: ${attrs.trim()} ${body.trim().slice(0, 120)}`);
   }
   return { headerNonce, scripts };
 }
@@ -64,18 +64,25 @@ async function main() {
 
     assert.notStrictEqual(pages[0].headerNonce, pages[1].headerNonce, 'dos respuestas reutilizaron el mismo nonce');
     assert.match(pages[1].html, /<script[^>]+type="application\/ld\+json"[^>]+nonce=/, 'la nota perdió JSON-LD con nonce');
-    assert.ok(pages[1].scripts.filter(([, attrs]) => !/\bsrc\s*=/i.test(attrs)).length >= 2, 'faltan scripts dinámicos en la nota');
+    assert.ok(pages[1].scripts.filter(([, attrs]) => !/\bsrc\s*=/i.test(attrs)).length >= 1, 'falta JSON-LD dinámico en la nota');
+    assert.match(pages[1].html, /data-article-slug="csp-check"/, 'la nota perdió el slug para el conteo de vistas');
 
     const assetSources = new Set(pages.flatMap(({ scripts }) => scripts
       .map(([, attrs]) => attrs.match(/\bsrc="([^"]+)"/i)?.[1])
       .filter(Boolean)));
     assert.ok(assetSources.size >= 4, 'los scripts de interacción no salieron como archivos externos');
+    let viewScriptFound = false;
+    let menuScriptFound = false;
     for (const src of assetSources) {
       assert.match(src, /^\/_astro\//, `script externo inesperado: ${src}`);
-      assert.strictEqual((await fetch(BASE + src)).status, 200, `no se pudo cargar ${src}`);
+      const asset = await fetch(BASE + src);
+      assert.strictEqual(asset.status, 200, `no se pudo cargar ${src}`);
+      const source = await asset.text();
+      if (source.includes('/view')) viewScriptFound = true;
+      if (source.includes('Escape') && source.includes('aria-expanded')) menuScriptFound = true;
     }
-
-    assert.match(pages[1].html, /fetch\('\/api\/public\/articles\/' \+ encodeURIComponent\(slug\) \+ '\/view'/, 'la nota perdió el POST de vistas');
+    assert.ok(viewScriptFound, 'la nota perdió el script externo de conteo de vistas');
+    assert.ok(menuScriptFound, 'el menú perdió el cierre por Escape o su estado aria-expanded');
 
     console.log('OK: CSP con nonce por respuesta, scripts inline autorizados y assets externos.');
   } finally {

@@ -132,10 +132,9 @@ documentada para conciliación posterior.
 
 **Síntoma**: una propuesta con sensibilidad alta llega al gate editorial.
 
-1. El campo `content_proposals.sensibilidad` existe pero todavía no bloquea la
-   publicación. El director debe revisarlo antes de usar `publish`.
-2. Registrar la decisión y el motivo en `review_comment`; rechazar el contenido si
-   no puede verificarse.
+1. Una pieza con `sensibilidad='rojo'` no puede publicarse sin revisión documentada.
+2. El director debe devolverla con un comentario; después de corregirla y enviarla de nuevo a
+   revisión, `review_comment` permite completar el gate. Rechazarla si no puede verificarse.
 
 **Salida**: propuesta publicada con evidencia de revisión o rechazada con motivo.
 
