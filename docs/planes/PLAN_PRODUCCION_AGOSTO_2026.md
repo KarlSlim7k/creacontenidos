@@ -1,7 +1,7 @@
 # PLAN — Cierre de producción y lanzamiento de agosto 2026
 
-Estado: en ejecución desde el 1 de agosto de 2026; Fases 1–5 completadas en producción y Fase 6
-validada localmente, pendiente de despliegue y smoke controlado.
+Estado: en ejecución desde el 1 de agosto de 2026; Fases 1–6 completadas en producción. Fase 7
+pendiente de observación final.
 Alcance: portal público, Command Center, API, despliegue Dokploy/VPS y continuidad de IA.  
 Fuera de alcance: aumentar la cantidad de notas publicadas.
 
@@ -38,7 +38,7 @@ No se considera cierre sustituir pruebas por inspección visual ni relajar segur
 | Contenido existente | 3 notas empiezan con un título Markdown duplicado | P1 |
 | Privacidad | El texto niega cookies de terceros aunque la plataforma admite embeds sociales | P1 |
 | Métricas Estudio | `42K`, `+1K` y distribución de edades activas | Gate de negocio |
-| IA de texto | Nous primario; `AI_MODEL_FALLBACK` vacío; sin fallback de proveedor | P1 |
+| IA de texto | Nous primario → Ling en Nous → Ling en OpenRouter; timeout 45 s | Cerrado |
 | OpenRouter | Key activa; USD 10 comprados, USD 1.10303 usados | Disponible para respaldo |
 
 Corrección respecto a la auditoría anterior: no falta SPF. Resend usa el Return-Path del
@@ -182,7 +182,7 @@ Evidencia de cierre:
 - Condición para reactivar métricas: contar con fuente, periodo, responsable y aprobación
   editorial; el endpoint administrativo puede conservar los datos sin mostrarlos públicamente.
 
-### Fase 6 — Respaldo de modelos/proveedores IA (P1, en ejecución el 1 de agosto de 2026)
+### Fase 6 — Respaldo de modelos/proveedores IA (P1, completada el 1 de agosto de 2026)
 
 #### Decisión de arquitectura
 
@@ -248,6 +248,12 @@ inferior. El gate humano compensa que no exista diversidad de modelo en el últi
 
 Aceptación: los cinco casos pasan; una prueba controlada en producción registra OpenRouter como
 fallback y deja la pieza en borrador para revisión.
+
+Evidencia de cierre: commits `89abf3c` y `b12d5b0`; imagen Docker y suites unit/public/integration/e2e
+verdes; catálogos Nous/OpenRouter verificados; contenedor de producción healthy. El smoke aislado
+forzó dos modelos Nous inexistentes, resolvió con OpenRouter/Ling, registró dos intentos fallidos en
+`activity_log` y dejó la propuesta sintética `#25` con estado `borrador` y prefijo
+`[CHECK FASE 6]`. No se publicó ni distribuyó.
 
 Referencias:
 
