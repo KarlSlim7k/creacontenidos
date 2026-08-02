@@ -76,7 +76,7 @@ const jsonLd = article ? newsArticleJsonLd(article, image) : null;
           </div>
         </div>
 
-        <Cover coverUrl={article.cover_image_url} section={article.section} class="featured ratio-16-9" style="margin-bottom:24px;" alt={article.title} imageWidth={1200} imageHeight={675} />
+        <Cover coverUrl={article.cover_image_url} section={article.section} class="featured ratio-16-9" style="margin-bottom:24px;" alt={article.title} imageWidth={1200} imageHeight={675} eager />
 
         {paras.map((p, i) => (
           <>
