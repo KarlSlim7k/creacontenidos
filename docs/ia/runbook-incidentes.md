@@ -7,7 +7,7 @@ vive en [`../operacion-backups.md`](../operacion-backups.md).
 ## Responsables y tiempos
 
 - Responsable primario: Karol Delgado.
-- Responsable alterno: **pendiente de designar antes del lanzamiento**.
+- Responsable alterno: **pendiente hasta nuevo aviso por decisión del propietario**.
 - Objetivo inicial para una caída total o pérdida de acceso a la API: confirmar
   recepción en 15 minutos y escalar al alterno a los 30 minutos.
 - RTO de la base de datos: 2 horas. RPO: 24 horas.
@@ -22,11 +22,11 @@ Estado al 1 de agosto de 2026:
 
 | Superficie | Comprobación externa | Estado |
 |---|---|---|
-| Portal | `https://crea-contenidos.com/`, HTTP 200 y keyword `CREA Contenidos` | Solicitud de UptimeRobot enviada; falta confirmar el alta y configurar la keyword |
-| API + Postgres | `https://crea-contenidos.com/api/public/articles?limit=1`, HTTP 200 y JSON válido | Solicitud de UptimeRobot enviada; falta confirmar el alta |
-| TLS/dominio | Aviso de expiración del certificado del monitor del portal | Pendiente de activar en UptimeRobot |
-| Backup local | Heartbeat diario con gracia máxima de 26 horas | Activo; señales de fallo y recuperación aceptadas, falta confirmar la recepción de ambas alertas |
-| Excepciones de API | Sentry, proyecto `crea-command-center-api` | Inactivo: falta guardar un DSN real en Dokploy y volver a verificar una alerta |
+| Portal | `https://crea-contenidos.com/`, HTTP 200 y keyword `CREA Contenidos` | Activo en UptimeRobot; alta, keyword y alertas DOWN/UP confirmadas |
+| API + Postgres | `https://crea-contenidos.com/api/public/articles?limit=1`, HTTP 200 y JSON válido | Activo en UptimeRobot; alta y alertas DOWN/UP confirmadas |
+| TLS/dominio | Aviso de expiración del certificado del monitor del portal | Activo en UptimeRobot; configuración confirmada |
+| Backup local | Heartbeat diario con gracia máxima de 26 horas | Activo; alertas de fallo y recuperación de Healthchecks confirmadas |
+| Excepciones de API | Sentry, proyecto `crea-command-center-api` | Activo; DSN persistió tras redeploy, evento sintético y alerta confirmados |
 
 Los monitores web deben comprobar cada 5 minutos y enviar alertas DOWN y UP al
 correo operativo. No se considera terminado el alta hasta recibir una alerta de
@@ -149,18 +149,16 @@ documentada para conciliación posterior.
 - Cuando está habilitado, Sentry excluye usuario, IP, request, headers, cuerpos,
   query strings, breadcrumbs, variables locales y entradas/salidas de IA.
 
-## Pruebas de aceptación pendientes
+## Evidencia de aceptación
 
-1. Activar los dos monitores solicitados, añadir keyword y alertas TLS/dominio.
-2. Probar DOWN/UP con un monitor temporal a una URL 404; no detener producción.
-3. Confirmar que llegaron las alertas de fallo y recuperación del heartbeat
-   enviadas el 1 de agosto de 2026.
-4. Guardar un DSN real de Sentry en la configuración persistente de Dokploy,
-   desplegar y comprobar una excepción sintética sin PII y su alerta.
-5. Designar al responsable alterno y confirmar que ambos reciben alertas.
+El 1 de agosto de 2026 el propietario confirmó las altas de ambos monitores de
+UptimeRobot, la keyword del portal, la alerta TLS y la recepción de alertas DOWN
+y UP. También confirmó las alertas de fallo y recuperación de Healthchecks y la
+aparición/alerta del evento sintético de Sentry. Desde fuera se verificaron portal
+y API en HTTP 200, JSON válido y certificado autorizado con vencimiento el 1 de
+septiembre de 2026.
 
-El despliegue de la fase 5 reveló que el valor persistente de `SENTRY_DSN` era el
-ejemplo con `...`, no un DSN válido. Se dejó vacío para que el SDK permanezca
-inactivo sin emitir errores al arrancar. Una prueba previa no sustituye la
-persistencia del secreto: Sentry se considera pendiente hasta repetirla después
-de un redeploy normal de Dokploy.
+El responsable alterno queda diferido hasta nuevo aviso por decisión explícita
+del propietario. Es un riesgo operativo aceptado: mientras no se designe, no hay
+escalamiento real a los 30 minutos y el responsable primario concentra todas las
+alertas.

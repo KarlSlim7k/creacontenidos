@@ -113,7 +113,7 @@ Aceptación: objeto presente fuera del VPS, restore completo documentado y alert
 
 Referencia: [Dokploy — Database Backups](https://docs.dokploy.com/docs/core/databases/backups).
 
-### Fase 4 — Monitoreo y respuesta (P1, 0.5–1 día)
+### Fase 4 — Monitoreo y respuesta (P1, completada técnicamente el 1 de agosto de 2026)
 
 - Crear monitores externos, no alojados en el mismo VPS:
   - portada con keyword `CREA Contenidos`;
@@ -129,6 +129,11 @@ Referencia: [Dokploy — Database Backups](https://docs.dokploy.com/docs/core/da
 - Actualizar `docs/ia/runbook-incidentes.md` con caída web/API, DB, backup y proveedores IA.
 
 Aceptación: una prueba de caída controlada genera alerta y una excepción sintética aparece sin PII.
+
+Estado de cierre: UptimeRobot, TLS, Healthchecks y Sentry fueron verificados con alertas reales de
+fallo/recuperación y evento sintético sin PII. El responsable alterno queda diferido hasta nuevo
+aviso por decisión del propietario; se acepta temporalmente el riesgo de concentración de alertas
+en el responsable primario.
 
 Referencia: [UptimeRobot Free](https://help.uptimerobot.com/en/articles/11604710-who-should-use-uptimerobot-s-free-plan).
 
