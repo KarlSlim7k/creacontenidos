@@ -97,14 +97,15 @@ newsletter.
 1. RADAR intenta Firecrawl cuando existen clave y fuentes configuradas. Si no está
    disponible o falla, continúa con Perplexity. Revisar `activity_log` para saber
    qué proveedor y modelo fallaron.
-2. La generación tiene un intento con `AI_MODEL_FALLBACK` dentro del mismo Nous
-   Portal. Si fallan ambos modelos, no existe todavía un fallback de proveedor;
-   dejar el tema pendiente y reintentar cuando el servicio se recupere.
+2. La generación intenta el modelo pedido en Nous, `AI_MODEL_FALLBACK` en Nous y por último
+   `AI_OPENROUTER_FALLBACK_MODEL` en OpenRouter. Revisar el evento estructurado
+   `ai_completion` y `activity_log.metadata`; no registrar prompts ni respuestas completas.
 3. No cambiar de proveedor ni copiar prompts o respuestas a herramientas externas
    durante el incidente. Si la caída afecta el cierre editorial, avisar al equipo
    por el canal operativo; Telegram puede seguir usándose si está disponible.
-4. Evitar disparos manuales repetidos: pueden duplicar costo y agravar un rate
-   limit. El cron de RADAR vuelve a intentar en su siguiente ciclo de 6 horas.
+4. Si los tres intentos fallan, dejar el tema pendiente. Evitar disparos manuales repetidos:
+   pueden duplicar costo y agravar un rate limit. El cron de RADAR vuelve a intentar en su
+   siguiente ciclo de 6 horas.
 
 **Salida**: un ciclo termina con estado exitoso y los temas pendientes vuelven a
 procesarse sin duplicados.

@@ -1,6 +1,7 @@
 # PLAN — Cierre de producción y lanzamiento de agosto 2026
 
-Estado: en ejecución desde el 1 de agosto de 2026; Fases 1–3 completadas en producción.
+Estado: en ejecución desde el 1 de agosto de 2026; Fases 1–5 completadas en producción y Fase 6
+validada localmente, pendiente de despliegue y smoke controlado.
 Alcance: portal público, Command Center, API, despliegue Dokploy/VPS y continuidad de IA.  
 Fuera de alcance: aumentar la cantidad de notas publicadas.
 
@@ -76,7 +77,7 @@ Aceptación:
 
 Rollback: revertir únicamente el commit CSP y redeploy; nunca desactivar Helmet como contingencia.
 
-### Fase 2 — Autenticación de correo (P0, 0.5 día + propagación DNS)
+### Fase 2 — Autenticación de correo (P0, completada el 1 de agosto de 2026)
 
 - Crear una dirección o alias que reciba reportes, por ejemplo `dmarc@crea-contenidos.com`.
 - Publicar inicialmente `_dmarc.crea-contenidos.com TXT` con política `p=none` y `rua` al alias.
@@ -181,7 +182,7 @@ Evidencia de cierre:
 - Condición para reactivar métricas: contar con fuente, periodo, responsable y aprobación
   editorial; el endpoint administrativo puede conservar los datos sin mostrarlos públicamente.
 
-### Fase 6 — Respaldo de modelos/proveedores IA (P1, 1–1.5 días)
+### Fase 6 — Respaldo de modelos/proveedores IA (P1, en ejecución el 1 de agosto de 2026)
 
 #### Decisión de arquitectura
 
@@ -200,8 +201,8 @@ No añadir SDK: Node 22 ya incluye `fetch` y ambos proveedores hablan
 Configuración propuesta:
 
 ```dotenv
-AI_MODEL_FALLBACK=google/gemini-3.5-flash-lite
-AI_OPENROUTER_FALLBACK_MODEL=google/gemma-4-26b-a4b-it:free
+AI_MODEL_FALLBACK=inclusionai/ling-3.0-flash:free
+AI_OPENROUTER_FALLBACK_MODEL=inclusionai/ling-3.0-flash:free
 AI_TEXT_TIMEOUT_MS=45000
 ```
 
@@ -216,18 +217,18 @@ AI_TEXT_TIMEOUT_MS=45000
 
 - Nous expuso 5 modelos `:free`: `inclusionai/ling-3.0-flash`, `poolside/laguna-s-2.1`,
   `poolside/laguna-xs-2.1`, `stepfun/step-3.7-flash` y `tencent/hy3`.
-- Smoke real: Step 3.7 y Ling 3.0 respondieron HTTP 200, pero agotaron 300/700 tokens en
-  razonamiento sin cumplir el JSON solicitado. No habilitarlos aún como fallback editorial.
-- OpenRouter expuso 17 opciones gratuitas. `google/gemma-4-26b-a4b-it:free` y
-  `openrouter/free` respondieron HTTP 200 y cumplieron el contrato JSON del smoke.
+- El smoke inicial confirmó cinco modelos gratuitos en Nous y 17 opciones sin costo en
+  OpenRouter. El check read-only confirmó que los cinco IDs configurados siguen publicados.
 - La cuenta OpenRouter tiene más de USD 8 de saldo restante; al haber comprado al menos USD 10,
   la documentación vigente indica hasta 1000 solicitudes free/día, sujeto a disponibilidad.
 
-Antes de fijar el modelo, ejecutar un benchmark versionado de 10 casos reales anonimizados:
-propuesta, borrador, QA, newsletter, JSON con acentos, rechazo de invención y contenido sensible.
-Umbral: 100% de JSON parseable en los fixtures estructurados, cero hechos inventados en fixtures cerrados y
-aprobación editorial de 8/10 en tono. Si Gemma no lo alcanza, usar un modelo OpenRouter económico
-con presupuesto limitado en lugar de encadenar más modelos free.
+El benchmark versionado usa 10 casos sintéticos: propuesta, aviso, QA, newsletter, JSON con
+acentos, rechazo de invención y contenido sensible. Ling obtuvo 10/10 JSON, 10/10 fidelidad y
+9/10 tono tanto por Nous (~3.9 s promedio) como por OpenRouter (~3.9 s). Gemma 26B obtuvo 9/10
+en fidelidad por atribuir a “autoridades” un dato no entregado; Gemma 31B no estuvo disponible;
+Nemotron y GPT-OSS agregaron detalles o texto impropio en revisión manual. Por eso Ling queda
+fijado en ambos proveedores: hay diversidad de proveedor sin aceptar un modelo editorialmente
+inferior. El gate humano compensa que no exista diversidad de modelo en el último salto.
 
 #### Cambios y manejo de fallos
 

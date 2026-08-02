@@ -9,7 +9,7 @@ y [[politica-ia-y-gate-editorial.md]] (reglas editoriales). Volúmenes marcados 
 | Capa | Servicio | Uso | Config |
 |---|---|---|---|
 | Texto (RADAR búsqueda) | Perplexity Sonar Pro | `detectTopics`, `detectCompetitorPosts` — única fuente con acceso web real | `PERPLEXITY_API_KEY` |
-| Texto (propuestas/borradores/QA/newsletter) | Nous Portal (Hermes vía suscripción) | `generateProposal`, `generateDraft`, `qaCheck`, `generateNewsletterEditorial` | `NOUS_PORTAL_API_KEY` + `AI_MODEL_DEFAULT/COMPLEX/QA` |
+| Texto (propuestas/borradores/QA/newsletter) | Nous Portal; OpenRouter como último respaldo | `generateProposal`, `generateDraft`, `qaCheck`, `generateNewsletterEditorial` | `NOUS_PORTAL_API_KEY`, `OPENROUTER_API_KEY`, modelos y timeout `AI_*` |
 | Imagen | OpenRouter → `google/gemini-3-pro-image` (Nano Banana Pro) y `openai/gpt-image-1.5` | Ilustrar notas (pendiente integrar función en `ai-client.js`) | `OPENROUTER_API_KEY` (ya en `.env`, acceso verificado) |
 | Audio (TTS) | ElevenLabs (plan Starter) | `synthesizeSpeech` — voz para `guion_audio` | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` |
 | Video | — (sin integrar) | — | — |

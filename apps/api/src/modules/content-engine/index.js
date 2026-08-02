@@ -71,7 +71,7 @@ router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director'
       [topic.title]
     );
 
-    const { proposal, usage, model, usedFallback } = await generateProposal(topic, format || 'nota', angle, competitorContext);
+    const { proposal, usage, requestedModel, model, provider, latencyMs, usedFallback, fallbackReason, attempts } = await generateProposal(topic, format || 'nota', angle, competitorContext);
     const { rows } = await pool.query(
       `INSERT INTO content_proposals (topic_id, format, title, body, dek, section, angulo, sensibilidad, origin, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Generado con IA', 'propuesta') RETURNING *`,
@@ -91,8 +91,13 @@ router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director'
     await logActivity(pool, 'generate_proposal', `Propuesta creada: ${proposal.title}`, req.user.id, 'exito', {
       topic_id,
       format,
+      provider,
+      requested_model: requestedModel,
       model,
+      latency_ms: latencyMs,
       used_fallback: usedFallback,
+      fallback_reason: fallbackReason,
+      failed_attempts: attempts,
       usage,
       competitor_matches: competitorContext.length,
       verification_status: vStatus,

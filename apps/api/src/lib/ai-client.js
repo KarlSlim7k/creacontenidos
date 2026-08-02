@@ -11,55 +11,149 @@ const MODELS = {
   qa: config.aiModelQa,
 };
 
-async function requestNousCompletion(model, systemPrompt, userMessage) {
-  const res = await fetch(`${NOUS_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.nousPortalKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-      temperature: 0.7,
-      max_tokens: 8192,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Nous Portal (${model}) respondió ${res.status}: ${text.slice(0, 300)}`);
+const FALLBACK_STATUSES = new Set([402, 404, 408, 429]);
+
+class AiProviderError extends Error {
+  constructor(provider, model, status, code, latencyMs) {
+    super(`${provider} (${model}) falló: ${status || code}`);
+    this.name = 'AiProviderError';
+    this.provider = provider;
+    this.model = model;
+    this.status = status || null;
+    this.code = code;
+    this.latencyMs = latencyMs;
   }
-  const json = await res.json();
-  const content = json.choices[0].message.content;
-  if (!content) throw new Error(`Nous Portal (${model}) no devolvió contenido (posible límite de tokens de razonamiento agotado)`);
-  return { content, usage: json.usage || null };
 }
 
-// Fallback de modelo (gap documentado en docs/ia/politica-ia-y-gate-editorial.md §1.2 y
-// docs/ia/runbook-incidentes.md §1): si el modelo primario falla (caída de proveedor,
-// modelo retirado, rate limit), reintenta UNA vez contra AI_MODEL_FALLBACK antes de
-// propagar el error — mismo Nous Portal, mismo formato, solo cambia `model`. No es
-// fallback de proveedor (eso seguiría requiriendo Hermes/Portal completo), es la mejora
-// acotada que sí cabe sin nueva infraestructura.
-// ponytail: un solo modelo de respaldo, sin cadena de N proveedores — si aiModelFallback
-// también cae, se propaga el error combinado. Suficiente para el volumen actual; si se
-// necesita más resiliencia, ahí sí aplica una cadena de fallback real (Hermes/Portal).
+function canFallback(error) {
+  return error instanceof AiProviderError
+    && (error.status == null || FALLBACK_STATUSES.has(error.status) || error.status >= 500);
+}
+
+function failedAttempt(error, provider, model) {
+  return {
+    provider,
+    model,
+    status: error instanceof AiProviderError ? error.status : null,
+    reason: error instanceof AiProviderError ? error.code : 'unexpected',
+    latency_ms: error instanceof AiProviderError ? error.latencyMs : null,
+  };
+}
+
+async function requestNousCompletion(model, systemPrompt, userMessage) {
+  const startedAt = Date.now();
+  let res;
+  try {
+    res = await fetch(`${NOUS_BASE}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.nousPortalKey}`,
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(config.aiTextTimeoutMs),
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        temperature: 0.7,
+        max_tokens: 8192,
+      }),
+    });
+  } catch (error) {
+    throw new AiProviderError('nous', model, null, error.name === 'TimeoutError' ? 'timeout' : 'network', Date.now() - startedAt);
+  }
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new AiProviderError('nous', model, res.status, `http_${res.status}`, Date.now() - startedAt);
+  const content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
+  if (!content) throw new AiProviderError('nous', model, 502, 'empty_response', Date.now() - startedAt);
+  return { content, usage: json.usage || null, requestedModel: model, model: json.model || model, provider: 'nous', latencyMs: Date.now() - startedAt };
+}
+
+async function requestOpenRouterTextCompletion(model, systemPrompt, userMessage) {
+  const startedAt = Date.now();
+  let res;
+  try {
+    res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.openrouterKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': config.publicSiteUrl,
+        'X-OpenRouter-Title': 'CREA Command Center',
+      },
+      signal: AbortSignal.timeout(config.aiTextTimeoutMs),
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        temperature: 0.7,
+        max_tokens: 8192,
+      }),
+    });
+  } catch (error) {
+    throw new AiProviderError('openrouter', model, null, error.name === 'TimeoutError' ? 'timeout' : 'network', Date.now() - startedAt);
+  }
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new AiProviderError('openrouter', model, res.status, `http_${res.status}`, Date.now() - startedAt);
+  if (json && json.error) {
+    const status = Number(json.error.code) || 502;
+    throw new AiProviderError('openrouter', model, status, 'provider_error', Date.now() - startedAt);
+  }
+  const choice = json && json.choices && json.choices[0];
+  const content = choice && choice.message && choice.message.content;
+  if (!content || choice.finish_reason === 'error' || choice.error) {
+    const status = Number(choice && choice.error && choice.error.code) || 502;
+    throw new AiProviderError('openrouter', model, status, content ? 'provider_error' : 'empty_response', Date.now() - startedAt);
+  }
+  return { content, usage: json.usage || null, requestedModel: model, model: json.model || model, provider: 'openrouter', latencyMs: Date.now() - startedAt };
+}
+
 async function chatComplete(systemPrompt, userMessage, modelKey) {
   modelKey = modelKey || 'default';
   const primaryModel = MODELS[modelKey];
-  try {
-    const result = await requestNousCompletion(primaryModel, systemPrompt, userMessage);
-    return { ...result, model: primaryModel, usedFallback: false };
-  } catch (primaryErr) {
-    if (!config.aiModelFallback || config.aiModelFallback === primaryModel) throw primaryErr;
+  const chain = [{ provider: 'nous', model: primaryModel }];
+  if (config.aiModelFallback && config.aiModelFallback !== primaryModel) {
+    chain.push({ provider: 'nous', model: config.aiModelFallback });
+  }
+  if (config.openrouterKey && config.aiOpenRouterFallbackModel) {
+    chain.push({ provider: 'openrouter', model: config.aiOpenRouterFallbackModel });
+  }
+  const attempts = [];
+
+  for (let i = 0; i < chain.length; i++) {
+    const attempt = chain[i];
     try {
-      const result = await requestNousCompletion(config.aiModelFallback, systemPrompt, userMessage);
-      return { ...result, model: config.aiModelFallback, usedFallback: true, fallbackReason: primaryErr.message };
-    } catch (fallbackErr) {
-      throw new Error(`Nous Portal falló con modelo primario y de respaldo. Primario: ${primaryErr.message} | Respaldo: ${fallbackErr.message}`);
+      const result = attempt.provider === 'nous'
+        ? await requestNousCompletion(attempt.model, systemPrompt, userMessage)
+        : await requestOpenRouterTextCompletion(attempt.model, systemPrompt, userMessage);
+      const output = {
+        ...result,
+        usedFallback: i > 0,
+        fallbackReason: attempts[0] ? attempts[0].reason : null,
+        attempts,
+      };
+      console.info('[ai_completion]', JSON.stringify({
+        provider: output.provider,
+        requested_model: output.requestedModel,
+        model: output.model,
+        latency_ms: output.latencyMs,
+        tokens: output.usage && output.usage.total_tokens || null,
+        used_fallback: output.usedFallback,
+        fallback_reason: output.fallbackReason,
+      }));
+      return output;
+    } catch (error) {
+      attempts.push(failedAttempt(error, attempt.provider, attempt.model));
+      if (!canFallback(error)) throw error;
+      if (i === chain.length - 1) {
+        const combined = new Error(`IA no disponible tras ${attempts.length} intento(s): ${attempts.map((a) => `${a.provider}/${a.model} (${a.reason})`).join(' | ')}`);
+        combined.attempts = attempts;
+        throw combined;
+      }
     }
   }
 }
@@ -202,8 +296,8 @@ async function generateProposal(context, format, angle, competitorPosts) {
     ? `\n\nCobertura reciente de competencia sobre temas similares (SOLO para elegir un ángulo distinto — NO copies ni parafrasees su texto):\n${JSON.stringify(competitorPosts.map((p) => ({ medio: p.source_account, texto: String(p.post_text || '').slice(0, 300) })))}`
     : '';
   const user = `Tema: ${context.title}\nDescripción: ${context.description || ''}\nAntecedentes: ${context.antecedentes || ''}\nActores: ${context.actores || ''}\nÁngulos sugeridos: ${context.angulos || ''}\nAudiencia: ${context.audiencia || ''}\nFormato pedido: ${format}\nÁngulo editorial: ${angle || 'libre'}${competitorBlock}\n\nGenera una propuesta de contenido. Devuelve SOLO un JSON con: title, body (resumen de 2-3 párrafos), dek (subtítulo de 1 línea), section (una de: ${SECTIONS.join(', ')}), angulo, sensibilidad (verde/amarillo/rojo).`;
-  const { content, usage, model, usedFallback } = await chatComplete(system, user, modelKey);
-  return { proposal: parseJson(content), usage, model, usedFallback };
+  const { content, ...metadata } = await chatComplete(system, user, modelKey);
+  return { proposal: parseJson(content), ...metadata };
 }
 
 async function generateDraft(proposal, instructions) {
@@ -272,4 +366,4 @@ async function logActivity(pool, action, detail, userId, status, metadata) {
   );
 }
 
-module.exports = { chatComplete, detectTopics, detectTopicsFromMarkdown, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity, stripLeadingDuplicateTitle };
+module.exports = { chatComplete, requestNousCompletion, requestOpenRouterTextCompletion, detectTopics, detectTopicsFromMarkdown, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity, stripLeadingDuplicateTitle };

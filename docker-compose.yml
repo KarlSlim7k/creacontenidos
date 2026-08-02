@@ -49,7 +49,9 @@ services:
       AI_MODEL_DEFAULT: ${AI_MODEL_DEFAULT:-deepseek/deepseek-v4-flash}
       AI_MODEL_COMPLEX: ${AI_MODEL_COMPLEX:-minimax/minimax-m3}
       AI_MODEL_QA: ${AI_MODEL_QA:-openai/gpt-5-nano}
-      AI_MODEL_FALLBACK: ${AI_MODEL_FALLBACK:-}
+      AI_MODEL_FALLBACK: ${AI_MODEL_FALLBACK:-inclusionai/ling-3.0-flash:free}
+      AI_OPENROUTER_FALLBACK_MODEL: ${AI_OPENROUTER_FALLBACK_MODEL:-inclusionai/ling-3.0-flash:free}
+      AI_TEXT_TIMEOUT_MS: ${AI_TEXT_TIMEOUT_MS:-45000}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       AI_MODEL_IMAGE: ${AI_MODEL_IMAGE:-google/gemini-3-pro-image}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-https://crea-contenidos.com}

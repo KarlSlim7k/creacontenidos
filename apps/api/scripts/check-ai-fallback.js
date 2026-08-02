@@ -1,120 +1,100 @@
 #!/usr/bin/env node
-// Check ejecutable del fallback de modelo en chatComplete (docs/ia/politica-ia-y-gate-editorial.md
-// §1.2, docs/ia/runbook-incidentes.md §1). No pega a Nous Portal real: mockea global.fetch para
-// simular caída del modelo primario y verificar que chatComplete cae a AI_MODEL_FALLBACK, y que
-// sin fallback configurado el error se propaga igual que antes (comportamiento no-regresivo).
 const assert = require('node:assert');
 
-process.env.NOUS_PORTAL_API_KEY = process.env.NOUS_PORTAL_API_KEY || 'check-key';
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://check';
-process.env.JWT_SECRET = process.env.JWT_SECRET || 'check-secret';
-process.env.NODE_ENV = process.env.NODE_ENV === 'production' ? 'development' : (process.env.NODE_ENV || 'development');
+Object.assign(process.env, {
+  NOUS_PORTAL_API_KEY: 'check-nous-secret',
+  OPENROUTER_API_KEY: 'check-openrouter-secret',
+  DATABASE_URL: process.env.DATABASE_URL || 'postgres://check',
+  JWT_SECRET: process.env.JWT_SECRET || 'check-jwt-secret',
+  NODE_ENV: 'development',
+  AI_MODEL_DEFAULT: 'primary/model',
+  AI_MODEL_FALLBACK: 'secondary/model',
+  AI_OPENROUTER_FALLBACK_MODEL: 'openrouter/model',
+  AI_TEXT_TIMEOUT_MS: '45000',
+});
 
-function fakeResponse(model, { ok, status, content }) {
+const { chatComplete } = require('../src/lib/ai-client');
+
+function response(status, content, error) {
   return {
-    ok,
-    status: status || 200,
-    text: async () => (ok ? '' : `boom (${model})`),
-    json: async () => ({ choices: [{ message: { content } }], usage: { total_tokens: 42 } }),
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => error || { model: 'returned/model', choices: [{ message: { content } }], usage: { total_tokens: 42 } },
   };
 }
 
-async function withFetchMock(mockFn, run) {
+async function runCase(routes, check) {
   const realFetch = global.fetch;
-  global.fetch = mockFn;
+  const calls = [];
+  global.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    const provider = String(url).includes('openrouter.ai') ? 'openrouter' : 'nous';
+    calls.push({ provider, model: body.model, headers: options.headers });
+    return routes[`${provider}:${body.model}`];
+  };
   try {
-    return await run();
+    await check(calls);
   } finally {
     global.fetch = realFetch;
   }
 }
 
 async function main() {
-  let n = 0;
-  const ok = (cond, msg) => { assert.ok(cond, msg); n++; };
+  let assertions = 0;
+  const ok = (condition, message) => { assert.ok(condition, message); assertions++; };
 
-  // --- Caso 1: sin AI_MODEL_FALLBACK configurado, el primario falla → error se propaga tal cual (no-regresión) ---
-  delete process.env.AI_MODEL_FALLBACK;
-  delete require.cache[require.resolve('../src/config')];
-  delete require.cache[require.resolve('../src/lib/ai-client')];
-  let ai = require('../src/lib/ai-client');
+  await runCase({ 'nous:primary/model': response(200, 'primario') }, async (calls) => {
+    const result = await chatComplete('sys', 'user');
+    ok(result.content === 'primario' && !result.usedFallback, '1. el primario responde sin fallback');
+    ok(calls.length === 1 && result.provider === 'nous', '1. hace un solo intento en Nous');
+  });
 
-  await withFetchMock(
-    async (url, opts) => {
-      const model = JSON.parse(opts.body).model;
-      return fakeResponse(model, { ok: false, status: 503 });
-    },
-    async () => {
-      await assert.rejects(
-        () => ai.chatComplete('sys', 'user', 'default'),
-        /respondió 503/,
-        'sin fallback configurado, el error del primario se propaga sin reintento'
-      );
-    }
-  );
-  ok(true, 'caso 1: sin AI_MODEL_FALLBACK, falla directo (comportamiento previo intacto)');
+  await runCase({
+    'nous:primary/model': response(503),
+    'nous:secondary/model': response(200, 'secundario'),
+  }, async (calls) => {
+    const result = await chatComplete('sys', 'user');
+    ok(result.content === 'secundario' && result.usedFallback, '2. usa el respaldo de Nous');
+    ok(calls.map((call) => call.model).join(',') === 'primary/model,secondary/model', '2. conserva el orden de modelos');
+  });
 
-  // --- Caso 2: con AI_MODEL_FALLBACK configurado, el primario falla y el respaldo responde ---
-  process.env.AI_MODEL_FALLBACK = 'fallback/model-x';
-  delete require.cache[require.resolve('../src/config')];
-  delete require.cache[require.resolve('../src/lib/ai-client')];
-  ai = require('../src/lib/ai-client');
-  const config = require('../src/config');
-  ok(config.aiModelFallback === 'fallback/model-x', 'config.aiModelFallback lee AI_MODEL_FALLBACK');
+  await runCase({
+    'nous:primary/model': response(404),
+    'nous:secondary/model': response(503),
+    'openrouter:openrouter/model': response(200, 'openrouter'),
+  }, async (calls) => {
+    const result = await chatComplete('sys', 'user');
+    ok(result.content === 'openrouter' && result.provider === 'openrouter', '3. usa OpenRouter tras fallar ambos modelos Nous');
+    ok(calls.length === 3 && calls[2].headers['HTTP-Referer'] && calls[2].headers['X-OpenRouter-Title'], '3. identifica el sitio ante OpenRouter');
+  });
 
-  const calledModels = [];
-  await withFetchMock(
-    async (url, opts) => {
-      const model = JSON.parse(opts.body).model;
-      calledModels.push(model);
-      if (model === config.aiModelDefault) return fakeResponse(model, { ok: false, status: 500 });
-      return fakeResponse(model, { ok: true, content: 'respuesta del fallback' });
-    },
-    async () => {
-      const result = await ai.chatComplete('sys', 'user', 'default');
-      ok(result.content === 'respuesta del fallback', 'caso 2: chatComplete devuelve el contenido del modelo de respaldo');
-      ok(result.model === 'fallback/model-x', 'caso 2: chatComplete reporta el modelo de respaldo usado');
-      ok(result.usedFallback === true, 'caso 2: chatComplete marca usedFallback=true');
-    }
-  );
-  ok(
-    calledModels[0] === config.aiModelDefault && calledModels[1] === 'fallback/model-x',
-    'caso 2: intenta primero el modelo primario y luego el de respaldo, en ese orden'
-  );
+  await runCase({ 'nous:primary/model': response(401) }, async (calls) => {
+    await assert.rejects(() => chatComplete('sys', 'user'), (error) => error.status === 401);
+    assertions++;
+    ok(calls.length === 1, '4. un error de autenticación no entra en bucle ni usa fallback');
+  });
 
-  // --- Caso 3: primario Y respaldo fallan → error combinado con ambos mensajes ---
-  await withFetchMock(
-    async (url, opts) => {
-      const model = JSON.parse(opts.body).model;
-      return fakeResponse(model, { ok: false, status: 500 });
-    },
-    async () => {
-      await assert.rejects(
-        () => ai.chatComplete('sys', 'user', 'default'),
-        (err) => err.message.includes('Primario:') && err.message.includes('Respaldo:'),
-        'caso 3: si ambos fallan, el error incluye el motivo de los dos intentos'
-      );
-    }
-  );
-  ok(true, 'caso 3: error combinado cuando primario y respaldo fallan');
+  const providerBodySecret = 'provider-body-must-not-leak';
+  await runCase({
+    'nous:primary/model': response(503, null, { error: providerBodySecret }),
+    'nous:secondary/model': response(503, null, { error: providerBodySecret }),
+    'openrouter:openrouter/model': response(503, null, { error: providerBodySecret }),
+  }, async (calls) => {
+    await assert.rejects(
+      () => chatComplete('sys', 'user'),
+      (error) => {
+        ok(error.attempts.length === 3 && calls.length === 3, '5. reporta los tres intentos fallidos');
+        ok(!error.message.includes(providerBodySecret) && !error.message.includes('check-openrouter-secret'), '5. el error combinado no filtra cuerpos ni credenciales');
+        return true;
+      }
+    );
+    assertions++;
+  });
 
-  // --- Caso 4: cuando el resultado exitoso es del primario, usedFallback queda en false ---
-  await withFetchMock(
-    async (url, opts) => {
-      const model = JSON.parse(opts.body).model;
-      return fakeResponse(model, { ok: true, content: 'respuesta del primario' });
-    },
-    async () => {
-      const result = await ai.chatComplete('sys', 'user', 'default');
-      ok(result.usedFallback === false, 'caso 4: usedFallback=false cuando el primario responde bien');
-      ok(result.model === config.aiModelDefault, 'caso 4: model reporta el modelo primario');
-    }
-  );
-
-  console.log(`\n✔ check-ai-fallback pasó (${n} asserts).`);
+  console.log(`\n✔ check-ai-fallback pasó (${assertions} asserts, 5 casos).`);
 }
 
-main().catch((err) => {
-  console.error('\n✘ check-ai-fallback falló:', err.message);
+main().catch((error) => {
+  console.error('\n✘ check-ai-fallback falló:', error.message);
   process.exit(1);
 });

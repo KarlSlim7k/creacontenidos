@@ -1,5 +1,7 @@
 require('dotenv').config();
 
+const configuredAiTextTimeoutMs = Number(process.env.AI_TEXT_TIMEOUT_MS || 45000);
+
 // En producción CORS_ORIGIN vacío haría que cors() refleje CUALQUIER origen
 // (cors(undefined) = abierto). En vez de abrir o de tumbar el boot, caemos al
 // origen del propio sitio (PUBLIC_SITE_URL): el default seguro correcto, porque
@@ -32,9 +34,11 @@ module.exports = {
   aiModelDefault: process.env.AI_MODEL_DEFAULT || 'deepseek/deepseek-v4-flash',
   aiModelComplex: process.env.AI_MODEL_COMPLEX || 'minimax/minimax-m3',
   aiModelQa: process.env.AI_MODEL_QA || 'openai/gpt-5-nano',
-  // Fallback de modelo si el primario falla (gap de docs/ia/politica-ia-y-gate-editorial.md
-  // §1.2 y runbook-incidentes.md §1). Vacío = sin fallback, se propaga el error como antes.
-  aiModelFallback: process.env.AI_MODEL_FALLBACK || '',
+  aiModelFallback: process.env.AI_MODEL_FALLBACK || 'inclusionai/ling-3.0-flash:free',
+  aiOpenRouterFallbackModel: process.env.AI_OPENROUTER_FALLBACK_MODEL || 'inclusionai/ling-3.0-flash:free',
+  aiTextTimeoutMs: Number.isFinite(configuredAiTextTimeoutMs) && configuredAiTextTimeoutMs >= 1000 && configuredAiTextTimeoutMs <= 120000
+    ? configuredAiTextTimeoutMs
+    : 45000,
   // Imagen vía OpenRouter (docs/ia/generacion-imagenes.md): Nano Banana Pro para portadas.
   openrouterKey: process.env.OPENROUTER_API_KEY,
   aiModelImage: process.env.AI_MODEL_IMAGE || 'google/gemini-3-pro-image',

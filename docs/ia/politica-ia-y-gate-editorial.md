@@ -6,7 +6,7 @@
 
 ## 1. Ruteo de modelos
 
-### 1.1 Qué usa v2 hoy (planeado, sin conectar)
+### 1.1 Qué usa v2 hoy
 
 Por `apps/api/src/modules/{listening,content-engine}/README.md` y la skill `fullstack`:
 
@@ -17,7 +17,11 @@ Por `apps/api/src/modules/{listening,content-engine}/README.md` y la skill `full
 
 [`../CREA_Stack_IA_Actualizado_v1.md`](../CREA_Stack_IA_Actualizado_v1.md) (Julio 2026, vigente) define que para el mes de pruebas el punto de entrada de IA es **Hermes Agent + Nous Portal + MiniMax como modelo primario**, con un modelo de razonamiento superior reservado para piezas sensibles/branded content de alto valor. Esa decisión **no cambia el schema ni los límites de los módulos** — solo determina qué proveedor y qué variables de entorno llama el código de `listening`/`content-engine` cuando se implementen. Antes de escribir el cliente HTTP de esas capas, confirmar contra ese documento si se llama a Anthropic/Perplexity directo o vía Nous Portal — es una decisión de una línea de configuración, no de arquitectura.
 
-**Fallback de modelo (implementado, acotado)**: `apps/api/src/lib/ai-client.js` reintenta **una** vez contra `AI_MODEL_FALLBACK` cuando falla el modelo primario (`AI_MODEL_DEFAULT`/`_COMPLEX`/`_QA`). Es el mismo Nous Portal con otro `model`, no una cadena de proveedores: si también falla, se propaga un error que nombra los dos. Vacío = sin fallback (comportamiento anterior). La cadena de fallback nativa de Hermes/Portal sigue siendo la mejora mayor pendiente; ver [`runbook-incidentes.md`](./runbook-incidentes.md) §1.
+**Fallback implementado**: `apps/api/src/lib/ai-client.js` usa la cadena modelo solicitado en
+Nous → `AI_MODEL_FALLBACK` en Nous → `AI_OPENROUTER_FALLBACK_MODEL` en OpenRouter. Solo avanza
+por timeout/red, 402, 404, 408, 429 o 5xx; 400, 401 y 403 se detienen para corregir configuración.
+El resultado registra proveedor, modelo, latencia, tokens y motivo sin guardar prompts ni cuerpos.
+Ninguna salida se publica automáticamente: conserva el gate editorial humano.
 
 ### 1.3 Reglas de ruteo por tipo de tarea (heredadas de v1, siguen aplicando)
 
@@ -39,7 +43,8 @@ Ninguna de estas existe en el código todavía — quedan como requisito para cu
 ### 1.5 Reglas de seguridad
 
 - No enviar datos sensibles sin anonimizar a proveedores externos.
-- Guardar trazabilidad para auditoría — hoy `review_comment` cubre el motivo de rechazo/devolución; no hay traza de "qué modelo generó esto" (ver 1.4).
+- Guardar trazabilidad para auditoría — `activity_log.metadata` conserva proveedor/modelo y
+  `review_comment` cubre el motivo de rechazo/devolución.
 
 ## 2. Gate editorial
 

@@ -22,6 +22,8 @@
     "check:scraper": "node scripts/check-competitor-scraper.js",
     "check:slug": "node scripts/check-slug.js",
     "check:telegram": "node scripts/check-telegram.js",
+    "check:ai-models": "node scripts/check-ai-models.js",
+    "benchmark:ai-fallback": "node scripts/benchmark-ai-fallback.js",
     "test": "node scripts/run-checks.js unit",
     "test:unit": "node scripts/run-checks.js unit",
     "test:public": "node scripts/run-checks.js public",
