@@ -26,7 +26,7 @@ Estado al 1 de agosto de 2026:
 | API + Postgres | `https://crea-contenidos.com/api/public/articles?limit=1`, HTTP 200 y JSON válido | Solicitud de UptimeRobot enviada; falta confirmar el alta |
 | TLS/dominio | Aviso de expiración del certificado del monitor del portal | Pendiente de activar en UptimeRobot |
 | Backup local | Heartbeat diario con gracia máxima de 26 horas | Activo; señales de fallo y recuperación aceptadas, falta confirmar la recepción de ambas alertas |
-| Excepciones de API | Sentry, proyecto `crea-command-center-api` | Activo; evento sintético y entrega de la alerta por correo verificadas |
+| Excepciones de API | Sentry, proyecto `crea-command-center-api` | Inactivo: falta guardar un DSN real en Dokploy y volver a verificar una alerta |
 
 Los monitores web deben comprobar cada 5 minutos y enviar alertas DOWN y UP al
 correo operativo. No se considera terminado el alta hasta recibir una alerta de
@@ -146,10 +146,8 @@ documentada para conciliación posterior.
   URLs privadas de heartbeat ni respuestas completas de proveedores.
 - Capturas o archivos de diagnóstico deben ocultar esos valores antes de
   compartirse.
-- Sentry excluye usuario, IP, request, headers, cuerpos, query strings,
-  breadcrumbs, variables locales y entradas/salidas de IA. Sentry conserva una
-  geolocalización aproximada del VPS emisor, no del visitante, aunque el proyecto
-  tenga activo el borrado de IP.
+- Cuando está habilitado, Sentry excluye usuario, IP, request, headers, cuerpos,
+  query strings, breadcrumbs, variables locales y entradas/salidas de IA.
 
 ## Pruebas de aceptación pendientes
 
@@ -157,9 +155,12 @@ documentada para conciliación posterior.
 2. Probar DOWN/UP con un monitor temporal a una URL 404; no detener producción.
 3. Confirmar que llegaron las alertas de fallo y recuperación del heartbeat
    enviadas el 1 de agosto de 2026.
-4. Designar al responsable alterno y confirmar que ambos reciben alertas.
+4. Guardar un DSN real de Sentry en la configuración persistente de Dokploy,
+   desplegar y comprobar una excepción sintética sin PII y su alerta.
+5. Designar al responsable alterno y confirmar que ambos reciben alertas.
 
-Sentry quedó verificado el 1 de agosto de 2026: DSN real inyectado únicamente en
-el servicio `api`, SDK iniciado sin errores y evento sintético visible en el
-entorno `production`. La alerta de alta prioridad llegó al correo del responsable.
-El evento no contiene identidad, IP, request ni breadcrumbs.
+El despliegue de la fase 5 reveló que el valor persistente de `SENTRY_DSN` era el
+ejemplo con `...`, no un DSN válido. Se dejó vacío para que el SDK permanezca
+inactivo sin emitir errores al arrancar. Una prueba previa no sustituye la
+persistencia del secreto: Sentry se considera pendiente hasta repetirla después
+de un redeploy normal de Dokploy.

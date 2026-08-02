@@ -132,7 +132,7 @@ Aceptación: una prueba de caída controlada genera alerta y una excepción sint
 
 Referencia: [UptimeRobot Free](https://help.uptimerobot.com/en/articles/11604710-who-should-use-uptimerobot-s-free-plan).
 
-### Fase 5 — SEO, legal y contenido visible (P1, 0.5–1 día)
+### Fase 5 — SEO, legal y contenido visible (P1, completada el 1 de agosto de 2026)
 
 - Crear redirección permanente de `www` al apex, conservando ruta y query. Preferir una Redirect
   Rule de Cloudflare; dejar un solo host que sirva contenido.
@@ -149,6 +149,32 @@ Referencia: [UptimeRobot Free](https://help.uptimerobot.com/en/articles/11604710
 
 Aceptación: `www/...` devuelve 301 al apex, canonical único, privacidad consistente, cero títulos
 Markdown duplicados y acta simple de aprobación de métricas.
+
+Evidencia de cierre:
+
+- Producción devolvió 301 de `www` al apex conservando ruta y query; portada, sección, nota,
+  perfil y Estudio devolvieron canonical y `og:url` únicos sin parámetros de seguimiento.
+- El sitemap incluye Estudio, notas y perfiles. El aviso de privacidad describe Cloudflare,
+  Google Fonts, Sentry condicional y la carga voluntaria de reproductores sociales.
+- Los reproductores usan click-to-load. Producción no tenía filas en `social_posts` al cierre,
+  por lo que no realizó conexiones sociales; el flujo con publicaciones se validó contra las
+  fixtures locales y resolvió el iframe solo después de la interacción.
+- Las propuestas 20, 22 y 24 se corrigieron en una transacción después de respaldar únicamente
+  esas filas en `/opt/backups/creacontenidos/content-proposals-before-phase5-20260801.jsonl`
+  (modo 600). La API pública confirmó que ninguna conserva el título como primera línea.
+- `generateDraft` solicita texto plano sin título y elimina una primera cabecera idéntica antes
+  de persistir. `check-draft-body.js` cubre título en negritas, encabezado Markdown, mayúsculas,
+  espacios iniciales y una cabecera distinta que debe conservarse.
+
+#### Acta de decisión sobre métricas de Estudio
+
+- Fecha: 1 de agosto de 2026.
+- Decisión: no se aprueba publicar alcance, oyentes, municipios ni distribución por edad porque
+  no se entregó evidencia verificable de periodo y fuente.
+- Acción: se retiraron `StatCards` y las cifras del Estudio, Media Kit y Tercer Tiempo. El Media
+  Kit invita a solicitar cifras respaldadas al equipo comercial.
+- Condición para reactivar métricas: contar con fuente, periodo, responsable y aprobación
+  editorial; el endpoint administrativo puede conservar los datos sin mostrarlos públicamente.
 
 ### Fase 6 — Respaldo de modelos/proveedores IA (P1, 1–1.5 días)
 
