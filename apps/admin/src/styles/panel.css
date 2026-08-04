@@ -116,10 +116,10 @@
 .padmin-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 0.5px solid var(--line-soft); }
 .padmin-row:last-child { border-bottom: none; }
 .padmin-row.clickable { cursor: pointer; }
-.padmin-row-title { font-size: 13px; font-weight: 500; color: var(--text); margin: 0 0 2px; }
+.padmin-row-title { font-size: 13px; font-weight: 500; color: var(--text); margin: 0 0 2px; overflow-wrap: anywhere; }
 /* Título de fila que es el disparador real de la acción (ver pickerRow del editor). */
 .padmin-row-title-btn { display: block; width: 100%; text-align: left; background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; }
-.padmin-row-meta { font-size: 11px; color: var(--text-mute); margin: 0; }
+.padmin-row-meta { font-size: 11px; color: var(--text-mute); margin: 0; overflow-wrap: anywhere; }
 .padmin-badge { font-size: 10px; font-weight: 600; padding: 4px 8px; border-radius: 4px; display: inline-block; width: fit-content; }
 .padmin-chip { font-size: 11px; font-weight: 500; padding: 6px 12px; border-radius: 20px; cursor: pointer; border: 1px solid var(--line-soft); background: var(--surface); color: var(--text); }
 .padmin-chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
@@ -194,7 +194,7 @@
 /* Plantillas de columnas compartidas head/row — el min-width fuerza scroll horizontal
    dentro de .padmin-card (overflow-x:auto) en móvil en vez de aplastar las columnas. */
 /* Tema | Fuente | Interés | Confianza | Verificación | Acciones */
-.padmin-cols-radar { grid-template-columns: minmax(160px, 1.6fr) 100px 70px 80px 120px 110px; min-width: 700px; }
+.padmin-cols-radar { grid-template-columns: minmax(160px, 1.6fr) 100px 70px 92px 132px 110px; min-width: 720px; }
 .padmin-cols-social { grid-template-columns: 50px 100px 1fr 90px 90px 130px; min-width: 640px; }
 .padmin-cols-users { grid-template-columns: 1fr 1fr 90px 210px; min-width: 620px; }
 .padmin-cols-permisos { grid-template-columns: 2fr 70px 90px 80px 90px; min-width: 560px; }
@@ -203,6 +203,24 @@
 .padmin-cols-competencia { grid-template-columns: 140px 2fr 90px 110px 90px 140px; min-width: 760px; }
 /* Dominio | Etiqueta | Confianza | Activa | Notas | Acciones */
 .padmin-cols-fuentes { grid-template-columns: 1.2fr 1.4fr 90px 90px 1fr 100px; min-width: 640px; }
+
+/* ---------- radar (temas/competencia/fuentes) ---------- */
+.padmin-radar-post-text { display: block; font-size: 12px; color: var(--text-2); line-height: 1.5; overflow-wrap: anywhere; word-break: break-word; }
+.padmin-radar-row { padding-top: 13px; padding-bottom: 13px; }
+/* Bloque informativo liviano compartido por las 3 tabs: calibración (temas),
+   barra de acciones (competencia), nota de contexto (fuentes). Misma "unidad
+   de sección" para que las tabs lean consistentes entre sí. */
+.padmin-radar-block { margin: 0 0 16px; padding: 14px 16px; background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 7px; }
+.padmin-radar-calibration-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.padmin-radar-calibration-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; }
+.padmin-radar-calibration-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.padmin-radar-pill { display: inline-flex; align-items: baseline; gap: 4px; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 20px; }
+.padmin-radar-pill span { font-weight: 400; opacity: 0.85; }
+.padmin-radar-calibration-meta { margin: 0; padding-top: 10px; border-top: 0.5px solid var(--line-soft); font-size: 12px; color: var(--text-mute); line-height: 1.5; }
+.padmin-radar-filters { margin-bottom: 16px; }
+.padmin-radar-filter-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.padmin-radar-filter-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin-right: 2px; }
+.padmin-radar-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 
 /* ---------- editor picker ---------- */
 .padmin-picker-thumb { width: 56px; height: 40px; object-fit: cover; border-radius: 5px; flex-shrink: 0; border: 0.5px solid var(--line-soft); }

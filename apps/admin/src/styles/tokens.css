@@ -11,11 +11,11 @@ body.theme-editorial {
   --bg-2: #E2DFD3;     /* Paper 2 */
   --bg-3: #DCE6D6;     /* Pine light */
   --text: #1F2A22;     /* Ink */
-  --text-mute: #6B6A60;/* Stone */
+  --text-mute: #59584F;/* Stone (AA, sync con apps/web) */
   --line: #C9C6B8;     /* Stone line */
   --brand: #2F5233;    /* Pine */
   --accent: #C77D2E;   /* Ochre */
-  --accent-text: #7A4A18; /* Ochre dark */
+  --accent-text: #3B220A; /* Ochre dark (AA, sync con apps/web) */
   --sponsor: #8C9D6B;  /* Sage */
   --card-2: #D7D3C4;
 }

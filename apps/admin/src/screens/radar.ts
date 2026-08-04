@@ -142,13 +142,13 @@ function renderRadarFuentes(): string {
   const canManage = canManageRadar();
   const activeCount = sources.filter((s) => s.active).length;
   return `<div>
-    <p class="padmin-lede" style="margin-top:0;">Lista editorial de dominios. En la detección, evidence con host <b>alta</b> sube confianza; <b>baja</b> la penaliza. Activas: ${activeCount}.</p>
+    <p class="padmin-radar-block" style="margin-bottom:16px;">Lista editorial de dominios. En la detección, evidence con host <b>alta</b> sube confianza; <b>baja</b> la penaliza. Activas: ${activeCount}.</p>
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-fuentes">
         <span>DOMINIO</span><span>ETIQUETA</span><span>TRUST</span><span>ESTADO</span><span>NOTAS</span><span>ACCIONES</span>
       </div>
       ${sources.length ? sources.map((s: RadarSource) => `
-        <div class="padmin-table-row padmin-cols-fuentes">
+        <div class="padmin-table-row padmin-radar-row padmin-cols-fuentes">
           <span style="font-size:13px;font-weight:600;color:var(--text);">${esc(s.domain)}</span>
           <span style="font-size:12px;color:var(--text);">${esc(s.label)}</span>
           <span>${trustBadge(s.trust)}</span>
@@ -167,7 +167,7 @@ function renderRadarCompetencia(): string {
   if (!posts) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const canManage = state.user!.role === 'director' || state.user!.role === 'produccion';
   const detectBtn = canManage
-    ? `<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px;">
+    ? `<div class="padmin-radar-actions">
         <button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" data-action="detect-competitors-fb" ${state.competitorsBusy ? 'disabled' : ''}>${state.competitorsBusy ? 'Escaneando…' : '📘 Escanear Facebook'}</button>
         <button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-competitors" ${state.competitorsBusy ? 'disabled' : ''}>${state.competitorsBusy ? 'Explorando…' : '🔎 Explorar competencia'}</button>
         ${posts.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-competitors">🗑 Limpiar todo</button>' : ''}
@@ -179,9 +179,9 @@ function renderRadarCompetencia(): string {
       ${posts.length ? posts.map((p: CompetitorPost) => {
         const inter = (p.reactions || 0) + (p.comments || 0) + (p.shares || 0);
         const text = String(p.post_text || '—');
-        return `<div class="padmin-table-row padmin-cols-competencia">
+        return `<div class="padmin-table-row padmin-radar-row padmin-cols-competencia">
           <div style="min-width:0;"><p class="padmin-row-title">${esc(p.source_account || '—')}</p><p class="padmin-row-meta" style="text-transform:uppercase;">${esc(p.source_platform || '')}</p></div>
-          <div style="min-width:0;"><span style="font-size:12px;color:var(--text-2);line-height:1.4;" title="${esc(text)}">${esc(text.slice(0, 160))}${text.length > 160 ? '…' : ''}</span>
+          <div style="min-width:0;"><span class="padmin-radar-post-text" title="${esc(text)}">${esc(text.slice(0, 160))}${text.length > 160 ? '…' : ''}</span>
             ${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener" style="display:block;font-size:11px;color:var(--accent-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(p.post_url)}</a>` : ''}</div>
           <span style="font-size:11px;color:var(--text-mute);">${p.post_date ? new Date(p.post_date).toLocaleDateString('es-MX') : '—'}</span>
           <span style="font-size:12px;font-weight:600;color:var(--text);">${inter}</span>
@@ -216,42 +216,43 @@ function renderSummary(): string {
 function renderCalibration(stats: RadarStats | null): string {
   if (!stats) {
     if (state.radarStatsError) {
-      return `<div style="margin:0 0 16px;padding:12px 14px;background:var(--surface);border:0.5px solid var(--line-soft);border-radius:7px;font-size:12px;color:var(--danger);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      return `<div class="padmin-radar-block" style="color:var(--danger);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span>Calibración: ${esc(state.radarStatsError)}</span>
         <button type="button" class="padmin-chip" data-action="retry-radar-stats">Reintentar</button>
       </div>`;
     }
-    return `<div style="margin:0 0 16px;padding:12px 14px;background:var(--surface);border:0.5px solid var(--line-soft);border-radius:7px;font-size:12px;color:var(--text-mute);">Calibración: cargando stats…</div>`;
+    return `<div class="padmin-radar-block" style="color:var(--text-mute);">Calibración: cargando stats…</div>`;
   }
   const days = state.radarStatsDays || stats.days;
   const bs = stats.topics.by_status || {};
-  const line = (key: string, label: string) => {
+  const pill = (key: string, label: string, tone: string) => {
     const row = bs[key];
-    if (!row) return `${label}: 0`;
-    const avg = row.avg_confidence != null ? ` · conf ${row.avg_confidence}` : '';
-    return `${label}: ${row.count} (${row.pct}%${avg})`;
+    const st = statusStyle(tone);
+    const count = row ? row.count : 0;
+    const detail = row ? `${row.pct}%${row.avg_confidence != null ? ` · conf ${row.avg_confidence}` : ''}` : '';
+    return `<span class="padmin-radar-pill" style="background:${st.bg};color:${st.color};">${esc(label)} ${count}${detail ? `<span>(${esc(detail)})</span>` : ''}</span>`;
   };
   const dayChip = (d: number) =>
     `<button type="button" class="padmin-chip${days === d ? ' active' : ''}" data-action="set-radar-stats-days" data-value="${d}">${d}d</button>`;
   const hints = (stats.hints || []).map((h) =>
     `<li style="margin:4px 0;font-size:12px;color:var(--text-2);">${esc(h)}</li>`
   ).join('');
-  return `<div style="margin:0 0 16px;padding:14px 16px;background:var(--surface);border:0.5px solid var(--line-soft);border-radius:7px;">
-    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:10px;">
-      <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;color:var(--text-mute);text-transform:uppercase;">Calibración</span>
+  return `<div class="padmin-radar-block">
+    <div class="padmin-radar-calibration-head">
+      <span class="padmin-radar-calibration-label">Calibración</span>
       ${dayChip(7)}${dayChip(30)}
       <span style="font-size:11px;color:var(--text-mute);margin-left:auto;">ventana ${stats.days}d · ${stats.topics.total} topics</span>
     </div>
-    <p style="margin:0 0 8px;font-size:12px;color:var(--text);line-height:1.45;">
-      ${esc(line('verified', 'Verified'))} · ${esc(line('checking', 'Checking'))} · ${esc(line('signal', 'Signal'))} · ${esc(line('risk', 'Risk'))}
-      ${bs.unevaluated ? ' · ' + esc(line('unevaluated', 'Sin evaluar')) : ''}
-    </p>
-    <p style="margin:0 0 8px;font-size:12px;color:var(--text-mute);">
+    <div class="padmin-radar-calibration-pills">
+      ${pill('verified', 'Verified', 'verified')}${pill('checking', 'Checking', 'checking')}${pill('signal', 'Signal', 'signal')}${pill('risk', 'Risk', 'risk')}
+      ${bs.unevaluated ? pill('unevaluated', 'Sin evaluar', 'sin_evaluar') : ''}
+    </div>
+    <p class="padmin-radar-calibration-meta">
       Propuestas: ${stats.proposals.generated} ok · gate risk bloqueó ${stats.proposals.blocked_risk} · forced risk ${stats.proposals.forced_from_risk}
       · Detect: ${stats.detection.runs} corridas, +${stats.detection.inserted} insert / ${stats.detection.upgraded} upgrade / ${stats.detection.skipped_similar} skip similar
       · Fuentes activas: ${stats.sources.active}
     </p>
-    <ul style="margin:0;padding-left:18px;">${hints}</ul>
+    ${hints ? `<ul style="margin:8px 0 0;padding-left:18px;">${hints}</ul>` : ''}
   </div>`;
 }
 
@@ -282,16 +283,19 @@ function renderRadarTemas(): string {
 
   return `${renderSummary()}
     ${renderCalibration(state.data.radarStats)}
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;">${sourceChips}
-      <span style="margin-left:auto;display:flex;gap:8px;">
-        <button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" title="Recargar temas, resumen y calibración" data-action="refresh-radar">↻ Actualizar</button>
-        ${state.user!.role === 'director' || state.user!.role === 'produccion' ?
-          `${topics.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-topics">🗑 Limpiar todo</button>' : ''}
-          <button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ${state.radarBusy ? 'disabled' : ''}>${state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias'}</button>` : ''}
-      </span>
+    <div class="padmin-radar-filters">
+      <div class="padmin-radar-actions" style="justify-content:space-between;margin-bottom:10px;">
+        <div class="padmin-radar-filter-group" style="margin-bottom:0;"><span class="padmin-radar-filter-label">Fuente</span>${sourceChips}</div>
+        <span style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" title="Recargar temas, resumen y calibración" data-action="refresh-radar">↻ Actualizar</button>
+          ${state.user!.role === 'director' || state.user!.role === 'produccion' ?
+            `${topics.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-topics">🗑 Limpiar todo</button>' : ''}
+            <button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ${state.radarBusy ? 'disabled' : ''}>${state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias'}</button>` : ''}
+        </span>
+      </div>
+      <div class="padmin-radar-filter-group"><span class="padmin-radar-filter-label">Verificación</span>${verifyChips}</div>
+      <div class="padmin-radar-filter-group" style="margin-bottom:0;"><span class="padmin-radar-filter-label">Workflow</span>${workflowChips}</div>
     </div>
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">${verifyChips}</div>
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;"><span style="font-size:10px;color:var(--text-mute);text-transform:uppercase;margin-right:4px;">Workflow</span>${workflowChips}</div>
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-radar"><span>TEMA</span><span>FUENTE</span><span>INTERÉS</span><span>CONFIANZA</span><span>VERIFICACIÓN</span><span>ACCIONES</span></div>
       ${topics.length ? topics.map((r: Topic) => {
@@ -302,7 +306,7 @@ function renderRadarTemas(): string {
         // Sin role="button" en la fila: contiene botones (👁 Ver, ✓ Aprobar) y los
         // descendientes de role="button" son presentacionales para el lector de
         // pantalla. El acceso por teclado a la ficha va por el botón 👁.
-        return `<div class="padmin-table-row clickable padmin-cols-radar" data-action="open-radar" data-id="${r.id}">
+        return `<div class="padmin-table-row clickable padmin-radar-row padmin-cols-radar" data-action="open-radar" data-id="${r.id}">
           <div style="min-width:0;"><span style="font-size:13px;color:var(--text);display:block;">${esc(r.title)}</span>${sub ? `<span style="font-size:11px;color:var(--text-mute);display:block;margin-top:2px;">${sub}</span>` : ''}</div>
           <span style="font-size:12px;color:var(--text-mute);">${esc(r.source || '—')}</span>
           <span style="font-size:12px;color:var(--text);font-weight:600;">${r.mentions}</span>
