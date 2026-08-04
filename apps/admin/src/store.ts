@@ -374,6 +374,8 @@ export interface State {
   radarStatsError: string | null;
   /** true si la última página de topics vino llena → puede haber más en el servidor. */
   radarTopicsHasMore: boolean;
+  /** Página actual (0-based) de la tabla visible en el tab activo de RADAR. */
+  radarPage: number;
   competitorsBusy: boolean;
   leadsStatus: string;
   propuestaRejecting: number | null;
@@ -457,7 +459,7 @@ export const state: State = {
   distBusy: null,
   radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos', radarBusy: false,
   radarTab: 'temas', competitorsBusy: false, radarStatsDays: 30,
-  radarStatsError: null, radarTopicsHasMore: false,
+  radarStatsError: null, radarTopicsHasMore: false, radarPage: 0,
   leadsStatus: 'todos',
   propuestaRejecting: null,
   editorProposalId: null, editorDraft: null,
@@ -611,6 +613,8 @@ export function invalidateProposals() {
 // ---------- RADAR: carga server-side (filtros + paginación viven en la API) ----------
 
 export const RADAR_PAGE = 50;
+/** Filas por página en las tablas de RADAR (temas/competencia/fuentes). */
+export const RADAR_TABLE_PAGE_SIZE = 10;
 
 // Pide RADAR_PAGE+1 filas: si llegan PAGE+1 hay más páginas — evita un COUNT
 // extra en el API solo para mostrar "Cargar más".

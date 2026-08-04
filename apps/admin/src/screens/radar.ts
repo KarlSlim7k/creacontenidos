@@ -1,5 +1,5 @@
 // CREA Panel Admin — pantalla RADAR (social listening + verificación editorial).
-import { state, type Topic, type CompetitorPost, type RadarSource, type RadarStats } from '../store';
+import { state, RADAR_TABLE_PAGE_SIZE, type Topic, type CompetitorPost, type RadarSource, type RadarStats } from '../store';
 import { esc, loadingCard, errorCard, badge, statusStyle } from '../util';
 
 function canManageRadar(): boolean {
@@ -33,6 +33,31 @@ function evidenceList(topic: Topic): NonNullable<Topic['evidence']> {
 function riskFlagText(flag: string | { code?: string; message?: string }): string {
   if (typeof flag === 'string') return flag;
   return flag.message || flag.code || JSON.stringify(flag);
+}
+
+function paginateRows<T>(items: T[], page: number): { pageItems: T[]; page: number; totalPages: number } {
+  const totalPages = Math.max(1, Math.ceil(items.length / RADAR_TABLE_PAGE_SIZE));
+  const clamped = Math.min(Math.max(page, 0), totalPages - 1);
+  return { pageItems: items.slice(clamped * RADAR_TABLE_PAGE_SIZE, clamped * RADAR_TABLE_PAGE_SIZE + RADAR_TABLE_PAGE_SIZE), page: clamped, totalPages };
+}
+
+// Contador "Mostrando A–B de N" + Anterior/Siguiente. Un solo state.radarPage
+// para las 3 tablas (temas/competencia/fuentes): se clampea por tabla en
+// paginateRows, así que cambiar de tab nunca deja una página inválida.
+function renderPager(page: number, totalPages: number, totalItems: number, hasMore?: boolean): string {
+  if (!totalItems) return '';
+  const start = page * RADAR_TABLE_PAGE_SIZE + 1;
+  const end = Math.min(start + RADAR_TABLE_PAGE_SIZE - 1, totalItems);
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1 || !!hasMore;
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap;">
+    <span style="font-size:12px;color:var(--text-mute);">Mostrando ${start}–${end} de ${totalItems}${hasMore ? '+' : ''}</span>
+    <span style="display:flex;gap:6px;align-items:center;">
+      <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="set-radar-page" data-value="${page - 1}" ${canPrev ? '' : 'disabled'}>‹ Anterior</button>
+      <span style="font-size:12px;color:var(--text-mute);">Página ${page + 1}${hasMore ? '' : ` de ${totalPages}`}</span>
+      <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="set-radar-page" data-value="${page + 1}" ${canNext ? '' : 'disabled'}>Siguiente ›</button>
+    </span>
+  </div>`;
 }
 
 function renderRadarDetail(): string {
@@ -141,13 +166,14 @@ function renderRadarFuentes(): string {
   if (!sources) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const canManage = canManageRadar();
   const activeCount = sources.filter((s) => s.active).length;
+  const { pageItems, page, totalPages } = paginateRows(sources, state.radarPage);
   return `<div>
     <p class="padmin-radar-block" style="margin-bottom:16px;">Lista editorial de dominios. En la detección, evidence con host <b>alta</b> sube confianza; <b>baja</b> la penaliza. Activas: ${activeCount}.</p>
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-fuentes">
         <span>DOMINIO</span><span>ETIQUETA</span><span>TRUST</span><span>ESTADO</span><span>NOTAS</span><span>ACCIONES</span>
       </div>
-      ${sources.length ? sources.map((s: RadarSource) => `
+      ${sources.length ? pageItems.map((s: RadarSource) => `
         <div class="padmin-table-row padmin-radar-row padmin-cols-fuentes">
           <span style="font-size:13px;font-weight:600;color:var(--text);">${esc(s.domain)}</span>
           <span style="font-size:12px;color:var(--text);">${esc(s.label)}</span>
@@ -159,6 +185,7 @@ function renderRadarFuentes(): string {
             : '—'}</span>
         </div>`).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin fuentes. Corré la migración 035 o agregá dominios vía API.</p></div>'}
     </div>
+    ${renderPager(page, totalPages, sources.length)}
   </div>`;
 }
 
@@ -173,10 +200,11 @@ function renderRadarCompetencia(): string {
         ${posts.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-competitors">🗑 Limpiar todo</button>' : ''}
       </div>`
     : '';
+  const { pageItems, page, totalPages } = paginateRows(posts, state.radarPage);
   return detectBtn +
     `<div class="padmin-card">
       <div class="padmin-table-head padmin-cols-competencia"><span>CUENTA</span><span>PUBLICACIÓN</span><span>FECHA</span><span>INTERACCIONES</span><span>ESTADO</span><span>ACCIONES</span></div>
-      ${posts.length ? posts.map((p: CompetitorPost) => {
+      ${posts.length ? pageItems.map((p: CompetitorPost) => {
         const inter = (p.reactions || 0) + (p.comments || 0) + (p.shares || 0);
         const text = String(p.post_text || '—');
         return `<div class="padmin-table-row padmin-radar-row padmin-cols-competencia">
@@ -193,7 +221,8 @@ function renderRadarCompetencia(): string {
           </span>
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin publicaciones de competencia. Usa "Explorar competencia" para escanear con IA.</p></div>'}
-    </div>`;
+    </div>
+    ${renderPager(page, totalPages, posts.length)}`;
 }
 
 function renderSummary(): string {
@@ -280,6 +309,7 @@ function renderRadarTemas(): string {
   const sourceChips = sources.map((src) => chip(state.radarSource === src, 'set-radar-source', src, src)).join('');
   const workflowChips = workflowStatuses.map((st) => chip(state.radarStatus === st, 'set-radar-status', st, st, true)).join('');
   const verifyChips = verifications.map((v) => chip(state.radarVerification === v.id, 'set-radar-verification', v.id, v.label)).join('');
+  const { pageItems, page, totalPages } = paginateRows(topics, state.radarPage);
 
   return `${renderSummary()}
     ${renderCalibration(state.data.radarStats)}
@@ -298,7 +328,7 @@ function renderRadarTemas(): string {
     </div>
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-radar"><span>TEMA</span><span>FUENTE</span><span>INTERÉS</span><span>CONFIANZA</span><span>VERIFICACIÓN</span><span>ACCIONES</span></div>
-      ${topics.length ? topics.map((r: Topic) => {
+      ${topics.length ? pageItems.map((r: Topic) => {
         const canManage = state.user!.role === 'director' || state.user!.role === 'produccion';
         const sub = r.known_facts
           ? esc(r.known_facts.slice(0, 90)) + (r.known_facts.length > 90 ? '…' : '')
@@ -320,6 +350,6 @@ function renderRadarTemas(): string {
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">No hay temas con estos filtros.</p></div>'}
     </div>
-    ${state.radarTopicsHasMore ? `<div style="display:flex;justify-content:center;margin-top:12px;"><button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" data-action="load-more-topics">Cargar más temas</button></div>` : ''}
+    ${renderPager(page, totalPages, topics.length, state.radarTopicsHasMore)}
     ${renderRadarDetail()}`;
 }

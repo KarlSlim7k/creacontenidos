@@ -207,6 +207,12 @@
 /* ---------- radar (temas/competencia/fuentes) ---------- */
 .padmin-radar-post-text { display: block; font-size: 12px; color: var(--text-2); line-height: 1.5; overflow-wrap: anywhere; word-break: break-word; }
 .padmin-radar-row { padding-top: 13px; padding-bottom: 13px; }
+/* Root-cause: cualquier celda de una fila radar puede llevar texto sin
+   espacios (URLs, dominios, handles) — min-width:0 permite que el grid item
+   se achique y overflow-wrap:anywhere corta el token en vez de desbordar
+   sobre la columna vecina. Cubre las 3 tablas (temas/competencia/fuentes)
+   en un solo selector en vez de parchear cada span. */
+.padmin-radar-row > * { min-width: 0; overflow-wrap: anywhere; }
 /* Bloque informativo liviano compartido por las 3 tabs: calibración (temas),
    barra de acciones (competencia), nota de contexto (fuentes). Misma "unidad
    de sección" para que las tabs lean consistentes entre sí. */

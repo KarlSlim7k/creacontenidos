@@ -1,7 +1,7 @@
 // CREA Panel Admin — acciones (submit/handle) y delegación de eventos por data-action.
 import {
   state, setState, setData, adminApi, adminApiBlob, loadScreenData, mergeKey, setProposalsKey, isSoundMuted,
-  loadRadarTopics, loadRadarSummary, loadRadarStats,
+  loadRadarTopics, loadRadarSummary, loadRadarStats, RADAR_TABLE_PAGE_SIZE,
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
@@ -81,7 +81,18 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'set-radar-source': (el) => { setState({ radarSource: attr(el, 'data-value') }); loadRadarTopics(true); },
   'set-radar-status': (el) => { setState({ radarStatus: attr(el, 'data-value') }); loadRadarTopics(true); },
   'set-radar-verification': (el) => { setState({ radarVerification: attr(el, 'data-value') }); loadRadarTopics(true); },
-  'load-more-topics': () => loadRadarTopics(false),
+  // Paginación cliente (10 filas/página) sobre lo ya cargado. Si el tab activo
+  // es temas y la página pedida cae fuera de lo cargado pero el servidor
+  // puede tener más (radarTopicsHasMore), pide el siguiente lote de 50 antes
+  // de avanzar — el render clampea la página mientras tanto.
+  'set-radar-page': (el) => {
+    const p = Math.max(0, Number(attr(el, 'data-value')) || 0);
+    if (state.radarTab === 'temas' && state.radarTopicsHasMore) {
+      const loaded = (state.data.topics || []).length;
+      if ((p + 1) * RADAR_TABLE_PAGE_SIZE > loaded) loadRadarTopics(false);
+    }
+    setState({ radarPage: p });
+  },
   'refresh-radar': () => {
     loadRadarTopics(true);
     loadRadarSummary();
