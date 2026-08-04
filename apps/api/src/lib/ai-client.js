@@ -112,15 +112,20 @@ async function requestOpenRouterTextCompletion(model, systemPrompt, userMessage)
   return { content, usage: json.usage || null, requestedModel: model, model: json.model || model, provider: 'openrouter', latencyMs: Date.now() - startedAt };
 }
 
-async function chatComplete(systemPrompt, userMessage, modelKey) {
+async function chatComplete(systemPrompt, userMessage, modelKey, primaryProvider) {
   modelKey = modelKey || 'default';
   const primaryModel = MODELS[modelKey];
-  const chain = [{ provider: 'nous', model: primaryModel }];
-  if (config.aiModelFallback && config.aiModelFallback !== primaryModel) {
+  const chain = primaryProvider === 'openrouter' && config.openrouterKey && config.aiOpenRouterFallbackModel
+    ? [{ provider: 'openrouter', model: config.aiOpenRouterFallbackModel }]
+    : [{ provider: 'nous', model: primaryModel }];
+  if (chain[0].provider === 'nous' && config.aiModelFallback && config.aiModelFallback !== primaryModel) {
     chain.push({ provider: 'nous', model: config.aiModelFallback });
   }
-  if (config.openrouterKey && config.aiOpenRouterFallbackModel) {
+  if (config.openrouterKey && config.aiOpenRouterFallbackModel && chain[0].provider !== 'openrouter') {
     chain.push({ provider: 'openrouter', model: config.aiOpenRouterFallbackModel });
+  }
+  if (chain[0].provider === 'openrouter') {
+    chain.push({ provider: 'nous', model: primaryModel });
   }
   const attempts = [];
 
@@ -249,7 +254,8 @@ En evidence.url usa solo URLs que aparezcan en el markdown de entrada (o la URL 
 ${VERIFICATION_JSON_SPEC}
 
 Devuelve SOLO el JSON array, sin texto adicional. Máximo 5 topics. Si el markdown no trae temas útiles, devuelve [].`;
-  const { content, usage, model, usedFallback } = await chatComplete(system, user, 'default');
+  // ponytail: radar provisional en OpenRouter primero (Nous como fallback), revertir a 'nous' cuando se resuelva el motivo del cambio
+  const { content, usage, model, usedFallback } = await chatComplete(system, user, 'default', 'openrouter');
   return { topics: parseJson(content), usage, model, usedFallback, provider: 'firecrawl' };
 }
 
@@ -282,7 +288,8 @@ evidence (incluye la cuenta y post_url si viene en la entrada).
 ${VERIFICATION_JSON_SPEC}
 
 Devuelve SOLO un JSON array de longitud ${posts.length}, mismo orden que la entrada, sin texto adicional.`;
-  const { content } = await chatComplete(system, user, 'default');
+  // ponytail: radar provisional en OpenRouter primero (Nous como fallback), revertir a 'nous' cuando se resuelva el motivo del cambio
+  const { content } = await chatComplete(system, user, 'default', 'openrouter');
   return parseJson(content);
 }
 
