@@ -351,6 +351,7 @@ export interface EditorDraft {
   is_sponsored: boolean;
   sponsor_name: string;
   image_prompt: string;
+  sensibilidad: string | null;
 }
 
 export interface State {
@@ -385,6 +386,7 @@ export interface State {
   notaPreviewHtml: string | null;
   editorImagePrompt: string | null;
   generatingImage: boolean;
+  suggestingSlug: boolean;
   transparency: Record<string, unknown>;
   comentarioPieceId: number | null;
   comentarioText: string;
@@ -460,7 +462,7 @@ export const state: State = {
   propuestaRejecting: null,
   editorProposalId: null, editorDraft: null,
   generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false, notaPreviewHtml: null,
-  editorImagePrompt: null, generatingImage: false,
+  editorImagePrompt: null, generatingImage: false, suggestingSlug: false,
   transparency: {}, comentarioPieceId: null, comentarioText: '',
   pickerPreview: null,
   selectedRadarId: null,
@@ -675,7 +677,7 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
             title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || '',
             cover_image_url: p.cover_image_url || '', author_name: p.author_name || state.user!.name,
             is_sponsored: Boolean(p.is_sponsored), sponsor_name: p.sponsor_name || '',
-            image_prompt: p.image_prompt || '',
+            image_prompt: p.image_prompt || '', sensibilidad: p.sensibilidad || null,
           },
         });
       }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });

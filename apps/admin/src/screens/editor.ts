@@ -73,6 +73,10 @@ function renderEditorPicker(): string {
 
 function defaultImagePrompt(d: EditorDraft): string {
   const tema = d.title ? `"${d.title}"${d.dek ? '. ' + d.dek : ''}` : 'la nota';
+  const sens = (d.sensibilidad || '').toLowerCase();
+  if (sens === 'rojo' || sens === 'amarillo') {
+    return `Ilustración editorial narrativa tipo cómic urbano para ${tema}. Contexto: sección ${d.section || 'Local'} de un medio digital en Perote, Veracruz. Dramatización visual con personajes semirrealistas (no fotorrealistas), iluminación cinematográfica, textura grunge, composición de cartel informativo. Tono serio, sin exageraciones caricaturescas — debe leerse claramente como ilustración/dramatización, nunca como fotografía del hecho real. Sin contenido gráfico explícito, sin texto sobre la imagen.`;
+  }
   return `Imagen realista y profesional para ilustrar ${tema}. Contexto: sección ${d.section || 'Local'} de un medio digital en Perote, Veracruz. Estilo fotográfico documental, tonos cálidos y neutros, alta resolución, sin texto sobre la imagen.`;
 }
 
@@ -81,12 +85,22 @@ export function renderEditor(): string {
   if (!state.editorDraft) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const d = state.editorDraft;
   const imagePrompt = state.editorImagePrompt != null ? state.editorImagePrompt : (d.image_prompt || defaultImagePrompt(d));
+  const sens = (d.sensibilidad || '').toLowerCase();
+  const isSensitive = sens === 'rojo' || sens === 'amarillo';
+  const skipImageDefault = sens === 'rojo';
+  const sensBadge = isSensitive
+    ? `<div class="padmin-field" style="background:${sens === 'rojo' ? '#F4D9D9' : '#F6ECC9'};border-radius:6px;padding:8px 10px;margin-bottom:12px;">
+        <strong style="font-size:11px;color:${sens === 'rojo' ? '#8A2E2E' : '#8A6B0F'};">⚠ SENSIBILIDAD: ${sens.toUpperCase()}</strong>
+        <p style="font-size:11px;color:var(--text-2);margin:4px 0 0;">Tema sensible — evita fotos explícitas de lugares/personas reales; usa ilustración editorial.</p>
+      </div>`
+    : '';
   return `<div class="padmin-editor-wrap">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;">
       <h1 class="padmin-h1" style="margin:0;">Editor de nota</h1> ${badge('borrador')}
     </div>
     <div class="padmin-editor-cols">
     <div class="padmin-editor-card padmin-editor-main">
+      ${sensBadge}
       <label style="font-size:11px;color:var(--text-mute);display:block;margin-bottom:8px;">Título</label>
       <input id="editor-title" class="padmin-title-input" value="${esc(d.title)}" style="width:100%;box-sizing:border-box;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:12px;">
@@ -99,11 +113,17 @@ export function renderEditor(): string {
       <p class="padmin-editor-meta-title">Metadatos de la nota</p>
       <div class="padmin-field"><label>Sección editorial</label><select id="editor-section">${['Local', 'Cultura', 'Economía', 'Entretenimiento', 'Deportes', 'Opinión'].map((s) => `<option${d.section === s ? ' selected' : ''}>${s}</option>`).join('')}</select></div>
       <div class="padmin-field"><label>Dek / bajada</label><input id="editor-dek" type="text" value="${esc(d.dek)}"></div>
-      <div class="padmin-field"><label>Slug</label><input id="editor-slug" type="text" value="${esc(d.slug)}" placeholder="mi-nota-slug"></div>
+      <div class="padmin-field"><label>Slug</label>
+        <div style="display:flex;gap:6px;">
+          <input id="editor-slug" type="text" value="${esc(d.slug)}" placeholder="vacío = se genera automático del título al guardar" style="flex:1;">
+          <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="suggest-slug" ${state.suggestingSlug ? 'disabled' : ''}>${state.suggestingSlug ? '…' : 'Generar slug recomendado'}</button>
+        </div>
+      </div>
       <div class="padmin-field"><label>Autor / firma</label><input id="editor-author" type="text" value="${esc(d.author_name)}"></div>
       <div class="padmin-field"><label>Imagen de portada (URL)</label><input id="editor-cover" type="text" value="${esc(d.cover_image_url)}" placeholder="https://..." onchange="document.getElementById('editor-cover-thumb').src=this.value;document.getElementById('editor-cover-thumb').style.display=this.value?'block':'none';"></div>
       ${d.cover_image_url ? `<img id="editor-cover-thumb" src="${esc(d.cover_image_url)}" alt="" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" onerror="this.style.display='none';">` : `<img id="editor-cover-thumb" style="display:none;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" onerror="this.style.display='none';">`}
-      <div class="padmin-ia-image">
+      ${isSensitive ? `<div class="padmin-field-inline padmin-field"><input id="editor-skip-image" type="checkbox" ${skipImageDefault ? 'checked' : ''} onchange="document.getElementById('editor-ia-image-block').style.display=this.checked?'none':'';"><label for="editor-skip-image" style="font-size:13px;color:var(--text);">No generar imagen (nota sensible)</label></div>` : ''}
+      <div class="padmin-ia-image" id="editor-ia-image-block" style="display:${isSensitive && skipImageDefault ? 'none' : ''};">
         <p class="padmin-ia-image-title">Generación de imagen de portada con IA</p>
         <button type="button" class="padmin-btn" data-action="generate-image" style="width:100%;margin-bottom:12px;" ${state.generatingImage ? 'disabled' : ''}>${state.generatingImage ? 'Generando imagen…' : 'Generar imagen con IA'}</button>
         <div class="padmin-field"><label>Prompt sugerido (editable)</label><textarea id="editor-image-prompt" style="min-height:110px;font-size:12px;">${esc(imagePrompt)}</textarea></div>

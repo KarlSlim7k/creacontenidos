@@ -202,6 +202,18 @@ const clickHandlers: Record<string, (el: Element) => void> = {
       })
       .catch((err: ApiError) => { setState({ generatingImage: false, errorMsg: err.message }); });
   },
+  'suggest-slug': () => {
+    if (!state.editorProposalId) return;
+    const form = readEditorForm();
+    state.editorDraft = Object.assign({}, state.editorDraft, form) as EditorDraft;
+    setState({ suggestingSlug: true });
+    adminApi<Proposal>('/api/editorial/proposals/' + state.editorProposalId + '/draft', { method: 'PATCH', body: Object.assign({}, form, { slug: '' }) })
+      .then((updated) => {
+        if (state.editorDraft) state.editorDraft.slug = updated.slug || '';
+        setState({ suggestingSlug: false, successMsg: 'Slug recomendado generado.' });
+      })
+      .catch((err: ApiError) => { setState({ suggestingSlug: false, errorMsg: err.message }); });
+  },
   'run-qa': () => {
     if (!state.editorProposalId) return;
     setState({ qaBusy: true, qaResult: null });
@@ -341,6 +353,7 @@ export function submitDraft(id: number, thenSubmitReview: boolean) {
           title: updated.title || '', body: updated.body || '', section: updated.section || '', dek: updated.dek || '', slug: updated.slug || '',
           cover_image_url: updated.cover_image_url || '', author_name: updated.author_name || '',
           is_sponsored: Boolean(updated.is_sponsored), sponsor_name: updated.sponsor_name || '', image_prompt: updated.image_prompt || '',
+          sensibilidad: updated.sensibilidad || null,
         }, successMsg: 'Borrador guardado.' });
         return;
       }
