@@ -3,6 +3,7 @@ import EditorialLayout from '../../layouts/EditorialLayout.astro';
 import Cover from '../../components/Cover.astro';
 import EmptyState from '../../components/EmptyState.astro';
 import NewsletterForm from '../../components/NewsletterForm.astro';
+import ShareButtons from '../../components/ShareButtons.astro';
 import { creaApi, ApiError, OFFLINE_STATE, type Article } from '../../lib/api';
 import { notaHref, perfilHref, seccionHref, initials, fechaLarga } from '../../lib/format';
 import { newsArticleJsonLd } from '../../lib/jsonld';
@@ -47,13 +48,15 @@ if (article) {
   paras = body.split(/\n\s*\n/).filter(Boolean);
 }
 
+const ogImage = image && image.includes('/api/public/images/') ? `${image}?w=1200` : image;
 const jsonLd = article ? newsArticleJsonLd(article, image) : null;
+const noteUrl = new URL(Astro.url.pathname, 'https://crea-contenidos.com').toString();
 ---
 <EditorialLayout
   title={article ? article.title : (fail ? fail.title : 'Nota')}
   description={article ? (article.dek || '') : 'Notas y reportajes de CREA Contenidos, medio digital local de Perote, Veracruz y el corredor Perote–Xalapa–Puebla.'}
   ogType="article"
-  ogImage={image || undefined}
+  ogImage={ogImage || undefined}
   noJsWarning="CREA Contenidos necesita JavaScript para mostrar esta nota. Actívalo para leerla completa."
 >
   <Fragment slot="head">
@@ -75,6 +78,8 @@ const jsonLd = article ? newsArticleJsonLd(article, image) : null;
             <a href={perfilHref(article.author_name)} style="color:var(--text);font-weight:500;">{article.author_name}</a> &middot; {fecha} &middot; {minutes} min de lectura
           </div>
         </div>
+
+        <ShareButtons url={noteUrl} title={article.title} />
 
         <Cover coverUrl={article.cover_image_url} section={article.section} class="featured ratio-16-9" style="margin-bottom:24px;" alt={article.title} imageWidth={1200} imageHeight={675} eager />
 
