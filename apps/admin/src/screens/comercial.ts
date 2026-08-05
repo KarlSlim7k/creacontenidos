@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantallas Comercial (pipeline de clientes) y Leads.
 import { state, type Client, type Lead } from '../store';
-import { esc, badge, loadingCard, errorCard, STATUS_LABEL, relativeTime } from '../util';
+import { esc, badge, loadingCard, errorCard, STATUS_LABEL, relativeTime, paginateRows, renderPager } from '../util';
 
 const PIPELINE_STAGES_ORDER = ['identificado', 'contactado', 'propuesta_enviada', 'cerrado'];
 
@@ -68,6 +68,7 @@ export function renderLeads(): string {
   }).join('');
   const filtered = leads.filter((l: Lead) => state.leadsStatus === 'todos' || l.status === state.leadsStatus);
   const nuevos = leads.filter((l: Lead) => l.status === 'nuevo').length;
+  const { pageItems, page, totalPages } = paginateRows(filtered, state.leadsPage);
 
   return `<div>
     <h1 class="padmin-h1">Leads</h1>
@@ -75,7 +76,7 @@ export function renderLeads(): string {
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;">${chips}</div>
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-leads"><span>RECIBIDO</span><span>CONTACTO</span><span>INTERÉS</span><span>MENSAJE</span><span>ESTADO</span><span>ACCIONES</span></div>
-      ${filtered.length ? filtered.map((l: Lead) =>
+      ${filtered.length ? pageItems.map((l: Lead) =>
         `<div class="padmin-table-row padmin-cols-leads">
           <span style="font-size:11px;color:var(--text-mute);">${esc(relativeTime(l.created_at))}</span>
           <div style="min-width:0;"><p class="padmin-row-title">${esc(l.name)}${l.company ? ' · ' + esc(l.company) : ''}</p><p class="padmin-row-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(l.email || '')}</p></div>
@@ -90,6 +91,7 @@ export function renderLeads(): string {
           </span>
         </div>`
       ).join('') : `<div class="padmin-row"><p class="padmin-row-meta">${leads.length ? 'Sin leads con ese estado.' : 'Todavía no llegan mensajes del formulario de contacto.'}</p></div>`}
+      ${renderPager(page, totalPages, filtered.length, 'set-leads-page')}
     </div>
   </div>`;
 }

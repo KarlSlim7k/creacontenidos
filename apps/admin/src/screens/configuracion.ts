@@ -148,7 +148,7 @@ export function renderConfigServicios(): string {
         <span style="font-size:13px;color:var(--text);">${esc(s.name)}</span>
         <span style="font-size:12px;color:var(--text-mute);">${esc(s.price_label)}</span>
         ${badge(s.active ? 'activo' : 'inactivo')}
-        <span style="display:flex;gap:6px;">
+        <span style="display:flex;gap:6px;flex-wrap:wrap;">
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="edit-service" data-id="${s.id}">Editar</button>
           <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-service" data-id="${s.id}">Borrar</button>
         </span>
@@ -182,7 +182,7 @@ export function renderConfigCuentasFb(): string {
         <span style="font-size:13px;color:var(--text);">${esc(a.label)}</span>
         <span style="font-size:12px;color:var(--text-mute);">${esc(a.handle_or_url)}</span>
         ${badge(a.active ? 'activo' : 'inactivo', a.active ? 'Activa' : 'Inactiva')}
-        <span style="display:flex;gap:6px;">
+        <span style="display:flex;gap:6px;flex-wrap:wrap;">
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="edit-fb-account" data-id="${a.id}">Editar</button>
           <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-fb-account" data-id="${a.id}">Borrar</button>
         </span>

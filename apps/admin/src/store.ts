@@ -378,6 +378,10 @@ export interface State {
   radarPage: number;
   competitorsBusy: boolean;
   leadsStatus: string;
+  /** Página actual (0-based) de la tabla de Leads. */
+  leadsPage: number;
+  /** Página actual (0-based) de la tabla de Producciones (admin). */
+  produccionesPage: number;
   propuestaRejecting: number | null;
   editorProposalId: number | null;
   editorDraft: EditorDraft | null;
@@ -460,7 +464,7 @@ export const state: State = {
   radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos', radarBusy: false,
   radarTab: 'temas', competitorsBusy: false, radarStatsDays: 30,
   radarStatsError: null, radarTopicsHasMore: false, radarPage: 0,
-  leadsStatus: 'todos',
+  leadsStatus: 'todos', leadsPage: 0, produccionesPage: 0,
   propuestaRejecting: null,
   editorProposalId: null, editorDraft: null,
   generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false, notaPreviewHtml: null,

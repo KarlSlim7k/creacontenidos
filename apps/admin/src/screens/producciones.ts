@@ -1,10 +1,11 @@
 // CREA Panel Admin — pantallas Producciones (social embeds) y Publicadas.
 import { state, type SocialPost, type Proposal } from '../store';
-import { esc, loadingCard, errorCard, relativeTime, badge } from '../util';
+import { esc, loadingCard, errorCard, relativeTime, badge, paginateRows, renderPager } from '../util';
 
 export function renderProducciones(): string {
   const posts = state.data.socialPosts;
   if (!posts) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  const { pageItems, page, totalPages } = paginateRows(posts, state.produccionesPage);
   const errorHtml = state.socialFormError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.socialFormError)}</p>` : '';
   const formHtml = state.socialFormOpen ? (
     `<div class="padmin-card" style="padding:18px;margin-bottom:18px;max-width:760px;">
@@ -27,7 +28,7 @@ export function renderProducciones(): string {
     ${formHtml}
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-social"><span></span><span>RED</span><span>TÍTULO / URL</span><span>POSICIÓN</span><span>ESTADO</span><span></span></div>
-      ${posts.length ? posts.map((p: SocialPost) => {
+      ${posts.length ? pageItems.map((p: SocialPost) => {
         const titleLine = p.title ? `<p class="padmin-row-title" style="margin:0 0 2px;">${esc(p.title)}</p>` : '<p class="padmin-row-title" style="margin:0 0 2px;color:var(--mute-2);">(sin título)</p>';
         return `<div class="padmin-table-row padmin-cols-social">
           ${p.thumbnail_url ? `<img src="${esc(p.thumbnail_url)}" alt="" style="width:42px;height:42px;object-fit:cover;border-radius:4px;background:var(--line-soft);">` : '<div style="width:42px;height:42px;background:var(--line-soft);border-radius:4px;"></div>'}
@@ -42,6 +43,7 @@ export function renderProducciones(): string {
           </div>
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Aún no hay producciones. Agrega una URL de TikTok, YouTube, Facebook o Instagram para empezar.</p></div>'}
+      ${renderPager(page, totalPages, posts.length, 'set-producciones-page')}
     </div>
   </div>`;
 }

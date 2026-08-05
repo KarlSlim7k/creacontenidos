@@ -61,6 +61,32 @@ export function badge(statusKey: string, label?: string): string {
   return `<span class="padmin-badge" style="background:${st.bg};color:${st.color};">${esc(label || STATUS_LABEL[statusKey] || statusKey)}</span>`;
 }
 
+// Paginación cliente genérica (10 filas/página) para tablas que ya cargan todo el
+// dataset de un jalón (Leads, Producciones) — a diferencia de RADAR, que pagina sobre
+// datos que pueden crecer desde el servidor (ver paginateRows/renderPager locales de
+// radar.ts, con su propio manejo de "hasMore"). No se unificaron para no arriesgar el
+// flujo de RADAR ya probado (12/12 e2e); estas versiones son la mitad más simple.
+export const TABLE_PAGE_SIZE = 10;
+
+export function paginateRows<T>(items: T[], page: number): { pageItems: T[]; page: number; totalPages: number } {
+  const totalPages = Math.max(1, Math.ceil(items.length / TABLE_PAGE_SIZE));
+  const clamped = Math.min(Math.max(page, 0), totalPages - 1);
+  return { pageItems: items.slice(clamped * TABLE_PAGE_SIZE, clamped * TABLE_PAGE_SIZE + TABLE_PAGE_SIZE), page: clamped, totalPages };
+}
+
+export function renderPager(page: number, totalPages: number, totalItems: number, action: string): string {
+  if (totalPages <= 1) return '';
+  const start = page * TABLE_PAGE_SIZE + 1;
+  const end = Math.min(start + TABLE_PAGE_SIZE - 1, totalItems);
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1;
+  return `<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;border-top:0.5px solid var(--line-soft);">
+    <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="${action}" data-value="${page - 1}" ${canPrev ? '' : 'disabled'}>‹ Anterior</button>
+    <span style="font-size:12px;color:var(--text-mute);">Mostrando ${start}–${end} de ${totalItems}</span>
+    <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="${action}" data-value="${page + 1}" ${canNext ? '' : 'disabled'}>Siguiente ›</button>
+  </div>`;
+}
+
 export function loadingCard(label?: string): string {
   return `<div class="padmin-card" style="padding:20px;"><p class="padmin-lede" style="margin:0;">${esc(label || 'Cargando…')}</p></div>`;
 }
