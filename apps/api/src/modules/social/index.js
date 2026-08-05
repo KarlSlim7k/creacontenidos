@@ -213,13 +213,30 @@ router.get('/public/social/:id/embed', socialPublicLimiter, async (req, res, nex
     const post = rows[0];
     if (!post) return res.status(404).json({ error: 'Post no encontrado' });
 
-    // El iframe nativo siempre se puede construir mientras la URL sea válida.
-    const iframe = buildEmbedHtml(post.network, post.external_url, post.title);
-
-    // Refrescar metadata de oEmbed en background solo si está vieja (>6h): sin esto,
-    // cada visita anónima escribía la BD. No bloquea la respuesta.
+    // Refrescar metadata de oEmbed solo si está vieja (>6h): sin esto, cada visita
+    // anónima escribía la BD.
     const stale = !post.fetched_at || (Date.now() - new Date(post.fetched_at).getTime() > OEMBED_TTL_MS);
-    if (stale) {
+
+    // YouTube (a diferencia de TikTok/Facebook) responde 401 en su oEmbed cuando el
+    // dueño del video deshabilitó el embed en otros sitios — ahí sí hay que creerle:
+    // el iframe cargaría pero YouTube muestra "Error 153" adentro. Por eso este caso
+    // se resuelve SÍNCRONO (no en background) antes de decidir si mandamos iframe o
+    // fallback; se cachea 6h vía fetchOembed así que no pega dos veces seguidas.
+    let embeddingBlocked = false;
+    if (stale && post.network === 'youtube') {
+      try {
+        const fresh = await fetchOembed('youtube', post.external_url);
+        await pool.query(
+          `UPDATE social_posts SET title = COALESCE($1, title), author_name = COALESCE($2, author_name),
+            thumbnail_url = COALESCE($3, thumbnail_url), fetched_at = now(), updated_at = now() WHERE id = $4`,
+          [fresh.title, fresh.author_name, fresh.thumbnail_url, req.params.id]
+        );
+        post.title = fresh.title || post.title;
+        post.thumbnail_url = fresh.thumbnail_url || post.thumbnail_url;
+      } catch (err) {
+        embeddingBlocked = true;
+      }
+    } else if (stale) {
       fetchOembed(post.network, post.external_url)
         .then(async (fresh) => {
           await pool.query(
@@ -230,6 +247,10 @@ router.get('/public/social/:id/embed', socialPublicLimiter, async (req, res, nex
         })
         .catch(() => { /* oEmbed falló; la metadata existente se conserva */ });
     }
+
+    // El iframe nativo siempre se puede construir mientras la URL sea válida, salvo
+    // que ya sepamos (arriba) que YouTube lo va a rechazar.
+    const iframe = embeddingBlocked ? null : buildEmbedHtml(post.network, post.external_url, post.title);
 
     if (iframe) {
       return res.json({ embed_html: iframe, title: post.title, author_name: post.author_name });
