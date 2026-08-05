@@ -100,7 +100,7 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        const { accounts, maxPostsPerAccount, sinceDate } = body;
+        const { accounts, maxPostsPerAccount, sinceDate, includeReels } = body;
 
         if (!Array.isArray(accounts) || accounts.length === 0) {
             sendError(res, 400, 'accounts must be a non-empty array of Facebook handles or URLs');
@@ -134,6 +134,7 @@ const server = http.createServer(async (req, res) => {
                 maxPostsPerAccount: max,
                 sinceDate: sinceDateObj,
                 cookies: cachedCookies,
+                includeReels: includeReels === true,
                 logger: crawleeLog,
             });
 

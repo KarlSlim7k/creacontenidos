@@ -104,7 +104,7 @@ function buildEmbedHtml(network, externalUrl, title) {
   // pasarle la URL del video como "href". Solo cubre posts de video
   // (facebook.com/.../videos/<id>/); fotos o texto no tienen plugin equivalente
   // y caen al fallback (thumbnail + link).
-  if (network === 'facebook' && /\/videos\//.test(externalUrl)) {
+  if (network === 'facebook' && /\/(videos|reel)\//.test(externalUrl)) {
     const src = 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(externalUrl) + '&show_text=false&width=560&t=0';
     return '<iframe src="' + src + '" style="width:100%;height:100%;border:0;" scrolling="no" frameborder="0" allowfullscreen loading="lazy" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>';
   }
@@ -141,6 +141,38 @@ function detectNetwork(url) {
 }
 
 const POST_FIELDS = 'id, network, external_url, title, author_name, thumbnail_url, is_published, position, created_at, updated_at, fetched_at';
+
+// Inserta un post ya validado en social_posts: detecta red, resuelve oEmbed (best-effort)
+// e inserta. Compartido por POST /admin/social (URL manual del editor) y por
+// social-facebook-cron.js (ingesta automática de la página propia). Devuelve
+// { error: 'unrecognized_network' } o { duplicate: true } en vez de tirar, para que
+// ambos llamadores decidan qué hacer sin try/catch de códigos Postgres duplicado.
+async function insertSocialPost(externalUrl, { position = 0, published = true, createdBy = null } = {}) {
+  const network = detectNetwork(externalUrl);
+  if (!network) return { error: 'unrecognized_network' };
+
+  let oembed = { title: null, author_name: null, thumbnail_url: null };
+  let oembedFailed = false;
+  try { oembed = await fetchOembed(network, externalUrl); }
+  catch (err) { oembedFailed = true; }
+
+  const safeTitle = (oembed.title || '').slice(0, 300) || null;
+  const safeAuthor = (oembed.author_name || '').slice(0, 200) || null;
+
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO social_posts (network, external_url, title, author_name, thumbnail_url,
+                                  is_published, position, created_by, fetched_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $3::text IS NULL AND $4::text IS NULL THEN NULL ELSE now() END)
+       RETURNING ${POST_FIELDS}`,
+      [network, externalUrl, safeTitle, safeAuthor, oembed.thumbnail_url, published, position, createdBy]
+    );
+    return { row: rows[0], oembedFailed };
+  } catch (err) {
+    if (err.code === '23505') return { duplicate: true };
+    throw err;
+  }
+}
 
 // --- público ---
 
@@ -242,18 +274,6 @@ router.post('/admin/social', requireAuth, requireRole('director', 'produccion'),
     if (typeof external_url !== 'string' || !URL_RE.test(external_url) || external_url.length > POST_BODY_MAX) {
       return res.status(400).json({ error: 'Datos inválidos', fields: { external_url: 'URL pública requerida (http/https), máximo ' + POST_BODY_MAX + ' caracteres' } });
     }
-    const network = detectNetwork(external_url);
-    if (!network) {
-      return res.status(400).json({ error: 'Datos inválidos', fields: { external_url: 'URL no reconocida (soportamos TikTok, YouTube, Facebook e Instagram)' } });
-    }
-
-    let oembed = { title: null, author_name: null, thumbnail_url: null };
-    let oembedFailed = false;
-    try { oembed = await fetchOembed(network, external_url); }
-    catch (err) { oembedFailed = true; }
-
-    const safeTitle = (oembed.title || '').slice(0, 300) || null;
-    const safeAuthor = (oembed.author_name || '').slice(0, 200) || null;
     // El iframe se construye on-demand desde la URL; no guardamos embed_html.
     // Si oEmbed falla (red caída, IP bloqueada), el post queda como borrador —
     // igual se puede mostrar porque el iframe nativo (TikTok /embed/v2/:id)
@@ -261,19 +281,16 @@ router.post('/admin/social', requireAuth, requireRole('director', 'produccion'),
     const published = is_published !== false;
     const pos = Number.isFinite(position) ? Math.max(0, parseInt(position, 10)) : 0;
 
-    const { rows } = await pool.query(
-      `INSERT INTO social_posts (network, external_url, title, author_name, thumbnail_url,
-                                  is_published, position, created_by, fetched_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $3::text IS NULL AND $4::text IS NULL THEN NULL ELSE now() END)
-       RETURNING id, network, external_url, title, author_name, thumbnail_url, is_published, position, created_at, updated_at, fetched_at`,
-      [network, external_url, safeTitle, safeAuthor, oembed.thumbnail_url, published, pos, req.user.id]
-    );
-    if (oembedFailed) {
-      return res.status(201).json(Object.assign(rows[0], { warning: 'oEmbed no respondió (el video se puede mostrar de todas formas).' }));
+    const result = await insertSocialPost(external_url, { position: pos, published, createdBy: req.user.id });
+    if (result.error === 'unrecognized_network') {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { external_url: 'URL no reconocida (soportamos TikTok, YouTube, Facebook e Instagram)' } });
     }
-    res.status(201).json(rows[0]);
+    if (result.duplicate) return res.status(409).json({ error: 'Esta URL ya está agregada' });
+    if (result.oembedFailed) {
+      return res.status(201).json(Object.assign(result.row, { warning: 'oEmbed no respondió (el video se puede mostrar de todas formas).' }));
+    }
+    res.status(201).json(result.row);
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Esta URL ya está agregada' });
     next(err);
   }
 });
@@ -325,3 +342,4 @@ router.delete('/admin/social/:id', requireAuth, requireRole('director'), async (
 });
 
 module.exports = router;
+module.exports.insertSocialPost = insertSocialPost;

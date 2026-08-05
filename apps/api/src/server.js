@@ -20,6 +20,7 @@ const newsletterRouter = require('./modules/newsletter');
 const telegramRouter = require('./modules/telegram');
 const { startNewsletterCron } = require('./lib/newsletter-cron');
 const { startListeningCron } = require('./lib/listening-cron');
+const { startSocialFacebookCron } = require('./lib/social-facebook-cron');
 const { startTelegramReviewCron } = require('./lib/telegram-review-cron');
 const { SECTIONS } = require('./lib/sections');
 const pool = require('./db/pool');
@@ -149,6 +150,7 @@ async function main() {
 
   startNewsletterCron();
   startListeningCron();
+  startSocialFacebookCron();
   startTelegramReviewCron();
 }
 

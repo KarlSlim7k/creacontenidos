@@ -1,7 +1,7 @@
 import { PlaywrightCrawler, log as crawleeLog } from 'crawlee';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { extractPostsFromPage } from './facebook.js';
+import { extractPostsFromPage, extractReelsFromPage } from './facebook.js';
 import { hasMinimumAuthCookies, resolveFacebookCookies } from './cookies.js';
 import { isBeforeSinceDate, toStartUrl } from './utils.js';
 
@@ -13,7 +13,11 @@ import { isBeforeSinceDate, toStartUrl } from './utils.js';
 // `cookies` is an array of Playwright cookie objects (already resolved by
 // resolveFacebookCookies). `logger` is any object with .info/.warning/.debug
 // methods (crawlee's logger works; console does too).
-export async function runScrape({ accounts, maxPostsPerAccount = 10, sinceDate = null, cookies = [], logger = crawleeLog }) {
+// `includeReels` es opt-in (default false): visita también <página>/reels/ por cada
+// cuenta, una navegación extra (~15s) por cuenta. RADAR (competidores, muchas cuentas)
+// no lo necesita y no debe pagar ese costo; lo usa el cron de ingesta de la página
+// propia (apps/api/src/lib/social-facebook-cron.js), que solo escanea 1 cuenta.
+export async function runScrape({ accounts, maxPostsPerAccount = 10, sinceDate = null, cookies = [], includeReels = false, logger = crawleeLog }) {
     if (!Array.isArray(accounts) || accounts.length === 0) {
         throw new Error('runScrape: accounts must be a non-empty array');
     }
@@ -70,6 +74,20 @@ export async function runScrape({ accounts, maxPostsPerAccount = 10, sinceDate =
             }
 
             crawlerLog.info(`Extracted ${posts.length} post(s) for account "${account}"`);
+
+            if (includeReels) {
+                // Canónica post-redirect (page.url() ya resolvió profile.php?id=... a
+                // /people/<slug>/<id>/): le pegamos "/reels/" ahí, no a la URL de entrada.
+                const reelsUrl = `${page.url().split('?')[0].replace(/\/$/, '')}/reels/`;
+                await page.goto(reelsUrl, { waitUntil: 'domcontentloaded' });
+                const reels = await extractReelsFromPage({ page, log: crawlerLog, maxReels: maxPostsPerAccount });
+                for (const reel of reels) {
+                    if (seenPostUrls.has(reel.post_url)) continue;
+                    seenPostUrls.add(reel.post_url);
+                    items.push({ source_platform: 'facebook', source_account: account, ...reel });
+                }
+                crawlerLog.info(`Extracted ${reels.length} reel(s) for account "${account}"`);
+            }
 
             // Rate limiting: random 2-5s delay before the crawler picks up the next page.
             await sleep(2000 + Math.random() * 3000);
@@ -132,7 +150,7 @@ export async function runCli(argv = process.argv.slice(2)) {
         process.exit(1);
     }
 
-    const { accounts, maxPostsPerAccount, sinceDate } = input;
+    const { accounts, maxPostsPerAccount, sinceDate, includeReels } = input;
     const { cookies } = await resolveFacebookCookies({ input, env: process.env });
 
     if (cookies.length > 0) {
@@ -151,7 +169,7 @@ export async function runCli(argv = process.argv.slice(2)) {
     }
 
     try {
-        const items = await runScrape({ accounts, maxPostsPerAccount, sinceDate: sinceDateObj, cookies, logger: crawleeLog });
+        const items = await runScrape({ accounts, maxPostsPerAccount, sinceDate: sinceDateObj, cookies, includeReels, logger: crawleeLog });
         for (const item of items) {
             process.stdout.write(JSON.stringify(item) + '\n');
         }

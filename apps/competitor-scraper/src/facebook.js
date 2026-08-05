@@ -146,4 +146,36 @@ export async function extractPostsFromPage({ page, log, maxPosts }) {
     }));
 }
 
+// Reels viven en su propio tab (URL <página>/reels/) con un layout de grid — no usan
+// [role="article"] como el timeline normal, así que extractPostsFromPage nunca los ve
+// aunque se scrollee. El tab solo existe si la página ya publicó al menos un reel
+// (si no, Facebook responde "página no disponible" / 404 — no es un login wall).
+export async function extractReelsFromPage({ page, log, maxReels }) {
+    await page.waitForLoadState('domcontentloaded');
+
+    if (await isLoginWall(page)) {
+        if (log && log.warning) log.warning('Login wall detected on reels tab, skipping.', { url: page.url() });
+        return [];
+    }
+
+    // Sin scroll infinito: alcanza con lo que carga al entrar (igual que el resto del
+    // scraper, maxReels ya acota cuántos nos importan).
+    await page.waitForTimeout(2000);
+
+    const hrefs = await page
+        .locator('a[href*="/reel/"]')
+        .evaluateAll((els) => Array.from(new Set(els.map((el) => el.href.split('?')[0]))));
+
+    return hrefs.slice(0, maxReels).map((url) => ({
+        post_url: url,
+        post_text: null,
+        post_date: null,
+        reactions: 0,
+        comments: 0,
+        shares: 0,
+        views: 0,
+        media_type: 'video',
+    }));
+}
+
 export { LOGIN_WALL_PATTERNS };

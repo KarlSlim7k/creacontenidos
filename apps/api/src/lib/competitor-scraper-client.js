@@ -10,7 +10,7 @@
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
 
-async function scrapeCompetitorPosts({ baseUrl, accounts, maxPostsPerAccount, sinceDate, signal, timeoutMs = DEFAULT_TIMEOUT_MS, logger = console }) {
+async function scrapeCompetitorPosts({ baseUrl, accounts, maxPostsPerAccount, sinceDate, includeReels, signal, timeoutMs = DEFAULT_TIMEOUT_MS, logger = console }) {
   if (!baseUrl) {
     throw new Error('scrapeCompetitorPosts: baseUrl is required');
   }
@@ -34,7 +34,7 @@ async function scrapeCompetitorPosts({ baseUrl, accounts, maxPostsPerAccount, si
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ accounts, maxPostsPerAccount, sinceDate }),
+      body: JSON.stringify({ accounts, maxPostsPerAccount, sinceDate, includeReels }),
       signal: controller.signal,
     });
 
