@@ -5,6 +5,7 @@ const { SECTIONS } = require('../../lib/sections');
 const { logActivity } = require('../../lib/ai-client');
 const { publishProposal, returnProposal } = require('../../lib/editorial-review');
 const { slugify } = require('../../lib/slug');
+const { sendPushToRoles } = require('../../lib/push');
 
 const router = express.Router();
 
@@ -232,6 +233,11 @@ router.patch('/proposals/:id/submit-review', requireAuth, async (req, res, next)
       [req.params.id]
     );
     res.json(rows[0]);
+    sendPushToRoles(['director'], {
+      title: 'Pieza en revisión',
+      body: rows[0].title,
+      url: '/admin/#aprobacion',
+    });
   } catch (err) {
     next(err);
   }

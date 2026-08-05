@@ -2,7 +2,7 @@
 // newsletter, servicios, cuentas FB, métricas del sitio).
 import { state, type AdminUser, type Integration, type NewsletterEvent, type Service, type FbAccount } from '../store';
 import { esc, loadingCard, errorCard, relativeTime, roleLabels, navItemsAll, badge } from '../util';
-import { isPwaInstalled, isIosDevice } from '../pwa';
+import { isPwaInstalled, isIosDevice, pushSupported } from '../pwa';
 
 function renderPwaInstallCard(): string {
   let body: string;
@@ -19,6 +19,38 @@ function renderPwaInstallCard(): string {
     <p style="font-size:13px;font-weight:600;color:var(--text);margin:0 0 8px;">Instalar como aplicación</p>
     <p class="padmin-lede" style="margin:0 0 10px;">Agrega el panel a la pantalla de inicio de tu teléfono o computadora — se abre como app aparte.</p>
     ${body}
+  </div>`;
+}
+
+function renderPushCard(): string {
+  // En iOS el push solo funciona con la PWA agregada a inicio (iOS 16.4+) — Safari
+  // nunca manda push a una pestaña normal. Mismo requisito se pide en Android/desktop
+  // por simplicidad, aunque ahí no hace falta técnicamente.
+  if (!isPwaInstalled()) {
+    return `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:560px;">
+      <p style="font-size:13px;font-weight:600;color:var(--text);margin:0 0 8px;">Notificaciones push</p>
+      <p class="padmin-lede" style="margin:0;">Instala la app primero (arriba) para poder activar notificaciones.</p>
+    </div>`;
+  }
+  if (!pushSupported()) {
+    return `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:560px;">
+      <p style="font-size:13px;font-weight:600;color:var(--text);margin:0 0 8px;">Notificaciones push</p>
+      <p class="padmin-lede" style="margin:0;">Este navegador no soporta notificaciones push.</p>
+    </div>`;
+  }
+  const errorHtml = state.pushError ? `<p class="padmin-lede" style="color:var(--danger);margin:0 0 10px;">${esc(state.pushError)}</p>` : '';
+  let body: string;
+  if (state.pushEnabled == null) {
+    body = '<p class="padmin-lede" style="margin:0;">Comprobando…</p>';
+  } else if (state.pushEnabled) {
+    body = `<button type="button" class="padmin-btn-outline padmin-btn-sm" data-action="disable-push" ${state.pushBusy ? 'disabled' : ''}>${state.pushBusy ? 'Desactivando…' : 'Desactivar notificaciones'}</button>`;
+  } else {
+    body = `<button type="button" class="padmin-btn padmin-btn-sm" data-action="enable-push" ${state.pushBusy ? 'disabled' : ''}>${state.pushBusy ? 'Activando…' : 'Activar notificaciones'}</button>`;
+  }
+  return `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:560px;">
+    <p style="font-size:13px;font-weight:600;color:var(--text);margin:0 0 8px;">Notificaciones push</p>
+    <p class="padmin-lede" style="margin:0 0 10px;">Avisos en el teléfono para: nuevo lead, pieza en revisión, propuesta generada por IA.</p>
+    ${errorHtml}${body}
   </div>`;
 }
 
@@ -72,7 +104,7 @@ export function renderConfigPermisos(): string {
 export function renderConfigIntegraciones(): string {
   const integrations = state.data.integrations;
   if (!integrations) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
-  return renderPwaInstallCard() +
+  return renderPwaInstallCard() + renderPushCard() +
     '<p class="padmin-lede" style="margin-bottom:14px;">Solo lectura — refleja las variables de entorno configuradas en el servidor.</p>' +
     `<div class="padmin-integraciones-grid">${integrations.map((i: Integration) => {
       const dot = i.connected ? 'var(--brand)' : 'var(--line)';

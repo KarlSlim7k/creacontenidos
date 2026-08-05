@@ -9,7 +9,7 @@ import {
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
 import { readNewsletterForm } from './screens/hermes';
 import { goTo, login, logout } from './auth';
-import { promptPwaInstall } from './pwa';
+import { promptPwaInstall, enablePushNotifications, disablePushNotifications } from './pwa';
 
 // ---------- lectura de formularios inline ----------
 
@@ -59,6 +59,17 @@ function generateNewsletter() {
 const clickHandlers: Record<string, (el: Element) => void> = {
   'logout': () => logout(),
   'install-pwa': () => promptPwaInstall(),
+  'enable-push': () => {
+    setState({ pushBusy: true, pushError: null });
+    enablePushNotifications().then((result) => {
+      if (result.ok) setState({ pushBusy: false, pushEnabled: true });
+      else setState({ pushBusy: false, pushError: result.error || 'No se pudo activar.' });
+    });
+  },
+  'disable-push': () => {
+    setState({ pushBusy: true });
+    disablePushNotifications().then(() => setState({ pushBusy: false, pushEnabled: false }));
+  },
   'goto': (el) => goTo(attr(el, 'data-id') as Screen, el.getAttribute('data-pid') ? Number(el.getAttribute('data-pid')) : null),
   'open-editor': (el) => goTo('editor', Number(attr(el, 'data-id'))),
   'close-editor': () => setState({ editorProposalId: null, editorDraft: null }),

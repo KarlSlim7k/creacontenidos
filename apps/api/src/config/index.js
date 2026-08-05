@@ -57,6 +57,12 @@ module.exports = {
   contactEmail: process.env.CONTACT_EMAIL || 'contacto@crea-contenidos.com',
   comunidadEmail: process.env.COMUNIDAD_EMAIL || 'comunidad@crea-contenidos.com',
   elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM',
+  // Web Push (notificaciones a la PWA del panel admin). Sin estas dos, el feature
+  // queda apagado solo (lib/push.js no manda nada, el endpoint de vapid-public-key
+  // devuelve null y el cliente no ofrece el toggle) — no requiere flag aparte.
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY || null,
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || null,
+  vapidSubject: process.env.VAPID_SUBJECT || 'mailto:soporte@crea-contenidos.com',
   // Microservicio de scraping de Facebook (apps/competitor-scraper). Si está
   // configurado, el endpoint POST /api/listening/competitors/detect acepta
   // {source: 'facebook'} y delega al scraper (sesión autenticada vía cookies

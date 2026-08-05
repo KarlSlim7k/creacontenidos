@@ -433,6 +433,10 @@ export interface State {
   deniedTarget?: string | null;
   mobileNavOpen?: boolean;
   pwaInstallAvailable: boolean;
+  /** null mientras no se sabe (chequeo async al montar Configuración). */
+  pushEnabled: boolean | null;
+  pushBusy: boolean;
+  pushError: string | null;
 }
 
 export const CREA_API_BASE = (function () {
@@ -483,6 +487,7 @@ export const state: State = {
   newsletterAudioBusy: false, newsletterAudioUrl: null,
   demoNote: null, errorMsg: null, dataError: null, successMsg: null, soundMuted: false,
   pwaInstallAvailable: false,
+  pushEnabled: null, pushBusy: false, pushError: null,
 };
 state.soundMuted = isSoundMuted();
 

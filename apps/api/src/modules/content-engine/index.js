@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { generateProposal, generateDraft, qaCheck, generateImage, logActivity } = require('../../lib/ai-client');
+const { sendPushToRoles } = require('../../lib/push');
 
 const router = express.Router();
 
@@ -106,6 +107,11 @@ router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director'
     const body = rows[0];
     if (warnings.length) body.warnings = warnings;
     res.status(201).json(body);
+    sendPushToRoles(['director', 'produccion'], {
+      title: 'Propuesta generada',
+      body: proposal.title,
+      url: '/admin/#propuestas',
+    });
   } catch (err) {
     next(err);
   }

@@ -146,6 +146,54 @@ adminRouter.get('/activity', requireAuth, requireRole('director'), async (req, r
   }
 });
 
+// --- Web Push (notificaciones panel admin) ---
+
+// GET /api/admin/push/vapid-public-key — el cliente la usa para suscribirse
+// (PushManager.subscribe). null si el servidor no tiene VAPID configurado: el
+// cliente oculta el toggle en vez de ofrecer algo que va a fallar.
+adminRouter.get('/push/vapid-public-key', requireAuth, (req, res) => {
+  res.json({ publicKey: config.vapidPublicKey || null });
+});
+
+// POST /api/admin/push/subscribe — guarda/actualiza la suscripción del navegador
+// actual, atada a req.user.id (nunca a un user_id del body). ON CONFLICT por
+// endpoint: reinstalar/resuscribirse en el mismo navegador no duplica filas.
+adminRouter.post('/push/subscribe', requireAuth, async (req, res, next) => {
+  try {
+    const { endpoint, keys } = req.body || {};
+    if (typeof endpoint !== 'string' || !endpoint.startsWith('https://') || endpoint.length > 2000) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { endpoint: 'Suscripción inválida' } });
+    }
+    const p256dh = keys && typeof keys.p256dh === 'string' ? keys.p256dh : null;
+    const auth = keys && typeof keys.auth === 'string' ? keys.auth : null;
+    if (!p256dh || !auth) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { keys: 'Faltan p256dh/auth' } });
+    }
+    await pool.query(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (endpoint) DO UPDATE SET user_id = $1, p256dh = $3, auth = $4`,
+      [req.user.id, endpoint, p256dh, auth]
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/admin/push/subscribe — desuscribe el navegador actual (botón
+// "Desactivar notificaciones" o cleanup si el usuario revocó el permiso).
+adminRouter.delete('/push/subscribe', requireAuth, async (req, res, next) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (typeof endpoint !== 'string') return res.status(400).json({ error: 'Datos inválidos', fields: { endpoint: 'Requerido' } });
+    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET/PATCH /api/admin/site-metrics — Configuración → Métricas del sitio (solo director).
 adminRouter.get('/site-metrics', requireAuth, requireRole('director'), async (req, res, next) => {
   try {

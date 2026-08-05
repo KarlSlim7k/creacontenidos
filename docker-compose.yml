@@ -71,6 +71,10 @@ services:
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
       FIRECRAWL_BASE_URL: ${FIRECRAWL_BASE_URL:-}
       FIRECRAWL_SOURCE_URLS: ${FIRECRAWL_SOURCE_URLS:-}
+      # Web Push (notificaciones panel admin). Vacío = feature apagada sola.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:soporte@crea-contenidos.com}
     ports:
       # Host 3001: el 3000 lo ocupa el dashboard de Dokploy en el VPS.
       # Bind a 127.0.0.1: Traefik ya rutea por dokploy-network; publicar en

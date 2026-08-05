@@ -6,6 +6,7 @@ const config = require('../../config');
 const { addContact, updateContact, sendEmail } = require('../../lib/resend-client');
 const { makeToken, readToken, confirmEmailHtml, confirmPage } = require('../../lib/newsletter-optin');
 const { rateLimitKey } = require('../../lib/client-ip');
+const { sendPushToRoles } = require('../../lib/push');
 
 const router = express.Router();
 
@@ -227,6 +228,12 @@ router.post('/leads', leadsLimiter, async (req, res, next) => {
     );
     // Sin fila ni id en la respuesta: el cliente público no necesita nada más.
     res.status(201).json({ ok: true });
+    // Sin await: el visitante público no debe esperar a que salgan los pushes.
+    sendPushToRoles(['comercial', 'director'], {
+      title: 'Nuevo lead',
+      body: lead.name + (lead.service_interest ? ' · ' + lead.service_interest : ''),
+      url: '/admin/#leads',
+    });
   } catch (err) {
     next(err);
   }
