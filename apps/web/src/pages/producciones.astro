@@ -5,6 +5,16 @@ import SocialEmbed from '../components/SocialEmbed.astro';
 import { creaApiOrFail, type SocialPost } from '../lib/api';
 
 const { data: posts, failed } = await creaApiOrFail<SocialPost[]>('/api/public/social?limit=24', []);
+
+// TikTok siempre es vertical (9:16). Reels/Shorts también. El resto (video normal de
+// YouTube/Facebook) es horizontal. No tenemos ancho/alto real del video (oEmbed de
+// Facebook/Instagram no está disponible sin token), así que esto es una heurística por
+// patrón de URL, no una medición exacta.
+function inferRatio(network: string, url: string): 'vertical' | 'horizontal' {
+  if (network === 'tiktok') return 'vertical';
+  if (/\/(reel|reels|shorts)\//.test(url)) return 'vertical';
+  return 'horizontal';
+}
 ---
 <EditorialLayout
   title="Producciones CREA"
@@ -26,7 +36,7 @@ const { data: posts, failed } = await creaApiOrFail<SocialPost[]>('/api/public/s
       <div class="prod-grid">
         {posts.map((p) => (
           <article class="prod-card">
-            <SocialEmbed id={p.id} network={p.network} ratio="vertical" />
+            <SocialEmbed id={p.id} network={p.network} ratio={inferRatio(p.network, p.external_url)} />
             <div class="prod-meta">
               <p class="prod-author">{p.author_name || '@' + p.network}</p>
               <p class="prod-title">{p.title || p.external_url}</p>
