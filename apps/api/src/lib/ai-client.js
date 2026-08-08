@@ -155,12 +155,18 @@ async function chatComplete(systemPrompt, userMessage, modelKey, primaryProvider
       return output;
     } catch (error) {
       attempts.push(failedAttempt(error, attempt.provider, attempt.model));
-      if (!canFallback(error)) throw error;
       if (i === chain.length - 1) {
         const combined = new Error(`IA no disponible tras ${attempts.length} intento(s): ${attempts.map((a) => `${a.provider}/${a.model} (${a.reason})`).join(' | ')}`);
         combined.attempts = attempts;
         throw combined;
       }
+      // canFallback() solo aplica quedándose en el MISMO provider: un 401/403 ahí
+      // es un error persistente que reintentar no arregla. Cruzar de provider SÍ
+      // vale la pena pase lo que pase — sus credenciales/estado son independientes
+      // (verificado en prod: un 401 de OpenRouter frenaba la cadena antes de
+      // llegar al último recurso de Nous).
+      const next = chain[i + 1];
+      if (next.provider === attempt.provider && !canFallback(error)) throw error;
     }
   }
 }
