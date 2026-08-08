@@ -125,6 +125,10 @@ function renderRadarDetail(): string {
         `<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid var(--line-soft);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           ${topic.verification_status === 'risk' ? '<p style="width:100%;margin:0 0 8px;font-size:12px;color:var(--danger);">Riesgo alto: generar propuesta requiere confirmación explícita (force).</p>' : ''}
           ${(topic.verification_status === 'checking' || topic.verification_status === 'signal') ? `<p style="width:100%;margin:0 0 8px;font-size:12px;color:var(--accent-text);">${topic.verification_status === 'checking' ? 'En verificación: se puede generar, pero conviene corroborar.' : 'Solo señal: la propuesta puede necesitar más research.'}</p>` : ''}
+          <div class="padmin-field" style="width:100%;margin:0 0 8px;">
+            <label style="font-size:11px;color:var(--text-mute);">Directriz editorial (opcional)</label>
+            <textarea id="proposal-directive-${topic.id}" placeholder="Ej: tono crítico, incluir versión ciudadana. Vacío = default de Configuración → Perfil." style="min-height:50px;font-size:12px;width:100%;box-sizing:border-box;"></textarea>
+          </div>
           <select id="proposal-format-${topic.id}" style="font-size:12px;border:0.5px solid var(--line-soft);border-radius:6px;padding:6px 8px;background:#fff;">
             ${['nota', 'post', 'guion_audio', 'guion_video'].map((f) => `<option value="${f}">${f}</option>`).join('')}
           </select>

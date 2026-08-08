@@ -115,16 +115,18 @@ async function requestOpenRouterTextCompletion(model, systemPrompt, userMessage)
 async function chatComplete(systemPrompt, userMessage, modelKey, primaryProvider) {
   modelKey = modelKey || 'default';
   const primaryModel = MODELS[modelKey];
-  const chain = primaryProvider === 'openrouter' && config.openrouterKey && config.aiOpenRouterFallbackModel
+  const hasOpenRouterFallback = Boolean(config.openrouterKey && config.aiOpenRouterFallbackModel);
+  const hasNousFallback = Boolean(config.aiModelFallback && config.aiModelFallback !== primaryModel);
+  const chain = primaryProvider === 'openrouter' && hasOpenRouterFallback
     ? [{ provider: 'openrouter', model: config.aiOpenRouterFallbackModel }]
     : [{ provider: 'nous', model: primaryModel }];
-  if (chain[0].provider === 'nous' && config.aiModelFallback && config.aiModelFallback !== primaryModel) {
-    chain.push({ provider: 'nous', model: config.aiModelFallback });
-  }
-  if (config.openrouterKey && config.aiOpenRouterFallbackModel && chain[0].provider !== 'openrouter') {
-    chain.push({ provider: 'openrouter', model: config.aiOpenRouterFallbackModel });
-  }
-  if (chain[0].provider === 'openrouter') {
+  if (chain[0].provider === 'nous') {
+    // Cross-provider primero: si Nous falla, probar OpenRouter antes que otro
+    // modelo de Nous — un segundo modelo de Nous casi siempre "funciona" y el
+    // fallback a OpenRouter nunca se alcanzaba (verificado en activity_log).
+    if (hasOpenRouterFallback) chain.push({ provider: 'openrouter', model: config.aiOpenRouterFallbackModel });
+    if (hasNousFallback) chain.push({ provider: 'nous', model: config.aiModelFallback });
+  } else {
     chain.push({ provider: 'nous', model: primaryModel });
   }
   const attempts = [];
@@ -161,6 +163,14 @@ async function chatComplete(systemPrompt, userMessage, modelKey, primaryProvider
       }
     }
   }
+}
+
+// Directriz editorial (por-nota o default global desde editorial_settings): va
+// primero en el user prompt para que la IA la aplique antes de redactar, no
+// después de ya haber generado algo que habría que tirar.
+function directiveBlock(directive) {
+  const clean = directive && String(directive).trim();
+  return clean ? `Directriz editorial — aplícala antes que nada: ${clean}\n\n` : '';
 }
 
 function parseJson(text) {
@@ -296,22 +306,42 @@ Devuelve SOLO un JSON array de longitud ${posts.length}, mismo orden que la entr
 // competitorPosts (opcional): posts de competencia ya recuperados por
 // similarity() en content-engine/index.js — solo para que el modelo elija un
 // ángulo distinto, nunca para copiar/parafrasear su texto (se le dice explícito).
-async function generateProposal(context, format, angle, competitorPosts) {
+async function generateProposal(context, format, angle, competitorPosts, directive) {
   const modelKey = format === 'guion_audio' || format === 'guion_video' ? 'complex' : 'default';
   const system = 'Eres un editor asistente para CREA Contenidos, un medio digital en Perote, Veracruz. Generas propuestas de contenido en español mexicano profesional.';
   const competitorBlock = competitorPosts && competitorPosts.length
     ? `\n\nCobertura reciente de competencia sobre temas similares (SOLO para elegir un ángulo distinto — NO copies ni parafrasees su texto):\n${JSON.stringify(competitorPosts.map((p) => ({ medio: p.source_account, texto: String(p.post_text || '').slice(0, 300) })))}`
     : '';
-  const user = `Tema: ${context.title}\nDescripción: ${context.description || ''}\nAntecedentes: ${context.antecedentes || ''}\nActores: ${context.actores || ''}\nÁngulos sugeridos: ${context.angulos || ''}\nAudiencia: ${context.audiencia || ''}\nFormato pedido: ${format}\nÁngulo editorial: ${angle || 'libre'}${competitorBlock}\n\nGenera una propuesta de contenido. Devuelve SOLO un JSON con: title, body (resumen de 2-3 párrafos), dek (subtítulo de 1 línea), section (una de: ${SECTIONS.join(', ')}), angulo, sensibilidad (verde/amarillo/rojo).`;
+  const user = `${directiveBlock(directive)}Tema: ${context.title}\nDescripción: ${context.description || ''}\nAntecedentes: ${context.antecedentes || ''}\nActores: ${context.actores || ''}\nÁngulos sugeridos: ${context.angulos || ''}\nAudiencia: ${context.audiencia || ''}\nFormato pedido: ${format}\nÁngulo editorial: ${angle || 'libre'}${competitorBlock}\n\nGenera una propuesta de contenido. Devuelve SOLO un JSON con: title, body (resumen de 2-3 párrafos), dek (subtítulo de 1 línea), section (una de: ${SECTIONS.join(', ')}), angulo, sensibilidad (verde/amarillo/rojo).`;
   const { content, ...metadata } = await chatComplete(system, user, modelKey);
   return { proposal: parseJson(content), ...metadata };
 }
 
-async function generateDraft(proposal, instructions) {
+async function generateDraft(proposal, instructions, directive) {
   const system = 'Eres un redactor para CREA Contenidos, medio digital en Perote, Veracruz. Escribes artículos completos en español mexicano, tono profesional pero accesible. Devuelve texto plano, sin Markdown. NO repitas el título al inicio. NO uses emojis. NO uses caracteres CJK o no latinos.';
-  const user = `Título: ${proposal.title}\nDek: ${proposal.dek || ''}\nSección: ${proposal.section || ''}\nÁngulo: ${proposal.angulo || ''}\nCuerpo actual: ${proposal.body || ''}\nInstrucciones del editor: ${instructions || 'ninguna'}\n\nEscribe únicamente el cuerpo completo del artículo, sin repetir el título.`;
+  const user = `${directiveBlock(directive)}Título: ${proposal.title}\nDek: ${proposal.dek || ''}\nSección: ${proposal.section || ''}\nÁngulo: ${proposal.angulo || ''}\nCuerpo actual: ${proposal.body || ''}\nInstrucciones del editor: ${instructions || 'ninguna'}\n\nEscribe únicamente el cuerpo completo del artículo, sin repetir el título.`;
   const { content } = await chatComplete(system, user, 'default');
   return stripLeadingDuplicateTitle(content, proposal.title);
+}
+
+// Chat de edición asistida en el editor: aplica una instrucción del encargado sobre
+// párrafos existentes sin reescribir la nota completa — permite mostrar diff parcial
+// y aceptar/rechazar cambio por cambio en vez de todo-o-nada. modelKey 'default' +
+// primaryProvider 'openrouter' es el mismo patrón que detectTopicsFromMarkdown/
+// enrichFacebookTopics: primer intento en el modelo free de OpenRouter
+// (aiOpenRouterFallbackModel), Nous como respaldo pagado — feature nueva, sin
+// presupuesto propio, con tope de 10 usos/día por usuario en la ruta.
+async function editNoteChat(proposal, paragraphs, instruction, history) {
+  const sensNote = proposal.sensibilidad === 'rojo' || proposal.sensibilidad === 'amarillo'
+    ? ` Nota de sensibilidad ${proposal.sensibilidad}: mantén tono serio, no agregues acusaciones ni datos que no estén ya en el texto.`
+    : '';
+  const system = `Eres un editor de texto asistente para CREA Contenidos, medio digital en Perote, Veracruz. Vas a recibir el cuerpo de una nota dividido en párrafos numerados y una instrucción de edición del encargado. Aplica la instrucción solo donde corresponda.${sensNote} Nunca agregues ni elimines párrafos: la salida debe referirse al mismo número de párrafos, en el mismo orden. Español mexicano profesional, sin emojis, sin Markdown. Devuelve SOLO un JSON: {"changes": [{"index": <número de párrafo>, "text": "<párrafo reescrito completo>"}], "note": "<1 línea explicando qué cambiaste>"}. En "changes" incluye SOLO los párrafos que modificaste — omite los que dejas igual.`;
+  const historyBlock = history && history.length
+    ? `\nConversación previa (contexto, no repitas cambios ya aplicados):\n${history.map((h) => `${h.role === 'user' ? 'Editor' : 'IA'}: ${h.content}`).join('\n')}\n`
+    : '';
+  const user = `Título: ${proposal.title}\nSección: ${proposal.section || ''}\n\nPárrafos actuales:\n${paragraphs.map((p, i) => `[${i}] ${p}`).join('\n\n')}\n${historyBlock}\nInstrucción del editor: ${instruction}`;
+  const { content, ...metadata } = await chatComplete(system, user, 'default', 'openrouter');
+  return { result: parseJson(content), ...metadata };
 }
 
 async function qaCheck(title, body) {
@@ -373,4 +403,4 @@ async function logActivity(pool, action, detail, userId, status, metadata) {
   );
 }
 
-module.exports = { chatComplete, requestNousCompletion, requestOpenRouterTextCompletion, detectTopics, detectTopicsFromMarkdown, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, qaCheck, generateNewsletterEditorial, generateImage, logActivity, stripLeadingDuplicateTitle };
+module.exports = { chatComplete, requestNousCompletion, requestOpenRouterTextCompletion, detectTopics, detectTopicsFromMarkdown, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, editNoteChat, qaCheck, generateNewsletterEditorial, generateImage, logActivity, stripLeadingDuplicateTitle };

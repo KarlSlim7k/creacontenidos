@@ -252,6 +252,20 @@
 .padmin-editor-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; margin-bottom: 18px; }
 @media (max-width: 900px) { .padmin-editor-cols { grid-template-columns: 1fr; } .padmin-editor-meta { position: static; } }
 .padmin-preview-frame { width: 100%; height: clamp(320px, 70vh, 640px); border: 0.5px solid var(--line-soft); border-radius: 6px; background: #fff; }
+.padmin-chat { border-top: 0.5px solid var(--line-soft); padding-top: 16px; }
+.padmin-chat-messages { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; margin-bottom: 8px; }
+.padmin-chat-msg { font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 6px; }
+.padmin-chat-msg-user { background: var(--bg-admin); color: var(--text); align-self: flex-end; }
+.padmin-chat-msg-assistant { background: var(--bg-3); color: var(--text); }
+.padmin-chat-empty { font-size: 12px; color: var(--text-mute); margin: 0; }
+.padmin-chat-error { font-size: 12px; color: var(--danger); margin: 8px 0 0; }
+.padmin-chat-input { flex: 1; font-size: 12px; padding: 8px 10px; border: 0.5px solid var(--line-soft); border-radius: 6px; background: var(--bg-admin); color: var(--text); resize: vertical; font-family: inherit; }
+.padmin-chat-legend { font-size: 10px; color: var(--text-mute); margin: 10px 0 0; }
+.padmin-chat-pending { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.padmin-chat-hunk { border: 0.5px solid var(--line-soft); border-radius: 6px; padding: 10px; background: var(--surface); }
+.padmin-chat-hunk-label { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin: 0 0 6px; }
+.padmin-chat-hunk-old { font-size: 12px; color: var(--danger); text-decoration: line-through; margin: 0 0 4px; }
+.padmin-chat-hunk-new { font-size: 12px; color: var(--brand); margin: 0; }
 
 /* Botón hamburguesa: solo existe en móvil. */
 .padmin-menu-toggle { display: none; background: none; border: none; cursor: pointer; color: var(--text-2); padding: 6px; border-radius: 6px; margin-left: auto; }

@@ -54,6 +54,50 @@ router.get('/roles', requireAuth, requireRole('director'), (req, res) => {
   res.json(ROLE_MODULES);
 });
 
+// --- Perfil propio (Configuración → Perfil, cualquier usuario autenticado) ---
+
+router.get('/me', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('SELECT id, name, email, role, created_at FROM users WHERE id = $1', [req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/auth/me — a diferencia de PATCH /users/:id (director editando a otros),
+// nunca acepta `role` ni `active`: un usuario no se autoasciende ni se reactiva.
+router.patch('/me', requireAuth, async (req, res, next) => {
+  try {
+    const { name, email, password } = req.body || {};
+    if ([name, email, password].every((v) => v === undefined)) {
+      return res.status(400).json({ error: 'Nada que actualizar' });
+    }
+    const errors = {};
+    if (name !== undefined && (typeof name !== 'string' || !name.trim())) errors.name = 'Campo requerido';
+    if (email !== undefined && (typeof email !== 'string' || !EMAIL_RE.test(email.trim()))) errors.email = 'Formato de email inválido';
+    if (password !== undefined && (typeof password !== 'string' || password.length < 8)) errors.password = 'Mínimo 8 caracteres';
+    if (Object.keys(errors).length) return res.status(400).json({ error: 'Datos inválidos', fields: errors });
+
+    const passwordHash = password === undefined ? null : await bcrypt.hash(password, 10);
+    const { rows } = await pool.query(
+      `UPDATE users SET
+         name = COALESCE($1, name),
+         email = COALESCE($2, email),
+         password_hash = COALESCE($3, password_hash)
+       WHERE id = $4
+       RETURNING id, name, email, role, created_at`,
+      [name === undefined ? null : name.trim(), email === undefined ? null : email.trim().toLowerCase(),
+        passwordHash, req.user.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'Datos inválidos', fields: { email: 'Ya existe un usuario con ese correo' } });
+    next(err);
+  }
+});
+
 // --- Usuarios (Configuración → Usuarios, solo director) ---
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -225,6 +269,30 @@ adminRouter.patch('/site-metrics', requireAuth, requireRole('director'), async (
         Number.isFinite(Number(b.audience_age_25_44_pct)) ? Number(b.audience_age_25_44_pct) : null,
         Number.isFinite(Number(b.audience_age_45_plus_pct)) ? Number(b.audience_age_45_plus_pct) : null,
       ]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET/PATCH /api/admin/editorial-settings — Configuración → Perfil → Directriz editorial
+// (default_directive global, precarga el campo por-nota cuando esta no trae la suya).
+adminRouter.get('/editorial-settings', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM editorial_settings WHERE id = 1');
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.patch('/editorial-settings', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const { default_directive } = req.body || {};
+    const { rows } = await pool.query(
+      `UPDATE editorial_settings SET default_directive = $1, updated_at = now() WHERE id = 1 RETURNING *`,
+      [default_directive == null ? null : String(default_directive).trim() || null]
     );
     res.json(rows[0]);
   } catch (err) {

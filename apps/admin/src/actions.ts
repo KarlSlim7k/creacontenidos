@@ -5,6 +5,7 @@ import {
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
+  type EditChatHunk, type MyProfile, type EditorialSettings,
 } from './store';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
 import { readNewsletterForm } from './screens/hermes';
@@ -72,7 +73,11 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   },
   'goto': (el) => goTo(attr(el, 'data-id') as Screen, el.getAttribute('data-pid') ? Number(el.getAttribute('data-pid')) : null),
   'open-editor': (el) => goTo('editor', Number(attr(el, 'data-id'))),
-  'close-editor': () => setState({ editorProposalId: null, editorDraft: null }),
+  'close-editor': () => setState({
+    editorProposalId: null, editorDraft: null,
+    editChatMessages: [], editChatPending: [], editChatModel: null, editChatProvider: null,
+    editChatUsesLeft: null, editChatError: null,
+  }),
   'toggle-notifications': () => {
     const opening = !state.showNotifications;
     setState({ showNotifications: opening });
@@ -195,7 +200,7 @@ const clickHandlers: Record<string, (el: Element) => void> = {
     if (!state.editorProposalId) return;
     state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
     setState({ generatingDraft: true });
-    adminApi<{ body: string }>('/api/content/generate-draft', { method: 'POST', body: { proposal_id: state.editorProposalId } })
+    adminApi<{ body: string }>('/api/content/generate-draft', { method: 'POST', body: { proposal_id: state.editorProposalId, editorial_directive: state.editorDraft.editorial_directive } })
       .then((res) => {
         if (state.editorDraft) state.editorDraft.body = res.body;
         setState({ generatingDraft: false });
@@ -212,7 +217,10 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'toggle-mobile-nav': () => setState({ mobileNavOpen: !state.mobileNavOpen }),
   'delete-borrador': (el) => submitDeleteBorrador(Number(attr(el, 'data-id'))),
   'reopen-published': (el) => submitReopenPublished(Number(attr(el, 'data-id'))),
-  'delete-published': (el) => submitDeletePublished(Number(attr(el, 'data-id')), attr(el, 'data-title')),
+  'open-delete-published': (el) => setState({ deletePublishedId: Number(attr(el, 'data-id')), deletePublishedError: null }),
+  'close-delete-published': () => setState({ deletePublishedId: null, deletePublishedError: null }),
+  'confirm-delete-published': (el) => submitDeletePublished(Number(attr(el, 'data-id'))),
+  'copy-delete-title': (el) => copyToClipboard(attr(el, 'data-text'), el as HTMLButtonElement),
   'generate-image': () => {
     if (!state.editorProposalId) return;
     state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
@@ -246,6 +254,52 @@ const clickHandlers: Record<string, (el: Element) => void> = {
       .catch((err: ApiError) => { setState({ qaBusy: false, errorMsg: err.message }); });
   },
   'close-qa': () => setState({ qaResult: null }),
+  'send-edit-chat': () => {
+    if (!state.editorProposalId || !state.editorDraft) return;
+    const input = document.getElementById('edit-chat-input') as HTMLTextAreaElement;
+    const instruction = input.value.trim();
+    if (!instruction) return;
+    // Sincroniza el form antes de tocar setState: si no, el re-render de abajo pisa
+    // cualquier campo que el encargado haya tocado a mano (mismo patrón que generate-image).
+    state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
+    const paragraphs = state.editorDraft.body.split(/\n\s*\n/).filter(Boolean);
+    const history = state.editChatMessages.slice(-6);
+    state.editChatMessages = state.editChatMessages.concat([{ role: 'user', content: instruction }]);
+    setState({ editChatBusy: true, editChatError: null });
+    adminApi<{ changes: { index: number; text: string }[]; note: string; model: string; provider: string; uses_left: number }>(
+      '/api/content/edit-note',
+      { method: 'POST', body: { proposal_id: state.editorProposalId, instruction, body: state.editorDraft.body, history } }
+    ).then((res) => {
+      const hunks: EditChatHunk[] = res.changes
+        .filter((c) => c.index >= 0 && c.index < paragraphs.length)
+        .map((c) => ({ index: c.index, original: paragraphs[c.index], suggested: c.text }));
+      state.editChatMessages = state.editChatMessages.concat([{ role: 'assistant', content: res.note || `${hunks.length} párrafo(s) propuesto(s).` }]);
+      setState({
+        editChatBusy: false, editChatPending: hunks,
+        editChatModel: res.model, editChatProvider: res.provider, editChatUsesLeft: res.uses_left,
+      });
+    }).catch((err: ApiError) => { setState({ editChatBusy: false, editChatError: err.message }); });
+  },
+  'accept-edit-hunk': (el) => {
+    if (!state.editorDraft) return;
+    const idx = Number(attr(el, 'data-index'));
+    const hunk = state.editChatPending.find((h) => h.index === idx);
+    state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
+    if (hunk) {
+      const paragraphs = state.editorDraft.body.split(/\n\s*\n/).filter(Boolean);
+      if (idx < paragraphs.length) {
+        paragraphs[idx] = hunk.suggested;
+        state.editorDraft.body = paragraphs.join('\n\n');
+      }
+    }
+    setState({ editChatPending: state.editChatPending.filter((h) => h.index !== idx) });
+  },
+  'reject-edit-hunk': (el) => {
+    if (!state.editorDraft) return;
+    state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
+    const idx = Number(attr(el, 'data-index'));
+    setState({ editChatPending: state.editChatPending.filter((h) => h.index !== idx) });
+  },
   'preview-nota': () => {
     if (!state.editorDraft) return;
     const previewFields = readEditorForm();
@@ -299,12 +353,14 @@ const clickHandlers: Record<string, (el: Element) => void> = {
       if (!ok) return;
     }
     const format = document.getElementById('proposal-format-' + topicId) as HTMLSelectElement | null;
+    const directive = document.getElementById('proposal-directive-' + topicId) as HTMLTextAreaElement | null;
     setState({ generatingProposal: true });
-    const body: { topic_id: number; format: string; force?: boolean } = {
+    const body: { topic_id: number; format: string; force?: boolean; editorial_directive?: string } = {
       topic_id: topicId,
       format: format ? format.value : 'nota',
     };
     if (forceRisk) body.force = true;
+    if (directive && directive.value.trim()) body.editorial_directive = directive.value.trim();
     adminApi<Proposal & { warnings?: string[] }>('/api/content/generate-proposal', { method: 'POST', body })
       .then((proposal) => {
         state.data.proposalsByKey = {};
@@ -377,7 +433,7 @@ export function submitDraft(id: number, thenSubmitReview: boolean) {
           title: updated.title || '', body: updated.body || '', section: updated.section || '', dek: updated.dek || '', slug: updated.slug || '',
           cover_image_url: updated.cover_image_url || '', author_name: updated.author_name || '',
           is_sponsored: Boolean(updated.is_sponsored), sponsor_name: updated.sponsor_name || '', image_prompt: updated.image_prompt || '',
-          sensibilidad: updated.sensibilidad || null,
+          sensibilidad: updated.sensibilidad || null, editorial_directive: updated.editorial_directive || '',
         }, successMsg: 'Borrador guardado.' });
         return;
       }
@@ -624,16 +680,26 @@ export function submitReopenPublished(id: number) {
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
 }
 
-export function submitDeletePublished(id: number, title: string) {
-  const typed = prompt(`Esta nota está VIVA en el sitio. Para eliminarla escribe su título exacto:\n\n${title}`);
-  if (typed !== title) {
-    if (typed !== null) alert('El título no coincide. No se eliminó la nota.');
+function copyToClipboard(text: string, btn: HTMLButtonElement) {
+  navigator.clipboard.writeText(text).then(() => {
+    const original = btn.textContent;
+    btn.textContent = 'Copiado ✓';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  });
+}
+
+export function submitDeletePublished(id: number) {
+  const piece = (state.data.proposalsByKey.published || []).filter((p) => p.id === id)[0];
+  if (!piece) return;
+  const typed = (document.getElementById('delete-published-input') as HTMLInputElement | null)?.value || '';
+  if (typed !== piece.title) {
+    setState({ deletePublishedError: 'El título no coincide. Revísalo o usa el botón de copiar.' });
     return;
   }
   adminApi('/api/editorial/proposals/' + id, { method: 'DELETE' })
     .then(() => {
       setProposalsKey('published', (state.data.proposalsByKey.published || []).filter((p) => p.id !== id));
-      setState({ successMsg: 'Nota publicada eliminada.' });
+      setState({ deletePublishedId: null, deletePublishedError: null, successMsg: 'Nota publicada eliminada.' });
     })
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
 }
@@ -769,6 +835,29 @@ export function handleSubmit(e: SubmitEvent) {
     } }).then((updated) => {
       setState({ errorMsg: null, successMsg: 'Métricas actualizadas.' });
       setData({ siteMetrics: updated });
+    }).catch((err: ApiError) => {
+      setState({ errorMsg: err.message });
+    });
+  } else if (action === 'submit-my-profile') {
+    e.preventDefault();
+    const pw = q('#me-password').value;
+    adminApi<MyProfile>('/api/auth/me', { method: 'PATCH', body: {
+      name: q('#me-name').value.trim(),
+      email: q('#me-email').value.trim(),
+      ...(pw ? { password: pw } : {}),
+    } }).then((updated) => {
+      setState({ errorMsg: null, successMsg: 'Perfil actualizado.' });
+      setData({ myProfile: updated });
+    }).catch((err: ApiError) => {
+      setState({ errorMsg: err.message });
+    });
+  } else if (action === 'submit-editorial-settings') {
+    e.preventDefault();
+    adminApi<EditorialSettings>('/api/admin/editorial-settings', { method: 'PATCH', body: {
+      default_directive: q<HTMLTextAreaElement>('#es-directive').value.trim(),
+    } }).then((updated) => {
+      setState({ errorMsg: null, successMsg: 'Directriz editorial actualizada.' });
+      setData({ editorialSettings: updated });
     }).catch((err: ApiError) => {
       setState({ errorMsg: err.message });
     });

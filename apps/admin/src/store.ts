@@ -32,6 +32,7 @@ export interface Proposal {
   is_sponsored: boolean;
   sponsor_name: string | null;
   image_prompt: string | null;
+  editorial_directive: string | null;
   angulo: string | null;
   sensibilidad: string | null;
   origin: string | null;
@@ -112,6 +113,19 @@ export interface AdminUser {
   role: string;
   active: boolean;
   created_at: string;
+}
+
+export interface MyProfile {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  created_at: string;
+}
+
+export interface EditorialSettings {
+  default_directive: string | null;
+  updated_at: string;
 }
 
 export type RoleModules = Record<string, string[]>;
@@ -326,6 +340,8 @@ export interface AdminData {
   topicSummary: TopicSummary | null;
   siteMetrics: SiteMetrics | null;
   fbAccounts: FbAccount[] | null;
+  myProfile: MyProfile | null;
+  editorialSettings: EditorialSettings | null;
 }
 
 export type Screen =
@@ -352,6 +368,18 @@ export interface EditorDraft {
   sponsor_name: string;
   image_prompt: string;
   sensibilidad: string | null;
+  editorial_directive: string;
+}
+
+export interface EditChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface EditChatHunk {
+  index: number;
+  original: string;
+  suggested: string;
 }
 
 export interface State {
@@ -389,6 +417,13 @@ export interface State {
   generatingDraft: boolean;
   qaResult: QaResult | null;
   qaBusy: boolean;
+  editChatMessages: EditChatMessage[];
+  editChatPending: EditChatHunk[];
+  editChatBusy: boolean;
+  editChatModel: string | null;
+  editChatProvider: string | null;
+  editChatUsesLeft: number | null;
+  editChatError: string | null;
   notaPreviewHtml: string | null;
   editorImagePrompt: string | null;
   generatingImage: boolean;
@@ -396,6 +431,8 @@ export interface State {
   transparency: Record<string, unknown>;
   comentarioPieceId: number | null;
   comentarioText: string;
+  deletePublishedId: number | null;
+  deletePublishedError: string | null;
   pickerPreview: Proposal | null;
   selectedRadarId: number | null;
   configTab: string;
@@ -457,6 +494,7 @@ export function initialData(): AdminData {
     newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null,
     distLog: null, distChannels: null, competitors: null, radarSources: null, radarStats: null,
     topicSummary: null, siteMetrics: null, fbAccounts: null,
+    myProfile: null, editorialSettings: null,
   };
 }
 
@@ -471,9 +509,13 @@ export const state: State = {
   leadsStatus: 'todos', leadsPage: 0, produccionesPage: 0,
   propuestaRejecting: null,
   editorProposalId: null, editorDraft: null,
-  generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false, notaPreviewHtml: null,
+  generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false,
+  editChatMessages: [], editChatPending: [], editChatBusy: false,
+  editChatModel: null, editChatProvider: null, editChatUsesLeft: null, editChatError: null,
+  notaPreviewHtml: null,
   editorImagePrompt: null, generatingImage: false, suggestingSlug: false,
   transparency: {}, comentarioPieceId: null, comentarioText: '',
+  deletePublishedId: null, deletePublishedError: null,
   pickerPreview: null,
   selectedRadarId: null,
   configTab: 'usuarios', showNotifications: false,
@@ -686,11 +728,15 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     if (id) {
       adminApi<Proposal>(`/api/editorial/proposals/${id}`).then((p) => {
         setState({
-          editorProposalId: id, notaPreviewHtml: null, editorImagePrompt: null, editorDraft: {
+          editorProposalId: id, notaPreviewHtml: null, editorImagePrompt: null,
+          editChatMessages: [], editChatPending: [], editChatModel: null, editChatProvider: null,
+          editChatUsesLeft: null, editChatError: null,
+          editorDraft: {
             title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || '',
             cover_image_url: p.cover_image_url || '', author_name: p.author_name || state.user!.name,
             is_sponsored: Boolean(p.is_sponsored), sponsor_name: p.sponsor_name || '',
             image_prompt: p.image_prompt || '', sensibilidad: p.sensibilidad || null,
+            editorial_directive: p.editorial_directive || '',
           },
         });
       }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
@@ -740,6 +786,10 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     if (state.configTab === 'servicios') adminApi<Service[]>('/api/commercial/services').then((r) => { setData({ services: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     if (state.configTab === 'cuentas-fb') adminApi<FbAccount[]>('/api/listening/competitors/accounts').then((r) => { setData({ fbAccounts: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     if (state.configTab === 'metricas-sitio') adminApi<SiteMetrics>('/api/admin/site-metrics').then((r) => { setData({ siteMetrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (state.configTab === 'perfil') {
+      adminApi<MyProfile>('/api/auth/me').then((r) => { setData({ myProfile: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+      adminApi<EditorialSettings>('/api/admin/editorial-settings').then((r) => { setData({ editorialSettings: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    }
   } else if (screen === 'hermes') {
     adminApi<ActivityEntry[]>('/api/admin/activity?limit=20').then((r) => { setData({ activity: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'pipeline') {

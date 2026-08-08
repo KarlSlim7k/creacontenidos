@@ -35,7 +35,9 @@ module.exports = {
   aiModelComplex: process.env.AI_MODEL_COMPLEX || 'minimax/minimax-m3',
   aiModelQa: process.env.AI_MODEL_QA || 'openai/gpt-5-nano',
   aiModelFallback: process.env.AI_MODEL_FALLBACK || 'inclusionai/ling-3.0-flash:free',
-  aiOpenRouterFallbackModel: process.env.AI_OPENROUTER_FALLBACK_MODEL || 'inclusionai/ling-3.0-flash:free',
+  // inclusionai/ling-3.0-flash:free dejó de ser gratis en OpenRouter (404 "usa la
+  // versión paga", verificado 2026-08-08) — reemplazado por otro modelo free vivo.
+  aiOpenRouterFallbackModel: process.env.AI_OPENROUTER_FALLBACK_MODEL || 'google/gemma-4-31b-it:free',
   aiTextTimeoutMs: Number.isFinite(configuredAiTextTimeoutMs) && configuredAiTextTimeoutMs >= 1000 && configuredAiTextTimeoutMs <= 120000
     ? configuredAiTextTimeoutMs
     : 45000,

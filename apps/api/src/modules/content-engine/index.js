@@ -2,7 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const pool = require('../../db/pool');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateProposal, generateDraft, qaCheck, generateImage, logActivity } = require('../../lib/ai-client');
+const { generateProposal, generateDraft, editNoteChat, qaCheck, generateImage, logActivity } = require('../../lib/ai-client');
 const { sendPushToRoles } = require('../../lib/push');
 
 const router = express.Router();
@@ -25,7 +25,7 @@ const aiLimiter = rateLimit({
 //  2) contexto de competencia — hasta 3 posts similares para ángulo distinto.
 router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
-    const { topic_id, format, angle, force } = req.body || {};
+    const { topic_id, format, angle, force, editorial_directive } = req.body || {};
     if (!topic_id) return res.status(400).json({ error: 'Datos inválidos', fields: { topic_id: 'Requerido' } });
     const { rows: topics } = await pool.query('SELECT * FROM topics WHERE id = $1', [topic_id]);
     if (!topics[0]) return res.status(404).json({ error: 'Topic no encontrado' });
@@ -72,11 +72,19 @@ router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director'
       [topic.title]
     );
 
-    const { proposal, usage, requestedModel, model, provider, latencyMs, usedFallback, fallbackReason, attempts } = await generateProposal(topic, format || 'nota', angle, competitorContext);
+    // Directriz por-nota (viaja desde el cliente) o, si no se manda, el default
+    // global de editorial_settings — ambos opcionales, sin directriz = voz estándar.
+    let directive = editorial_directive != null ? String(editorial_directive).trim() : '';
+    if (!directive) {
+      const { rows: settingsRows } = await pool.query('SELECT default_directive FROM editorial_settings WHERE id = 1');
+      directive = (settingsRows[0] && settingsRows[0].default_directive) || '';
+    }
+
+    const { proposal, usage, requestedModel, model, provider, latencyMs, usedFallback, fallbackReason, attempts } = await generateProposal(topic, format || 'nota', angle, competitorContext, directive);
     const { rows } = await pool.query(
-      `INSERT INTO content_proposals (topic_id, format, title, body, dek, section, angulo, sensibilidad, origin, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Generado con IA', 'propuesta') RETURNING *`,
-      [topic_id, format || 'nota', proposal.title, proposal.body, proposal.dek, proposal.section, proposal.angulo, proposal.sensibilidad]
+      `INSERT INTO content_proposals (topic_id, format, title, body, dek, section, angulo, sensibilidad, origin, status, editorial_directive)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Generado con IA', 'propuesta', $9) RETURNING *`,
+      [topic_id, format || 'nota', proposal.title, proposal.body, proposal.dek, proposal.section, proposal.angulo, proposal.sensibilidad, directive || null]
     );
     const warnings = [];
     if (vStatus === 'checking' || vStatus === 'signal') {
@@ -152,15 +160,18 @@ router.get('/ai-usage', requireAuth, requireRole('director'), async (req, res, n
 // POST /api/content/generate-draft — genera el borrador extendido de una propuesta (solo en estado 'borrador').
 router.post('/generate-draft', requireAuth, aiLimiter, async (req, res, next) => {
   try {
-    const { proposal_id, instructions } = req.body || {};
+    const { proposal_id, instructions, editorial_directive } = req.body || {};
     if (!proposal_id) return res.status(400).json({ error: 'Datos inválidos', fields: { proposal_id: 'Requerido' } });
     const { rows } = await pool.query('SELECT * FROM content_proposals WHERE id = $1', [proposal_id]);
     if (!rows[0]) return res.status(404).json({ error: 'Propuesta no encontrada' });
     if (rows[0].status !== 'borrador') {
       return res.status(409).json({ error: `Solo se puede generar borrador cuando el estado es 'borrador' (actual: '${rows[0].status}')` });
     }
-    const body = await generateDraft(rows[0], instructions);
-    await pool.query('UPDATE content_proposals SET body = $1, updated_at = now() WHERE id = $2', [body, proposal_id]);
+    // editorial_directive puede llegar del cliente (editor la cambió sin guardar
+    // todavía) — si no llega, usa la ya persistida en la propuesta.
+    const directive = editorial_directive !== undefined ? String(editorial_directive || '').trim() : (rows[0].editorial_directive || '');
+    const body = await generateDraft(rows[0], instructions, directive);
+    await pool.query('UPDATE content_proposals SET body = $1, editorial_directive = $2, updated_at = now() WHERE id = $3', [body, directive || null, proposal_id]);
     await logActivity(pool, 'generate_draft', `Borrador generado para propuesta ${proposal_id}`, req.user.id, 'exito', { proposal_id });
     res.json({ body });
   } catch (err) {
@@ -216,6 +227,48 @@ router.post('/qa-check', requireAuth, aiLimiter, async (req, res, next) => {
     const result = await qaCheck(rows[0].title, rows[0].body);
     await logActivity(pool, 'qa_check', `QA para propuesta ${proposal_id}`, req.user.id, 'exito', { score: result.score, issueCount: (result.issues || []).length });
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/content/edit-note — chat de edición asistida: instrucción en lenguaje
+// natural → cambios propuestos por párrafo (diff parcial; el front decide aplicar o
+// descartar cada uno). Tope propio de 10 usos/día por usuario (más estricto que
+// aiLimiter, que es anti-ráfaga genérico) contado sobre activity_log — el mismo
+// registro sirve de bitácora: qué pidió cada encargado y qué contestó la IA.
+// body viaja desde el cliente (no se lee de la BD): refleja el texto sin guardar
+// que el encargado tiene en el textarea, igual que /generate-image con el prompt.
+const EDIT_NOTE_DAILY_LIMIT = 10;
+router.post('/edit-note', requireAuth, aiLimiter, async (req, res, next) => {
+  try {
+    const { proposal_id, instruction, body, history } = req.body || {};
+    if (!proposal_id) return res.status(400).json({ error: 'Datos inválidos', fields: { proposal_id: 'Requerido' } });
+    if (typeof instruction !== 'string' || !instruction.trim()) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { instruction: 'Requerido' } });
+    }
+    const { rows: [used] } = await pool.query(
+      `SELECT count(*)::int AS count FROM activity_log
+       WHERE action = 'edit_note_chat' AND user_id = $1 AND created_at >= CURRENT_DATE`,
+      [req.user.id]
+    );
+    if (used.count >= EDIT_NOTE_DAILY_LIMIT) {
+      return res.status(429).json({ error: `Límite diario de ${EDIT_NOTE_DAILY_LIMIT} usos del asistente de edición alcanzado. Vuelve mañana.` });
+    }
+    const { rows } = await pool.query('SELECT title, section, sensibilidad, status, body FROM content_proposals WHERE id = $1', [proposal_id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Propuesta no encontrada' });
+    if (rows[0].status !== 'borrador') {
+      return res.status(409).json({ error: `Solo se puede editar con IA cuando el estado es 'borrador' (actual: '${rows[0].status}')` });
+    }
+    const bodyText = String(body != null ? body : rows[0].body || '').trim();
+    const paragraphs = bodyText.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+    if (!paragraphs.length) return res.status(400).json({ error: 'La nota no tiene párrafos que editar' });
+    const historyTrimmed = Array.isArray(history) ? history.slice(-6) : [];
+    const { result, model, provider, usedFallback } = await editNoteChat(rows[0], paragraphs, instruction.trim(), historyTrimmed);
+    await logActivity(pool, 'edit_note_chat', `Chat de edición: ${instruction.trim().slice(0, 140)}`, req.user.id, 'exito', {
+      proposal_id, model, provider, used_fallback: usedFallback, changes: (result.changes || []).length,
+    });
+    res.json({ changes: result.changes || [], note: result.note || '', model, provider, uses_left: EDIT_NOTE_DAILY_LIMIT - used.count - 1 });
   } catch (err) {
     next(err);
   }

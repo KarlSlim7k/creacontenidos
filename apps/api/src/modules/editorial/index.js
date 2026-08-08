@@ -86,7 +86,7 @@ router.delete('/ideas/:id', requireAuth, requireRole('director'), async (req, re
 // Pipeline: 'propuesta' → 'borrador' → 'en_revision' → 'published' (gate) | 'rechazada'.
 
 const PROPOSAL_FIELDS = `id, topic_id, format, title, body, dek, section, slug, cover_image_url,
-  author_name, is_sponsored, sponsor_name, image_prompt,
+  author_name, is_sponsored, sponsor_name, image_prompt, editorial_directive,
   angulo, sensibilidad, origin, status, author_id, review_comment, published_at, created_at, updated_at, view_count`;
 
 // GET /api/editorial/proposals?status=a,b&author_id=
@@ -173,7 +173,7 @@ router.patch('/proposals/:id/reject', requireAuth, requireRole('director', 'prod
 });
 
 // Editor: guardar borrador (título, cuerpo, sección, SEO, imagen, autor, patrocinio...). Solo mientras está en 'borrador'.
-const DRAFT_FIELDS = { title: 400, dek: 300, section: 40, slug: 200, cover_image_url: 500, author_name: 200, sponsor_name: 200 };
+const DRAFT_FIELDS = { title: 400, dek: 300, section: 40, slug: 200, cover_image_url: 500, author_name: 200, sponsor_name: 200, editorial_directive: 2000 };
 router.patch('/proposals/:id/draft', requireAuth, async (req, res, next) => {
   try {
     if (!(await requireStatus(req.params.id, 'borrador', res))) return;

@@ -243,9 +243,37 @@ export function renderConfigMetricas(): string {
   </div>`;
 }
 
+export function renderConfigPerfil(): string {
+  const me = state.data.myProfile;
+  const settings = state.data.editorialSettings;
+  if (!me || !settings) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
+    <p class="padmin-section-title" style="margin-bottom:10px;">Mi cuenta</p>
+    <form data-action="submit-my-profile" class="padmin-grid2" style="gap:10px;">
+      <div class="padmin-field" style="margin:0;"><label>Nombre</label><input id="me-name" type="text" required value="${esc(me.name)}"></div>
+      <div class="padmin-field" style="margin:0;"><label>Correo</label><input id="me-email" type="email" required value="${esc(me.email)}"></div>
+      <div class="padmin-field" style="margin:0;"><label>Rol</label><input type="text" value="${esc(roleLabels[me.role] || me.role)}" disabled></div>
+      <div class="padmin-field" style="margin:0;"><label>Nueva contraseña (opcional)</label><input id="me-password" type="password" placeholder="Dejar vacío para no cambiar"></div>
+      ${state.errorMsg ? `<p style="grid-column:1 / -1;font-size:12px;color:var(--danger);margin:0;">${esc(state.errorMsg)}</p>` : ''}
+      <div style="grid-column:1 / -1;"><button type="submit" class="padmin-btn padmin-btn-sm">Guardar cambios</button></div>
+    </form>
+  </div>
+  <div class="padmin-card" style="max-width:480px;padding:20px;">
+    <p class="padmin-section-title" style="margin-bottom:6px;">Directriz editorial</p>
+    <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Instrucción general que la IA aplica antes de redactar cualquier propuesta o borrador — precarga el campo por-nota en RADAR y el Editor cuando esa nota no trae una directriz propia. Vacío = voz estándar de CREA.</p>
+    <form data-action="submit-editorial-settings">
+      <div class="padmin-field" style="margin:0 0 12px;">
+        <textarea id="es-directive" style="min-height:110px;" placeholder="Ej: priorizar impacto económico sobre político. Incluir siempre versión ciudadana, no solo oficial.">${esc(settings.default_directive || '')}</textarea>
+      </div>
+      <button type="submit" class="padmin-btn padmin-btn-sm">Guardar</button>
+    </form>
+    <p style="font-size:11px;color:var(--mute-2);margin:12px 0 0;">Actualizado ${esc(relativeTime(settings.updated_at))}.</p>
+  </div>`;
+}
+
 export function renderConfiguracion(): string {
   const tab = state.configTab;
-  const body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : (tab === 'metricas-sitio' ? renderConfigMetricas() : (tab === 'cuentas-fb' ? renderConfigCuentasFb() : renderConfigUsuarios())))));
+  const body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : (tab === 'metricas-sitio' ? renderConfigMetricas() : (tab === 'cuentas-fb' ? renderConfigCuentasFb() : (tab === 'perfil' ? renderConfigPerfil() : renderConfigUsuarios()))))));
   const tabBtn = (id: string, label: string) => {
     const active = tab === id;
     return `<button type="button" class="padmin-tab${active ? ' active' : ''}" data-action="set-config-tab" data-tab="${id}">${label}</button>`;
@@ -253,7 +281,7 @@ export function renderConfiguracion(): string {
   return `<div>
     <h1 class="padmin-h1">Configuración</h1>
     <p class="padmin-lede">Usuarios, permisos e integraciones del panel. Solo visible para Director.</p>
-    <div class="padmin-tabs">${tabBtn('usuarios', 'Usuarios')}${tabBtn('permisos', 'Permisos')}${tabBtn('integraciones', 'Integraciones')}${tabBtn('newsletter', 'Newsletter')}${tabBtn('servicios', 'Servicios')}${tabBtn('cuentas-fb', 'Cuentas FB')}${tabBtn('metricas-sitio', 'Métricas del sitio')}</div>
+    <div class="padmin-tabs">${tabBtn('usuarios', 'Usuarios')}${tabBtn('permisos', 'Permisos')}${tabBtn('integraciones', 'Integraciones')}${tabBtn('newsletter', 'Newsletter')}${tabBtn('servicios', 'Servicios')}${tabBtn('cuentas-fb', 'Cuentas FB')}${tabBtn('metricas-sitio', 'Métricas del sitio')}${tabBtn('perfil', 'Perfil')}</div>
     ${body}
   </div>`;
 }

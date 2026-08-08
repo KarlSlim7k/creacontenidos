@@ -59,7 +59,7 @@ export function renderPublicadas(): string {
       </div>
       <span style="display:flex;gap:6px;flex-wrap:wrap;">
         <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="reopen-published" data-id="${p.id}">Editar</button>
-        ${state.user!.role === 'director' ? `<button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-published" data-id="${p.id}" data-title="${esc(p.title)}">Eliminar</button>` : ''}
+        ${state.user!.role === 'director' ? `<button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="open-delete-published" data-id="${p.id}">Eliminar</button>` : ''}
       </span>
     </div>`
   ).join('');
@@ -67,5 +67,31 @@ export function renderPublicadas(): string {
     <h1 class="padmin-h1">Publicadas</h1>
     <p class="padmin-lede">Notas visibles en el sitio. "Editar" la regresa a borrador y sale del sitio hasta que se vuelva a publicar tras pasar por revisión.</p>
     <div class="padmin-card">${rows || '<div class="padmin-row"><p class="padmin-row-meta">Todavía no hay notas publicadas.</p></div>'}</div>
+    ${renderDeletePublishedModal()}
+  </div>`;
+}
+
+function renderDeletePublishedModal(): string {
+  if (state.deletePublishedId == null) return '';
+  const published = state.data.proposalsByKey.published || [];
+  const piece = published.filter((p: Proposal) => p.id === state.deletePublishedId)[0];
+  if (!piece) return '';
+  const errorHtml = state.deletePublishedError ? `<p style="font-size:12px;color:var(--danger);margin:0 0 10px;">${esc(state.deletePublishedError)}</p>` : '';
+  return `<div class="padmin-overlay">
+    <div class="padmin-overlay-bg" data-action="close-delete-published"></div>
+    <div class="padmin-modal">
+      <p style="font-size:14px;font-weight:600;color:var(--text);margin:0 0 4px;">Eliminar nota publicada</p>
+      <p style="font-size:12px;color:var(--text-mute);margin:0 0 16px;">Esta nota está VIVA en el sitio. Para eliminarla, escribe (o copia y pega) su título exacto:</p>
+      <div style="display:flex;align-items:center;gap:8px;background:var(--bg-admin);border:0.5px solid var(--line-soft);border-radius:6px;padding:8px 10px;margin-bottom:12px;">
+        <p style="font-size:13px;color:var(--text);margin:0;flex:1;min-width:0;overflow-wrap:anywhere;">${esc(piece.title)}</p>
+        <button type="button" class="padmin-btn-sm padmin-btn-outline" style="flex-shrink:0;" data-action="copy-delete-title" data-text="${esc(piece.title)}">Copiar</button>
+      </div>
+      <input id="delete-published-input" type="text" class="padmin-sponsor-input" style="font-size:13px;padding:9px 10px;margin-bottom:4px;" placeholder="Pega o escribe el título aquí" autocomplete="off">
+      ${errorHtml}
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;">
+        <button type="button" class="padmin-btn-outline" data-action="close-delete-published">Cancelar</button>
+        <button type="button" class="padmin-btn padmin-btn-danger" data-action="confirm-delete-published" data-id="${piece.id}">Eliminar nota</button>
+      </div>
+    </div>
   </div>`;
 }

@@ -101,6 +101,11 @@ export function renderEditor(): string {
     <div class="padmin-editor-cols">
     <div class="padmin-editor-card padmin-editor-main">
       ${sensBadge}
+      <div class="padmin-field" style="margin-bottom:16px;">
+        <label style="font-size:11px;color:var(--text-mute);">Directriz editorial (opcional)</label>
+        <textarea id="editor-directive" placeholder="Ej: enfocar en impacto económico, no político. Incluir versión ciudadana, no solo oficial." style="min-height:60px;font-size:13px;">${esc(d.editorial_directive)}</textarea>
+        <p style="font-size:11px;color:var(--text-mute);margin:4px 0 0;">Se aplica antes de generar título/cuerpo con IA. Vacío = voz estándar de CREA.</p>
+      </div>
       <label style="font-size:11px;color:var(--text-mute);display:block;margin-bottom:8px;">Título</label>
       <input id="editor-title" class="padmin-title-input" value="${esc(d.title)}" style="width:100%;box-sizing:border-box;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:12px;">
@@ -130,6 +135,7 @@ export function renderEditor(): string {
       </div>
       <div class="padmin-field-inline padmin-field"><input id="editor-sponsored" type="checkbox" ${d.is_sponsored ? 'checked' : ''} onchange="document.getElementById('editor-sponsor-name-field').style.display=this.checked?'':'none';"><label for="editor-sponsored" style="font-size:13px;color:var(--text);">Nota patrocinada (publicidad)</label></div>
       <div class="padmin-field" id="editor-sponsor-name-field" style="margin-bottom:0;display:${d.is_sponsored ? '' : 'none'};"><label>Patrocinado por</label><input id="editor-sponsor-name" type="text" value="${esc(d.sponsor_name)}" placeholder="Nombre del negocio"></div>
+      ${renderEditChat()}
     </aside>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -173,6 +179,7 @@ export function readEditorForm() {
     author_name: inputVal('editor-author'),
     is_sponsored: checkedVal('editor-sponsored'),
     sponsor_name: inputVal('editor-sponsor-name'),
+    editorial_directive: inputVal('editor-directive'),
   };
 }
 
@@ -210,6 +217,40 @@ export function buildNotaPreviewDoc(d: NotaPreviewInput): string {
       ${paras || '<p style="font-size:13px;color:#9A9A93;">Sin contenido todavía.</p>'}
       ${sponsorBlock}
     </div></body></html>`;
+}
+
+// Chat de edición con IA, integrado en la columna derecha (metadatos): ahí ya vive
+// el contexto de la nota y sobra espacio en pantalla frente al textarea de cuerpo.
+// Cada hunk es un párrafo propuesto — el encargado aplica o descarta uno por uno
+// (diff parcial), nunca todo-o-nada.
+function renderEditChat(): string {
+  const messages = state.editChatMessages.map((m) =>
+    `<div class="padmin-chat-msg padmin-chat-msg-${m.role}">${esc(m.content)}</div>`
+  ).join('');
+  const pending = state.editChatPending.map((h) => `
+    <div class="padmin-chat-hunk">
+      <p class="padmin-chat-hunk-label">Párrafo ${h.index + 1}</p>
+      <p class="padmin-chat-hunk-old">${esc(h.original)}</p>
+      <p class="padmin-chat-hunk-new">${esc(h.suggested)}</p>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button type="button" class="padmin-btn-sm padmin-btn-brand" data-action="accept-edit-hunk" data-index="${h.index}">Aplicar</button>
+        <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="reject-edit-hunk" data-index="${h.index}">Descartar</button>
+      </div>
+    </div>`).join('');
+  const legend = state.editChatModel
+    ? `<p class="padmin-chat-legend">Usando modelo: <strong>${esc(state.editChatModel)}</strong> · vía: <strong>${esc(state.editChatProvider || '')}</strong>${state.editChatUsesLeft != null ? ` · ${state.editChatUsesLeft} uso(s) restante(s) hoy` : ''}</p>`
+    : '';
+  return `<div class="padmin-chat">
+    <p class="padmin-editor-meta-title">Asistente de edición (IA)</p>
+    <div class="padmin-chat-messages">${messages || '<p class="padmin-chat-empty">Pide un cambio, ej. "acorta el segundo párrafo" o "corrige el tono".</p>'}</div>
+    ${pending ? `<div class="padmin-chat-pending">${pending}</div>` : ''}
+    ${state.editChatError ? `<p class="padmin-chat-error">${esc(state.editChatError)}</p>` : ''}
+    <div style="display:flex;gap:6px;margin-top:10px;">
+      <textarea id="edit-chat-input" class="padmin-chat-input" placeholder="Instrucción de edición..." rows="2" ${state.editChatBusy ? 'disabled' : ''}></textarea>
+      <button type="button" class="padmin-btn padmin-btn-sm" data-action="send-edit-chat" ${state.editChatBusy ? 'disabled' : ''}>${state.editChatBusy ? '…' : 'Enviar'}</button>
+    </div>
+    ${legend}
+  </div>`;
 }
 
 function renderQaResult(): string {
