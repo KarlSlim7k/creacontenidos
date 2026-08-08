@@ -35,9 +35,11 @@ module.exports = {
   aiModelComplex: process.env.AI_MODEL_COMPLEX || 'minimax/minimax-m3',
   aiModelQa: process.env.AI_MODEL_QA || 'openai/gpt-5-nano',
   aiModelFallback: process.env.AI_MODEL_FALLBACK || 'inclusionai/ling-3.0-flash:free',
-  // inclusionai/ling-3.0-flash:free dejó de ser gratis en OpenRouter (404 "usa la
-  // versión paga", verificado 2026-08-08) — reemplazado por otro modelo free vivo.
-  aiOpenRouterFallbackModel: process.env.AI_OPENROUTER_FALLBACK_MODEL || 'google/gemma-4-31b-it:free',
+  // Modelo pago barato en vez de uno :free: los modelos gratis de OpenRouter
+  // tienen tope de 20 req/min y 50/día (verificado 2026-08-08, ahí murió
+  // google/gemma-4-31b-it:free con 429) — mistral-nemo cuesta ~$0.02-0.03 por
+  // millón de tokens, sin ese tope, y es fiable en español/JSON.
+  aiOpenRouterFallbackModel: process.env.AI_OPENROUTER_FALLBACK_MODEL || 'mistralai/mistral-nemo',
   aiTextTimeoutMs: Number.isFinite(configuredAiTextTimeoutMs) && configuredAiTextTimeoutMs >= 1000 && configuredAiTextTimeoutMs <= 120000
     ? configuredAiTextTimeoutMs
     : 45000,

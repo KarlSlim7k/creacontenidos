@@ -13,6 +13,7 @@ Object.assign(process.env, {
   AI_TEXT_TIMEOUT_MS: '45000',
 });
 
+const config = require('../src/config');
 const { chatComplete } = require('../src/lib/ai-client');
 
 function response(status, content, error) {
@@ -39,6 +40,22 @@ async function runCase(routes, check) {
   }
 }
 
+// Casos 2-3 aíslan el comportamiento SIN OpenRouter configurado (chain queda
+// nous→nous) — así se prueba la regla "mismo provider no reintenta ante un
+// error no-transitorio" sin que el cruce a OpenRouter la enmascare.
+async function withoutOpenRouter(fn) {
+  const key = config.openrouterKey;
+  const model = config.aiOpenRouterFallbackModel;
+  config.openrouterKey = '';
+  config.aiOpenRouterFallbackModel = '';
+  try {
+    await fn();
+  } finally {
+    config.openrouterKey = key;
+    config.aiOpenRouterFallbackModel = model;
+  }
+}
+
 async function main() {
   let assertions = 0;
   const ok = (condition, message) => { assert.ok(condition, message); assertions++; };
@@ -49,49 +66,61 @@ async function main() {
     ok(calls.length === 1 && result.provider === 'nous', '1. hace un solo intento en Nous');
   });
 
-  await runCase({
+  await withoutOpenRouter(() => runCase({ 'nous:primary/model': response(401) }, async (calls) => {
+    await assert.rejects(() => chatComplete('sys', 'user'), (error) => error.status === 401);
+    assertions++;
+    ok(calls.length === 1, '2. sin OpenRouter configurado, un error no-transitorio (401) del MISMO provider no reintenta con el respaldo de Nous');
+  }));
+
+  await withoutOpenRouter(() => runCase({
     'nous:primary/model': response(503),
     'nous:secondary/model': response(200, 'secundario'),
   }, async (calls) => {
     const result = await chatComplete('sys', 'user');
-    ok(result.content === 'secundario' && result.usedFallback, '2. usa el respaldo de Nous');
-    ok(calls.map((call) => call.model).join(',') === 'primary/model,secondary/model', '2. conserva el orden de modelos');
-  });
+    ok(result.content === 'secundario' && result.usedFallback, '3. sin OpenRouter configurado, un error transitorio (503) sí usa el respaldo de Nous');
+    ok(calls.map((call) => call.model).join(',') === 'primary/model,secondary/model', '3. conserva el orden de modelos');
+  }));
 
   await runCase({
-    'nous:primary/model': response(404),
-    'nous:secondary/model': response(503),
+    'nous:primary/model': response(401),
     'openrouter:openrouter/model': response(200, 'openrouter'),
   }, async (calls) => {
     const result = await chatComplete('sys', 'user');
-    ok(result.content === 'openrouter' && result.provider === 'openrouter', '3. usa OpenRouter tras fallar ambos modelos Nous');
-    ok(calls.length === 3 && calls[2].headers['HTTP-Referer'] && calls[2].headers['X-OpenRouter-Title'], '3. identifica el sitio ante OpenRouter');
+    ok(result.content === 'openrouter' && result.provider === 'openrouter', '4. cruza a OpenRouter en el SEGUNDO intento apenas falla Nous, sea cual sea el motivo');
+    ok(calls.length === 2, '4. no pasa por un segundo modelo de Nous antes de llegar a OpenRouter');
   });
 
-  await runCase({ 'nous:primary/model': response(401) }, async (calls) => {
-    await assert.rejects(() => chatComplete('sys', 'user'), (error) => error.status === 401);
-    assertions++;
-    ok(calls.length === 1, '4. un error de autenticación no entra en bucle ni usa fallback');
+  // Reproduce el incidente real de producción (2026-08-08): una key de
+  // OpenRouter revocada (401, no-transitorio) frenaba la cadena entera antes
+  // de llegar al último recurso de Nous.
+  await runCase({
+    'nous:primary/model': response(404),
+    'openrouter:openrouter/model': response(401),
+    'nous:secondary/model': response(200, 'secundario'),
+  }, async (calls) => {
+    const result = await chatComplete('sys', 'user');
+    ok(result.content === 'secundario' && result.provider === 'nous', '5. un 401 no-transitorio en OpenRouter (provider distinto) no frena la cadena — sigue al último recurso de Nous');
+    ok(calls.length === 3, '5. agota los tres intentos');
   });
 
   const providerBodySecret = 'provider-body-must-not-leak';
   await runCase({
     'nous:primary/model': response(503, null, { error: providerBodySecret }),
-    'nous:secondary/model': response(503, null, { error: providerBodySecret }),
     'openrouter:openrouter/model': response(503, null, { error: providerBodySecret }),
+    'nous:secondary/model': response(503, null, { error: providerBodySecret }),
   }, async (calls) => {
     await assert.rejects(
       () => chatComplete('sys', 'user'),
       (error) => {
-        ok(error.attempts.length === 3 && calls.length === 3, '5. reporta los tres intentos fallidos');
-        ok(!error.message.includes(providerBodySecret) && !error.message.includes('check-openrouter-secret'), '5. el error combinado no filtra cuerpos ni credenciales');
+        ok(error.attempts.length === 3 && calls.length === 3, '6. reporta los tres intentos fallidos');
+        ok(!error.message.includes(providerBodySecret) && !error.message.includes('check-openrouter-secret'), '6. el error combinado no filtra cuerpos ni credenciales');
         return true;
       }
     );
     assertions++;
   });
 
-  console.log(`\n✔ check-ai-fallback pasó (${assertions} asserts, 5 casos).`);
+  console.log(`\n✔ check-ai-fallback pasó (${assertions} asserts, 6 casos).`);
 }
 
 main().catch((error) => {
