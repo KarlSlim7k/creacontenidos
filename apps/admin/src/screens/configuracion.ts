@@ -243,10 +243,61 @@ export function renderConfigMetricas(): string {
   </div>`;
 }
 
+function renderTwoFactorCard(enabled: boolean): string {
+  const errorHtml = state.errorMsg ? `<p style="font-size:12px;color:var(--danger);margin:0 0 10px;">${esc(state.errorMsg)}</p>` : '';
+  if (state.twoFaBackupCodes) {
+    return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
+      <p class="padmin-section-title" style="margin-bottom:6px;">Guarda tus códigos de respaldo</p>
+      <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Cada uno sirve una sola vez si pierdes acceso a tu app de autenticación. No se vuelven a mostrar.</p>
+      <div id="tfa-backup-codes" style="font-family:monospace;font-size:14px;background:var(--bg-soft);border-radius:6px;padding:12px;margin-bottom:14px;line-height:1.8;">${state.twoFaBackupCodes.map((c) => esc(c)).join('<br>')}</div>
+      <button type="button" class="padmin-btn padmin-btn-sm" data-action="dismiss-2fa-backup-codes">Ya los guardé</button>
+    </div>`;
+  }
+  if (state.twoFaSetup) {
+    return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
+      <p class="padmin-section-title" style="margin-bottom:6px;">Activar verificación en dos pasos</p>
+      <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Escanea el código con Google Authenticator, Authy o similar, luego confirma con el código de 6 dígitos que te muestre la app.</p>
+      <img src="${esc(state.twoFaSetup.qr_data_url)}" alt="Código QR" width="180" height="180" style="display:block;margin-bottom:10px;">
+      <p style="font-size:11px;color:var(--mute-2);margin:0 0 14px;word-break:break-all;">O ingresa manualmente: <code>${esc(state.twoFaSetup.secret)}</code></p>
+      ${errorHtml}
+      <form data-action="submit-2fa-enable" class="padmin-grid2" style="gap:10px;">
+        <div class="padmin-field" style="margin:0;"><label>Código de 6 dígitos</label><input id="tfa-enable-code" type="text" inputmode="numeric" required autofocus></div>
+        <div style="grid-column:1 / -1;display:flex;gap:8px;"><button type="submit" class="padmin-btn padmin-btn-sm" ${state.twoFaBusy ? 'disabled' : ''}>Confirmar</button><button type="button" class="padmin-btn-outline" data-action="cancel-2fa-setup">Cancelar</button></div>
+      </form>
+    </div>`;
+  }
+  const body = enabled
+    ? `<p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Activada — se pide un código además de tu contraseña al iniciar sesión.</p>
+       ${errorHtml}
+       <form data-action="submit-2fa-disable" class="padmin-grid2" style="gap:10px;">
+         <div class="padmin-field" style="margin:0;"><label>Código actual (o uno de respaldo), para desactivar</label><input id="tfa-disable-code" type="text" inputmode="numeric" required></div>
+         <div style="grid-column:1 / -1;"><button type="submit" class="padmin-btn-outline padmin-btn-sm" ${state.twoFaBusy ? 'disabled' : ''}>Desactivar 2FA</button></div>
+       </form>`
+    : `<p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">No activada — agrega una capa extra de seguridad a tu cuenta.</p>
+       ${errorHtml}
+       <button type="button" class="padmin-btn padmin-btn-sm" data-action="start-2fa-setup" ${state.twoFaBusy ? 'disabled' : ''}>${state.twoFaBusy ? 'Generando…' : 'Activar 2FA'}</button>`;
+  return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
+    <p class="padmin-section-title" style="margin-bottom:6px;">Verificación en dos pasos</p>
+    ${body}
+  </div>`;
+}
+
 export function renderConfigPerfil(): string {
   const me = state.data.myProfile;
+  const isDirector = state.user!.role === 'director';
   const settings = state.data.editorialSettings;
-  if (!me || !settings) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  if (!me || (isDirector && !settings)) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  const directivaCard = !isDirector ? '' : `<div class="padmin-card" style="max-width:480px;padding:20px;">
+    <p class="padmin-section-title" style="margin-bottom:6px;">Directriz editorial</p>
+    <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Instrucción general que la IA aplica antes de redactar cualquier propuesta o borrador — precarga el campo por-nota en RADAR y el Editor cuando esa nota no trae una directriz propia. Vacío = voz estándar de CREA.</p>
+    <form data-action="submit-editorial-settings">
+      <div class="padmin-field" style="margin:0 0 12px;">
+        <textarea id="es-directive" style="min-height:110px;" placeholder="Ej: priorizar impacto económico sobre político. Incluir siempre versión ciudadana, no solo oficial.">${esc(settings!.default_directive || '')}</textarea>
+      </div>
+      <button type="submit" class="padmin-btn padmin-btn-sm">Guardar</button>
+    </form>
+    <p style="font-size:11px;color:var(--mute-2);margin:12px 0 0;">Actualizado ${esc(relativeTime(settings!.updated_at))}.</p>
+  </div>`;
   return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
     <p class="padmin-section-title" style="margin-bottom:10px;">Mi cuenta</p>
     <form data-action="submit-my-profile" class="padmin-grid2" style="gap:10px;">
@@ -258,30 +309,28 @@ export function renderConfigPerfil(): string {
       <div style="grid-column:1 / -1;"><button type="submit" class="padmin-btn padmin-btn-sm">Guardar cambios</button></div>
     </form>
   </div>
-  <div class="padmin-card" style="max-width:480px;padding:20px;">
-    <p class="padmin-section-title" style="margin-bottom:6px;">Directriz editorial</p>
-    <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Instrucción general que la IA aplica antes de redactar cualquier propuesta o borrador — precarga el campo por-nota en RADAR y el Editor cuando esa nota no trae una directriz propia. Vacío = voz estándar de CREA.</p>
-    <form data-action="submit-editorial-settings">
-      <div class="padmin-field" style="margin:0 0 12px;">
-        <textarea id="es-directive" style="min-height:110px;" placeholder="Ej: priorizar impacto económico sobre político. Incluir siempre versión ciudadana, no solo oficial.">${esc(settings.default_directive || '')}</textarea>
-      </div>
-      <button type="submit" class="padmin-btn padmin-btn-sm">Guardar</button>
-    </form>
-    <p style="font-size:11px;color:var(--mute-2);margin:12px 0 0;">Actualizado ${esc(relativeTime(settings.updated_at))}.</p>
-  </div>`;
+  ${renderTwoFactorCard(me.two_factor_enabled)}
+  ${directivaCard}`;
 }
 
 export function renderConfiguracion(): string {
-  const tab = state.configTab;
+  const isDirector = state.user!.role === 'director';
+  // Roles no-director solo tienen Integraciones y Perfil — el resto de tabs (usuarios,
+  // permisos, newsletter, servicios, cuentas-fb, métricas) son exclusivos de Director,
+  // así que un configTab heredado se recorta a uno de los dos disponibles.
+  const tab = isDirector ? state.configTab : (state.configTab === 'perfil' ? 'perfil' : 'integraciones');
   const body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : (tab === 'metricas-sitio' ? renderConfigMetricas() : (tab === 'cuentas-fb' ? renderConfigCuentasFb() : (tab === 'perfil' ? renderConfigPerfil() : renderConfigUsuarios()))))));
   const tabBtn = (id: string, label: string) => {
     const active = tab === id;
     return `<button type="button" class="padmin-tab${active ? ' active' : ''}" data-action="set-config-tab" data-tab="${id}">${label}</button>`;
   };
+  const tabs = isDirector
+    ? `${tabBtn('usuarios', 'Usuarios')}${tabBtn('permisos', 'Permisos')}${tabBtn('integraciones', 'Integraciones')}${tabBtn('newsletter', 'Newsletter')}${tabBtn('servicios', 'Servicios')}${tabBtn('cuentas-fb', 'Cuentas FB')}${tabBtn('metricas-sitio', 'Métricas del sitio')}${tabBtn('perfil', 'Perfil')}`
+    : `${tabBtn('integraciones', 'Integraciones')}${tabBtn('perfil', 'Perfil')}`;
   return `<div>
     <h1 class="padmin-h1">Configuración</h1>
-    <p class="padmin-lede">Usuarios, permisos e integraciones del panel. Solo visible para Director.</p>
-    <div class="padmin-tabs">${tabBtn('usuarios', 'Usuarios')}${tabBtn('permisos', 'Permisos')}${tabBtn('integraciones', 'Integraciones')}${tabBtn('newsletter', 'Newsletter')}${tabBtn('servicios', 'Servicios')}${tabBtn('cuentas-fb', 'Cuentas FB')}${tabBtn('metricas-sitio', 'Métricas del sitio')}${tabBtn('perfil', 'Perfil')}</div>
+    <p class="padmin-lede">${isDirector ? 'Usuarios, permisos e integraciones del panel. Solo visible para Director.' : 'Instalación de la app, notificaciones y tu cuenta.'}</p>
+    <div class="padmin-tabs">${tabs}</div>
     ${body}
   </div>`;
 }

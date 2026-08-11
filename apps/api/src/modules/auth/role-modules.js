@@ -3,9 +3,9 @@
 // que apps/admin/assets/js/panel.js arme el nav sin mantener su propia copia.
 const ROLE_MODULES = {
   director: ['dashboard', 'ideas', 'editor', 'aprobacion', 'comercial', 'leads', 'metricas', 'radar', 'propuestas', 'producciones', 'publicadas', 'hermes', 'pipeline', 'configuracion'],
-  produccion: ['dashboard', 'ideas', 'editor', 'radar', 'propuestas', 'producciones', 'publicadas', 'metricas', 'pipeline'],
-  comercial: ['comercial', 'leads'],
-  colaborador: ['ideas'],
+  produccion: ['dashboard', 'ideas', 'editor', 'radar', 'propuestas', 'producciones', 'publicadas', 'metricas', 'pipeline', 'configuracion'],
+  comercial: ['comercial', 'leads', 'configuracion'],
+  colaborador: ['ideas', 'configuracion'],
 };
 
 module.exports = { ROLE_MODULES };

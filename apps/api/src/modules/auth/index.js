@@ -1,19 +1,41 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
+const { authenticator } = require('otplib');
+const QRCode = require('qrcode');
 const pool = require('../../db/pool');
 const config = require('../../config');
-const { requireAuth, requireRole } = require('../../middleware/auth');
+const totpCrypto = require('../../lib/totp-crypto');
+const { requireAuth, requireRole, requirePending2fa } = require('../../middleware/auth');
 const { ROLE_MODULES } = require('./role-modules');
 
 const router = express.Router();
 
 // Intentos de login: límite estricto por IP, mismo espíritu que leadsLimiter en public.
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
+// Intentos de código 2FA: mismo espíritu, ventana propia (no consume el cupo de /login).
+const twoFaVerifyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
+
+function signSession(user) {
+  return jwt.sign({ id: user.id, name: user.name, role: user.role }, config.jwtSecret, { expiresIn: '8h' });
+}
+
+// Códigos de respaldo: comparación secuencial contra los hashes bcrypt guardados
+// (mismo mecanismo que password_hash) — O(n) sobre ~8 códigos, sin indexar.
+async function findBackupCodeMatch(hashedCodes, candidate) {
+  for (let i = 0; i < hashedCodes.length; i++) {
+    if (await bcrypt.compare(candidate, hashedCodes[i])) return i;
+  }
+  return -1;
+}
 
 // POST /api/auth/login — email+password contra users. Sin distinguir "no existe" de
-// "password incorrecto" en la respuesta (no dar pistas).
+// "password incorrecto" en la respuesta (no dar pistas). Si el usuario tiene 2FA
+// activo, no emite la sesión completa: emite un token "pendiente" (claim
+// pending2fa) de 5 min, que requireAuth rechaza en cualquier otra ruta — el
+// cliente debe pasar por POST /2fa/verify para canjearlo por la sesión real.
 router.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
@@ -21,15 +43,50 @@ router.post('/login', loginLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'Correo y contraseña son requeridos' });
     }
     const { rows } = await pool.query(
-      'SELECT id, name, password_hash, role, active FROM users WHERE email = $1',
+      'SELECT id, name, password_hash, role, active, two_factor_enabled FROM users WHERE email = $1',
       [email.trim().toLowerCase()]
     );
     const user = rows[0];
     if (!user || !user.active || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
-    const token = jwt.sign({ id: user.id, name: user.name, role: user.role }, config.jwtSecret, { expiresIn: '8h' });
-    res.json({ token, user: { id: user.id, name: user.name, role: user.role } });
+    if (user.two_factor_enabled) {
+      const pendingToken = jwt.sign({ id: user.id, pending2fa: true }, config.jwtSecret, { expiresIn: '5m' });
+      return res.json({ token: pendingToken, requires_2fa: true });
+    }
+    res.json({ token: signSession(user), user: { id: user.id, name: user.name, role: user.role } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/2fa/verify — canjea el token pendiente por la sesión real. Acepta
+// un código TOTP de 6 dígitos o, si no matchea, un código de respaldo de un solo uso
+// (se consume: se quita del array al usarlo).
+router.post('/2fa/verify', twoFaVerifyLimiter, requirePending2fa, async (req, res, next) => {
+  try {
+    const { code } = req.body || {};
+    if (typeof code !== 'string' || !code.trim()) return res.status(400).json({ error: 'Código requerido' });
+    const { rows } = await pool.query(
+      'SELECT id, name, role, active, two_factor_secret, two_factor_backup_codes FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const user = rows[0];
+    if (!user || !user.active || !user.two_factor_secret) return res.status(401).json({ error: 'Sesión inválida' });
+
+    const trimmed = code.trim();
+    const secret = totpCrypto.decrypt(user.two_factor_secret);
+    let ok = authenticator.check(trimmed, secret);
+    if (!ok && Array.isArray(user.two_factor_backup_codes)) {
+      const idx = await findBackupCodeMatch(user.two_factor_backup_codes, trimmed);
+      if (idx !== -1) {
+        ok = true;
+        const remaining = user.two_factor_backup_codes.filter((_, i) => i !== idx);
+        await pool.query('UPDATE users SET two_factor_backup_codes = $1 WHERE id = $2', [JSON.stringify(remaining), user.id]);
+      }
+    }
+    if (!ok) return res.status(401).json({ error: 'Código incorrecto' });
+    res.json({ token: signSession(user), user: { id: user.id, name: user.name, role: user.role } });
   } catch (err) {
     next(err);
   }
@@ -58,7 +115,7 @@ router.get('/roles', requireAuth, requireRole('director'), (req, res) => {
 
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT id, name, email, role, created_at FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await pool.query('SELECT id, name, email, role, created_at, two_factor_enabled FROM users WHERE id = $1', [req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(rows[0]);
   } catch (err) {
@@ -94,6 +151,72 @@ router.patch('/me', requireAuth, async (req, res, next) => {
     res.json(rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Datos inválidos', fields: { email: 'Ya existe un usuario con ese correo' } });
+    next(err);
+  }
+});
+
+// --- 2FA (Configuración → Perfil, cualquier usuario autenticado) ---
+
+// POST /api/auth/2fa/setup — genera un secret nuevo (sobreescribe cualquier setup sin
+// confirmar previo: cancelar en el frontend es simplemente no llamar a /enable, no
+// hace falta un endpoint aparte) y devuelve el QR para escanear. two_factor_enabled
+// sigue en false hasta /enable — el secret solo no autoriza nada.
+router.post('/2fa/setup', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('SELECT email FROM users WHERE id = $1', [req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const secret = authenticator.generateSecret();
+    await pool.query('UPDATE users SET two_factor_secret = $1 WHERE id = $2', [totpCrypto.encrypt(secret), req.user.id]);
+    const otpauth = authenticator.keyuri(rows[0].email, 'CREA Panel', secret);
+    const qrDataUrl = await QRCode.toDataURL(otpauth);
+    res.json({ secret, qr_data_url: qrDataUrl });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/2fa/enable — confirma el setup con un código válido y activa 2FA.
+// Genera 8 códigos de respaldo de un solo uso (se muestran una única vez acá,
+// hasheados con bcrypt antes de guardarse — igual que password_hash).
+router.post('/2fa/enable', requireAuth, async (req, res, next) => {
+  try {
+    const { code } = req.body || {};
+    if (typeof code !== 'string' || !code.trim()) return res.status(400).json({ error: 'Código requerido' });
+    const { rows } = await pool.query('SELECT two_factor_secret FROM users WHERE id = $1', [req.user.id]);
+    if (!rows[0] || !rows[0].two_factor_secret) return res.status(400).json({ error: 'Primero genera el código QR' });
+    const secret = totpCrypto.decrypt(rows[0].two_factor_secret);
+    if (!authenticator.check(code.trim(), secret)) return res.status(401).json({ error: 'Código incorrecto' });
+
+    const backupCodes = Array.from({ length: 8 }, () => crypto.randomBytes(5).toString('hex'));
+    const hashed = await Promise.all(backupCodes.map((c) => bcrypt.hash(c, 10)));
+    await pool.query('UPDATE users SET two_factor_enabled = true, two_factor_backup_codes = $1 WHERE id = $2', [JSON.stringify(hashed), req.user.id]);
+    res.json({ backup_codes: backupCodes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/2fa/disable — pide un código vigente (TOTP o de respaldo) antes de
+// apagar: sin esto, una sesión robada apagaría 2FA sin fricción.
+router.post('/2fa/disable', requireAuth, async (req, res, next) => {
+  try {
+    const { code } = req.body || {};
+    if (typeof code !== 'string' || !code.trim()) return res.status(400).json({ error: 'Código requerido' });
+    const { rows } = await pool.query('SELECT two_factor_secret, two_factor_backup_codes FROM users WHERE id = $1', [req.user.id]);
+    const user = rows[0];
+    if (!user || !user.two_factor_secret) return res.status(400).json({ error: '2FA no está activo' });
+
+    const trimmed = code.trim();
+    const secret = totpCrypto.decrypt(user.two_factor_secret);
+    let ok = authenticator.check(trimmed, secret);
+    if (!ok && Array.isArray(user.two_factor_backup_codes)) {
+      ok = (await findBackupCodeMatch(user.two_factor_backup_codes, trimmed)) !== -1;
+    }
+    if (!ok) return res.status(401).json({ error: 'Código incorrecto' });
+
+    await pool.query('UPDATE users SET two_factor_enabled = false, two_factor_secret = NULL, two_factor_backup_codes = NULL WHERE id = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
     next(err);
   }
 });

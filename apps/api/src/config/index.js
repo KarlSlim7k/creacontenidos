@@ -1,6 +1,17 @@
 require('dotenv').config();
+const crypto = require('crypto');
 
 const configuredAiTextTimeoutMs = Number(process.env.AI_TEXT_TIMEOUT_MS || 45000);
+
+// Clave AES-256 para cifrar el secret TOTP en reposo (ver lib/totp-crypto.js).
+// Sin TOTP_ENCRYPTION_KEY definida, se deriva de JWT_SECRET — funciona pero
+// mezcla el propósito de ambos secrets; definir una dedicada en producción.
+if (!process.env.TOTP_ENCRYPTION_KEY) {
+  console.warn('⚠️  TOTP_ENCRYPTION_KEY vacío: derivando de JWT_SECRET. Define TOTP_ENCRYPTION_KEY en producción.');
+}
+const totpEncryptionKey = crypto.createHash('sha256')
+  .update(process.env.TOTP_ENCRYPTION_KEY || `${process.env.JWT_SECRET || ''}:totp-fallback`)
+  .digest();
 
 // En producción CORS_ORIGIN vacío haría que cors() refleje CUALQUIER origen
 // (cors(undefined) = abierto). En vez de abrir o de tumbar el boot, caemos al
@@ -23,6 +34,7 @@ module.exports = {
   databaseUrl: process.env.DATABASE_URL,
   corsOrigin: resolvedCorsOrigin,
   jwtSecret: process.env.JWT_SECRET,
+  totpEncryptionKey,
   nousPortalKey: process.env.NOUS_PORTAL_API_KEY,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',

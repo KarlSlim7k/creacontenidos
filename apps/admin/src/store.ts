@@ -121,6 +121,12 @@ export interface MyProfile {
   email: string;
   role: string;
   created_at: string;
+  two_factor_enabled: boolean;
+}
+
+export interface TwoFaSetup {
+  secret: string;
+  qr_data_url: string;
 }
 
 export interface EditorialSettings {
@@ -388,6 +394,15 @@ export interface State {
   allowedModules: string[];
   screen: Screen;
   loginError: string | null;
+  /** true entre "password OK" y "código 2FA verificado" — login() deja el token
+   * pendiente en `token` (adminApi ya lo manda como Bearer) y renderLogin() muestra
+   * el segundo paso en vez del form de email/password. */
+  loginTwoFaRequired: boolean;
+  /** Setup de 2FA en progreso (QR mostrado, esperando el código de confirmación). */
+  twoFaSetup: TwoFaSetup | null;
+  /** Códigos de respaldo recién generados — se muestran una sola vez tras /2fa/enable. */
+  twoFaBackupCodes: string[] | null;
+  twoFaBusy: boolean;
   data: AdminData;
   distBusy: string | null;
   radarSource: string;
@@ -500,7 +515,8 @@ export function initialData(): AdminData {
 
 export const state: State = {
   token: null, user: null, allowedModules: [],
-  screen: 'login', loginError: null,
+  screen: 'login', loginError: null, loginTwoFaRequired: false,
+  twoFaSetup: null, twoFaBackupCodes: null, twoFaBusy: false,
   data: initialData(),
   distBusy: null,
   radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos', radarBusy: false,
@@ -776,19 +792,23 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
   } else if (screen === 'publicadas') {
     loadProposals('published', 'status=published');
   } else if (screen === 'configuracion') {
-    if (state.configTab === 'usuarios') adminApi<AdminUser[]>('/api/auth/users').then((r) => { setData({ users: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (state.configTab === 'permisos' && !state.data.roleModules) adminApi<RoleModules>('/api/auth/roles').then((r) => { setData({ roleModules: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (state.configTab === 'integraciones') adminApi<Integration[]>('/api/admin/integrations').then((r) => { setData({ integrations: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (state.configTab === 'newsletter') {
+    // Roles no-director solo ven Integraciones y Perfil (ver renderConfiguracion) — un
+    // configTab heredado ('usuarios' por default) no debe disparar fetches director-only.
+    const isDirector = state.user!.role === 'director';
+    const tab = isDirector ? state.configTab : (state.configTab === 'perfil' ? 'perfil' : 'integraciones');
+    if (tab === 'usuarios') adminApi<AdminUser[]>('/api/auth/users').then((r) => { setData({ users: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (tab === 'permisos' && !state.data.roleModules) adminApi<RoleModules>('/api/auth/roles').then((r) => { setData({ roleModules: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (tab === 'integraciones') adminApi<Integration[]>('/api/admin/integrations').then((r) => { setData({ integrations: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (tab === 'newsletter') {
       adminApi<NewsletterSettings>('/api/newsletter/settings').then((r) => { setData({ newsletterSettings: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
       adminApi<NewsletterEvent[]>('/api/newsletter/events').then((r) => { setData({ newsletterEvents: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     }
-    if (state.configTab === 'servicios') adminApi<Service[]>('/api/commercial/services').then((r) => { setData({ services: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (state.configTab === 'cuentas-fb') adminApi<FbAccount[]>('/api/listening/competitors/accounts').then((r) => { setData({ fbAccounts: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (state.configTab === 'metricas-sitio') adminApi<SiteMetrics>('/api/admin/site-metrics').then((r) => { setData({ siteMetrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (state.configTab === 'perfil') {
+    if (tab === 'servicios') adminApi<Service[]>('/api/commercial/services').then((r) => { setData({ services: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (tab === 'cuentas-fb') adminApi<FbAccount[]>('/api/listening/competitors/accounts').then((r) => { setData({ fbAccounts: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (tab === 'metricas-sitio') adminApi<SiteMetrics>('/api/admin/site-metrics').then((r) => { setData({ siteMetrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (tab === 'perfil') {
       adminApi<MyProfile>('/api/auth/me').then((r) => { setData({ myProfile: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-      adminApi<EditorialSettings>('/api/admin/editorial-settings').then((r) => { setData({ editorialSettings: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+      if (isDirector) adminApi<EditorialSettings>('/api/admin/editorial-settings').then((r) => { setData({ editorialSettings: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
     }
   } else if (screen === 'hermes') {
     adminApi<ActivityEntry[]>('/api/admin/activity?limit=20').then((r) => { setData({ activity: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });

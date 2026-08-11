@@ -15,20 +15,17 @@ window.addEventListener('hashchange', () => {
   if (target) goTo(target.screen, target.extra);
 });
 
-export function login(email: string, password: string) {
-  setState({ loginError: null });
-  adminApi<{ token: string }>('/api/auth/login', { method: 'POST', body: { email, password } })
-    .then((res) => {
-      state.token = res.token;
-      try { localStorage.setItem('crea-admin-token', res.token); } catch { /* modo privado */ }
-      return adminApi<{ id: number; name: string; role: string; allowedModules: string[] }>('/api/auth/session');
-    })
+// Compartido por login() sin 2FA y por verify2fa(): token ya en `state.token`
+// (adminApi lo manda como Bearer), falta resolver la sesión y aterrizar.
+function completeLogin() {
+  try { localStorage.setItem('crea-admin-token', state.token!); } catch { /* modo privado */ }
+  adminApi<{ id: number; name: string; role: string; allowedModules: string[] }>('/api/auth/session')
     .then((session) => {
       const landing = landingFor(session.role);
       setState({
         user: { id: session.id, name: session.name, role: session.role },
         allowedModules: session.allowedModules,
-        screen: landing, loginError: null,
+        screen: landing, loginError: null, loginTwoFaRequired: false,
       });
       location.hash = hashFor(landing);
       loadScreenData(landing);
@@ -37,7 +34,36 @@ export function login(email: string, password: string) {
     .catch((err: ApiError) => {
       state.token = null;
       try { localStorage.removeItem('crea-admin-token'); } catch { /* noop */ }
+      setState({ loginError: err.status === 401 ? 'Correo o contraseña incorrectos.' : 'No pudimos conectar con el servidor.', loginTwoFaRequired: false });
+    });
+}
+
+export function login(email: string, password: string) {
+  setState({ loginError: null });
+  adminApi<{ token: string; requires_2fa?: boolean }>('/api/auth/login', { method: 'POST', body: { email, password } })
+    .then((res) => {
+      state.token = res.token;
+      if (res.requires_2fa) {
+        // Token pendiente (claim pending2fa, 5min): requireAuth lo rechaza en
+        // cualquier otra ruta salvo /2fa/verify — no se persiste hasta canjearlo.
+        setState({ loginTwoFaRequired: true, loginError: null });
+        return;
+      }
+      completeLogin();
+    })
+    .catch((err: ApiError) => {
+      state.token = null;
+      try { localStorage.removeItem('crea-admin-token'); } catch { /* noop */ }
       setState({ loginError: err.status === 401 ? 'Correo o contraseña incorrectos.' : 'No pudimos conectar con el servidor.' });
+    });
+}
+
+export function verify2fa(code: string) {
+  setState({ loginError: null });
+  adminApi<{ token: string }>('/api/auth/2fa/verify', { method: 'POST', body: { code } })
+    .then((res) => { state.token = res.token; completeLogin(); })
+    .catch((err: ApiError) => {
+      setState({ loginError: err.status === 401 ? 'Código incorrecto.' : (err.message || 'No pudimos verificar el código.') });
     });
 }
 
@@ -51,7 +77,8 @@ export function logout() {
   try { localStorage.removeItem('crea-admin-token'); } catch { /* noop */ }
   location.hash = '';
   setState({
-    user: null, allowedModules: [], screen: 'login', loginError: null,
+    user: null, allowedModules: [], screen: 'login', loginError: null, loginTwoFaRequired: false,
+    twoFaSetup: null, twoFaBackupCodes: null, twoFaBusy: false,
     errorMsg: null, successMsg: null,
     data: initialData(),
   });
@@ -106,6 +133,17 @@ export function goHome() {
 
 export function renderLogin(): string {
   const errorHtml = state.loginError ? `<p class="padmin-lede" style="color:var(--danger);margin:0 0 12px;">${esc(state.loginError)}</p>` : '';
+  if (state.loginTwoFaRequired) {
+    return `<div class="padmin-login-screen"><div class="padmin-login-card">
+      <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
+      <p class="padmin-login-sub">Ingresa el código de tu app de autenticación</p>
+      ${errorHtml}
+      <form data-action="submit-2fa-verify">
+        <div class="padmin-field"><label for="pl-2fa-code">Código de 6 dígitos (o un código de respaldo)</label><input id="pl-2fa-code" type="text" inputmode="numeric" autocomplete="one-time-code" required autofocus></div>
+        <button type="submit" class="padmin-btn" style="width:100%;text-align:center;">Verificar</button>
+      </form>
+    </div></div>`;
+  }
   return `<div class="padmin-login-screen"><div class="padmin-login-card">
     <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
     <p class="padmin-login-sub">Herramienta de trabajo para el equipo CREA</p>

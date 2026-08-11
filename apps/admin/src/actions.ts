@@ -5,11 +5,11 @@ import {
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
-  type EditChatHunk, type MyProfile, type EditorialSettings,
+  type EditChatHunk, type MyProfile, type EditorialSettings, type TwoFaSetup,
 } from './store';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
 import { readNewsletterForm } from './screens/hermes';
-import { goTo, login, logout } from './auth';
+import { goTo, login, logout, verify2fa } from './auth';
 import { promptPwaInstall, enablePushNotifications, disablePushNotifications } from './pwa';
 
 // ---------- lectura de formularios inline ----------
@@ -71,6 +71,16 @@ const clickHandlers: Record<string, (el: Element) => void> = {
     setState({ pushBusy: true });
     disablePushNotifications().then(() => setState({ pushBusy: false, pushEnabled: false }));
   },
+  'start-2fa-setup': () => {
+    setState({ twoFaBusy: true, errorMsg: null });
+    adminApi<TwoFaSetup>('/api/auth/2fa/setup', { method: 'POST' })
+      .then((setup) => { setState({ twoFaBusy: false, twoFaSetup: setup }); })
+      .catch((err: ApiError) => { setState({ twoFaBusy: false, errorMsg: err.message }); });
+  },
+  // Cancelar no pega al backend: el secret sin confirmar queda en DB pero no
+  // autoriza nada (two_factor_enabled sigue false) — el próximo /2fa/setup lo pisa.
+  'cancel-2fa-setup': () => setState({ twoFaSetup: null, errorMsg: null }),
+  'dismiss-2fa-backup-codes': () => setState({ twoFaBackupCodes: null }),
   'goto': (el) => goTo(attr(el, 'data-id') as Screen, el.getAttribute('data-pid') ? Number(el.getAttribute('data-pid')) : null),
   'open-editor': (el) => goTo('editor', Number(attr(el, 'data-id'))),
   'close-editor': () => setState({
@@ -734,6 +744,9 @@ export function handleSubmit(e: SubmitEvent) {
   if (action === 'submit-login') {
     e.preventDefault();
     login(q('#pl-email').value.trim(), q('#pl-pass').value);
+  } else if (action === 'submit-2fa-verify') {
+    e.preventDefault();
+    verify2fa(q('#pl-2fa-code').value.trim());
   } else if (action === 'submit-idea') {
     e.preventDefault();
     const title = q('#idea-title').value.trim();
@@ -851,6 +864,24 @@ export function handleSubmit(e: SubmitEvent) {
     }).catch((err: ApiError) => {
       setState({ errorMsg: err.message });
     });
+  } else if (action === 'submit-2fa-enable') {
+    e.preventDefault();
+    setState({ twoFaBusy: true, errorMsg: null });
+    adminApi<{ backup_codes: string[] }>('/api/auth/2fa/enable', { method: 'POST', body: { code: q('#tfa-enable-code').value.trim() } })
+      .then((res) => {
+        setState({ twoFaBusy: false, twoFaSetup: null, twoFaBackupCodes: res.backup_codes, errorMsg: null });
+        setData({ myProfile: state.data.myProfile ? Object.assign({}, state.data.myProfile, { two_factor_enabled: true }) : null });
+      })
+      .catch((err: ApiError) => { setState({ twoFaBusy: false, errorMsg: err.message }); });
+  } else if (action === 'submit-2fa-disable') {
+    e.preventDefault();
+    setState({ twoFaBusy: true, errorMsg: null });
+    adminApi<{ ok: boolean }>('/api/auth/2fa/disable', { method: 'POST', body: { code: q('#tfa-disable-code').value.trim() } })
+      .then(() => {
+        setState({ twoFaBusy: false, errorMsg: null, successMsg: 'Verificación en dos pasos desactivada.' });
+        setData({ myProfile: state.data.myProfile ? Object.assign({}, state.data.myProfile, { two_factor_enabled: false }) : null });
+      })
+      .catch((err: ApiError) => { setState({ twoFaBusy: false, errorMsg: err.message }); });
   } else if (action === 'submit-editorial-settings') {
     e.preventDefault();
     adminApi<EditorialSettings>('/api/admin/editorial-settings', { method: 'PATCH', body: {

@@ -61,6 +61,7 @@ services:
       WORDPRESS_USER: ${WORDPRESS_USER:-}
       WORDPRESS_APP_PASSWORD: ${WORDPRESS_APP_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET (definila en .env)}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
       # Microservicio de scraping de Facebook (apps/competitor-scraper/).
