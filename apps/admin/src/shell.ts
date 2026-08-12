@@ -62,7 +62,7 @@ export function renderSidebar(): string {
   const toggleIcon = state.mobileNavOpen
     ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
     : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-  return `<div class="padmin-sidebar${state.mobileNavOpen ? ' nav-open' : ''}">
+  return `<nav class="padmin-sidebar${state.mobileNavOpen ? ' nav-open' : ''}" aria-label="Secciones del panel">
     <div class="padmin-sidebar-brand"><img src="${import.meta.env.BASE_URL}assets/img/logo-crea.png" alt="CREA"><span class="badge">PANEL</span>
       <button type="button" class="padmin-menu-toggle" data-action="toggle-mobile-nav" aria-label="Menú" aria-expanded="${state.mobileNavOpen ? 'true' : 'false'}">${toggleIcon}</button>
     </div>
@@ -74,7 +74,7 @@ export function renderSidebar(): string {
       </div>
       <button type="button" class="padmin-logout" data-action="logout">Cerrar sesión</button>
     </div>
-  </div>`;
+  </nav>`;
 }
 
 export function renderToasts(): string {
@@ -88,6 +88,39 @@ export function renderToasts(): string {
   return html ? `<div class="padmin-toast-stack">${html}</div>` : '';
 }
 
+// Confirmación para borrados masivos: escribir la frase exacta, mismo criterio que
+// eliminar una nota publicada. Un confirm() nativo era la guarda MÁS débil del panel
+// justo en su acción de mayor radio de daño (borra la tabla entera, sin deshacer).
+export function renderDangerConfirm(): string {
+  const d = state.dangerConfirm;
+  if (!d) return '';
+  const errorHtml = state.dangerConfirmError ? `<p style="font-size:12px;color:var(--danger);margin:0 0 10px;">${esc(state.dangerConfirmError)}</p>` : '';
+  return `<div class="padmin-overlay">
+    <div class="padmin-overlay-bg" data-action="close-danger-confirm"></div>
+    <div class="padmin-modal" role="dialog" aria-modal="true" aria-label="${esc(d.title)}">
+      <p style="font-size:14px;font-weight:600;color:var(--text);margin:0 0 4px;">${esc(d.title)}</p>
+      <p style="font-size:12px;color:var(--text-mute);margin:0 0 16px;">${esc(d.body)}</p>
+      <p style="font-size:12px;color:var(--text-mute);margin:0 0 8px;">Para continuar, escribe <b style="color:var(--text);">${esc(d.phrase)}</b>:</p>
+      <input id="danger-confirm-input" type="text" class="padmin-sponsor-input" style="font-size:13px;padding:9px 10px;margin-bottom:4px;" placeholder="${esc(d.phrase)}" autocomplete="off">
+      ${errorHtml}
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;">
+        <button type="button" class="padmin-btn-outline" data-action="close-danger-confirm">Cancelar</button>
+        <button type="button" class="padmin-btn padmin-btn-danger" data-action="confirm-danger">Eliminar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// <nav>/<main> y no dos <div>: con landmarks, un lector de pantalla salta entre
+// navegación y contenido de una tecla. El skip link hace lo mismo para quien navega
+// con teclado sin lector — antes había que tabular los ~14 items del menú en cada
+// cambio de pantalla, porque el repintado devuelve el foco al principio.
+// tabindex="-1" en <main>: sin él, el ancla salta pero el foco se queda atrás.
 export function renderShell(contentHtml: string): string {
-  return `<div class="padmin-shell">${renderSidebar()}<div class="padmin-content">${contentHtml}</div>${renderToasts()}</div>`;
+  return `<div class="padmin-shell">
+    <a href="#padmin-main" class="padmin-skip-link">Saltar al contenido</a>
+    ${renderSidebar()}
+    <main class="padmin-content" id="padmin-main" tabindex="-1">${contentHtml}</main>
+    ${renderDangerConfirm()}
+  </div>`;
 }

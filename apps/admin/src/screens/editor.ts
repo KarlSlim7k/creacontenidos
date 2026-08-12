@@ -43,7 +43,7 @@ function renderPickerPreview(): string {
   const p = state.pickerPreview;
   return `<div class="padmin-overlay">
     <div class="padmin-overlay-bg" data-action="close-picker-preview"></div>
-    <div class="padmin-modal" style="width:720px;padding:18px;">
+    <div class="padmin-modal" role="dialog" aria-modal="true" aria-label="Vista previa de la nota" style="width:720px;padding:18px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <p style="font-size:11px;font-weight:600;color:var(--text-mute);letter-spacing:0.06em;margin:0;">VISTA PREVIA — ${esc(p.title || '')}</p>
         <button type="button" class="padmin-drawer-close" data-action="close-picker-preview">Cerrar &times;</button>

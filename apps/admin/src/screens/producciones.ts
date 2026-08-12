@@ -79,7 +79,7 @@ function renderDeletePublishedModal(): string {
   const errorHtml = state.deletePublishedError ? `<p style="font-size:12px;color:var(--danger);margin:0 0 10px;">${esc(state.deletePublishedError)}</p>` : '';
   return `<div class="padmin-overlay">
     <div class="padmin-overlay-bg" data-action="close-delete-published"></div>
-    <div class="padmin-modal">
+    <div class="padmin-modal" role="dialog" aria-modal="true" aria-label="Eliminar nota publicada">
       <p style="font-size:14px;font-weight:600;color:var(--text);margin:0 0 4px;">Eliminar nota publicada</p>
       <p style="font-size:12px;color:var(--text-mute);margin:0 0 16px;">Esta nota está VIVA en el sitio. Para eliminarla, escribe (o copia y pega) su título exacto:</p>
       <div style="display:flex;align-items:center;gap:8px;background:var(--bg-admin);border:0.5px solid var(--line-soft);border-radius:6px;padding:8px 10px;margin-bottom:12px;">

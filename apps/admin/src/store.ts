@@ -556,6 +556,12 @@ export const state: State = initialState();
 let renderFn: () => void = function () {};
 export function setRender(fn: () => void) { renderFn = fn; }
 
+// Los toasts se pintan en su propio nodo (#toasts), fuera de #app: el auto-dismiss
+// dispara solo, 4-6s después de la acción, y con renderFn() repintaba TODA la pantalla
+// a espaldas del usuario — lo que borraba lo que estuviera escribiendo en el Editor.
+let renderToastsFn: () => void = function () {};
+export function setRenderToasts(fn: () => void) { renderToastsFn = fn; }
+
 export interface ApiOpts {
   method?: string;
   body?: unknown;
@@ -605,7 +611,6 @@ export function adminApiBlob(path: string, opts: ApiOpts = {}): Promise<Blob> {
 }
 
 // ---------- toasts: sonido + auto-dismiss ----------
-let errorToastTimer: ReturnType<typeof setTimeout> | null = null;
 let successToastTimer: ReturnType<typeof setTimeout> | null = null;
 let audioCtx: AudioContext | null = null;
 
@@ -643,18 +648,17 @@ export function setState(patch: Partial<State>) {
       (state as any)[k] = (patch as any)[k];
     }
   }
+  // Los errores NO se auto-cierran: publicar, distribuir o enviar el newsletter puede
+  // fallar y desaparecer en 6s no dejaba rastro de qué pasó. Se cierran con la × o al
+  // navegar. Los éxitos sí caducan solos — confirmar algo dos veces no aporta nada.
   if (Object.prototype.hasOwnProperty.call(patch, 'errorMsg')) {
-    if (errorToastTimer) { clearTimeout(errorToastTimer); errorToastTimer = null; }
-    if (patch.errorMsg) {
-      playToastSound('error');
-      errorToastTimer = setTimeout(() => { state.errorMsg = null; renderFn(); }, 6000);
-    }
+    if (patch.errorMsg) playToastSound('error');
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'successMsg')) {
     if (successToastTimer) { clearTimeout(successToastTimer); successToastTimer = null; }
     if (patch.successMsg) {
       playToastSound('success');
-      successToastTimer = setTimeout(() => { state.successMsg = null; renderFn(); }, 4000);
+      successToastTimer = setTimeout(() => { state.successMsg = null; renderToastsFn(); }, 4000);
     }
   }
   renderFn();

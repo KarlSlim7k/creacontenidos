@@ -175,7 +175,19 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   },
   'analyze-competitor': (el) => submitAnalyzeCompetitor(Number(attr(el, 'data-id'))),
   'delete-competitor': (el) => submitDeleteCompetitor(Number(attr(el, 'data-id'))),
-  'clear-competitors': () => submitClearCompetitors(),
+  'clear-competitors': () => {
+    const n = (state.data.competitors || []).length;
+    if (!n) return;
+    setState({
+      dangerConfirmError: null,
+      dangerConfirm: {
+        action: 'clear-competitors',
+        title: 'Eliminar todas las publicaciones de competencia',
+        body: `Se borran las ${n} publicaciones escaneadas. No se puede deshacer.`,
+        phrase: 'ELIMINAR TODO',
+      },
+    });
+  },
   'competitor-to-idea': (el) => submitCompetitorToIdea(Number(attr(el, 'data-id'))),
   'set-leads-status': (el) => setState({ leadsStatus: attr(el, 'data-value'), leadsPage: 0 }),
   'set-leads-page': (el) => setState({ leadsPage: Math.max(0, Number(attr(el, 'data-value')) || 0) }),
@@ -187,7 +199,32 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'close-radar': () => setState({ selectedRadarId: null }),
   'approve-topic': (el) => submitApproveTopic(Number(attr(el, 'data-id'))),
   'delete-topic': (el) => submitDeleteTopic(Number(attr(el, 'data-id'))),
-  'clear-topics': () => submitClearTopics(),
+  'clear-topics': () => {
+    const n = (state.data.topicSummary && state.data.topicSummary.total) || (state.data.topics || []).length;
+    if (!n) return;
+    setState({
+      dangerConfirmError: null,
+      dangerConfirm: {
+        action: 'clear-topics',
+        title: 'Eliminar todos los temas de RADAR',
+        body: `Se borran los ${n} temas detectados, con su ficha de verificación y evidencia. No se puede deshacer.`,
+        phrase: 'ELIMINAR TODO',
+      },
+    });
+  },
+  'close-danger-confirm': () => setState({ dangerConfirm: null, dangerConfirmError: null }),
+  'confirm-danger': () => {
+    const d = state.dangerConfirm;
+    if (!d) return;
+    const typed = ((document.getElementById('danger-confirm-input') as HTMLInputElement | null)?.value || '').trim();
+    if (typed.toUpperCase() !== d.phrase.toUpperCase()) {
+      setState({ dangerConfirmError: `El texto no coincide. Escribe exactamente «${d.phrase}».` });
+      return;
+    }
+    setState({ dangerConfirm: null, dangerConfirmError: null });
+    if (d.action === 'clear-topics') submitClearTopics();
+    else if (d.action === 'clear-competitors') submitClearCompetitors();
+  },
   'open-comentario': (el) => setState({ comentarioPieceId: Number(attr(el, 'data-id')), comentarioText: '' }),
   'close-comentario': () => setState({ comentarioPieceId: null, comentarioText: '' }),
   'confirm-comentario': (el) => submitReturn(Number(attr(el, 'data-id'))),
@@ -622,10 +659,11 @@ export function submitDeleteCompetitor(id: number) {
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
 }
 
+// La guarda vive en el modal de confirmación por frase (clickHandlers 'confirm-danger'),
+// no aquí: un confirm() nativo era demasiado fácil de despachar sin leer.
 export function submitClearCompetitors() {
   const posts = state.data.competitors || [];
   if (!posts.length) return;
-  if (!confirm('¿Eliminar las ' + posts.length + ' publicaciones de competencia? No se puede deshacer.')) return;
   Promise.all(posts.map((p: CompetitorPost) => adminApi('/api/listening/competitors/' + p.id, { method: 'DELETE' })))
     .then(() => { setData({ competitors: [] }); })
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
@@ -672,7 +710,6 @@ export function submitDeleteTopic(id: number) {
 export function submitClearTopics() {
   const total = (state.data.topicSummary && state.data.topicSummary.total) || (state.data.topics || []).length;
   if (!total) return;
-  if (!confirm('¿Eliminar los ' + total + ' temas detectados? No se puede deshacer.')) return;
   adminApi('/api/listening/topics', { method: 'DELETE' })
     .then(() => {
       setState({ data: Object.assign({}, state.data, { topics: [] }), selectedRadarId: null, radarTopicsHasMore: false });
@@ -946,6 +983,17 @@ export function handleSubmit(e: SubmitEvent) {
       setState({ socialBusy: false, formError: (err.fields as Record<string, string> | undefined)?.external_url || err.message });
     });
   }
+}
+
+// El título/cuerpo/metadatos de la nota vivían SOLO en el DOM hasta que algo llamaba
+// readEditorForm() (guardar, generar borrador, chat IA). Cualquier re-render intermedio
+// los repintaba desde el último editorDraft sincronizado — y se perdía lo escrito.
+// Sincroniza en cada tecla y SIN setState: el DOM ya tiene el valor bueno, repintar sobra.
+export function handleInput(e: Event) {
+  const t = e.target as HTMLElement;
+  if (!state.editorDraft || !t.id || t.id.indexOf('editor-') !== 0) return;
+  if (t.id === 'editor-image-prompt') { state.editorImagePrompt = (t as HTMLTextAreaElement).value; return; }
+  state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
 }
 
 export function handleChange(e: Event) {

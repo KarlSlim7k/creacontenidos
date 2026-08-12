@@ -19,6 +19,8 @@
 </head>
 <body class="theme-editorial">
 <div id="app" class="padmin"></div>
+<!-- Fuera de #app: el auto-dismiss del toast no debe repintar la pantalla (ver router.ts). -->
+<div id="toasts" class="padmin"></div>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

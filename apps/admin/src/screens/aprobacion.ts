@@ -31,7 +31,7 @@ function renderComentarioModal(): string {
   if (!piece) return '';
   return `<div class="padmin-overlay">
     <div class="padmin-overlay-bg" data-action="close-comentario"></div>
-    <div class="padmin-modal">
+    <div class="padmin-modal" role="dialog" aria-modal="true" aria-label="Devolver con comentarios">
       <p style="font-size:14px;font-weight:600;color:var(--text);margin:0 0 4px;">Devolver con comentarios</p>
       <p style="font-size:12px;color:var(--text-mute);margin:0 0 16px;">${esc(piece.title)}</p>
       <label style="font-size:11px;color:var(--text-mute);display:block;margin-bottom:6px;">Motivo de la devolución</label>

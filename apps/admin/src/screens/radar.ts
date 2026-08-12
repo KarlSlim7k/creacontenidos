@@ -78,7 +78,7 @@ function renderRadarDetail(): string {
 
   return `<div class="padmin-overlay">
     <div class="padmin-overlay-bg" data-action="close-radar"></div>
-    <div class="padmin-drawer">
+    <div class="padmin-drawer" role="dialog" aria-modal="true" aria-label="Ficha de verificación: ${esc(topic.title)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;"><p class="padmin-drawer-eyebrow">FICHA DE VERIFICACIÓN · RADAR</p><button type="button" class="padmin-drawer-close" data-action="close-radar">Cerrar &times;</button></div>
       <h2 style="font-size:16px;font-weight:600;color:var(--text);margin:0 0 12px;line-height:1.35;">${esc(topic.title)}</h2>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center;">
