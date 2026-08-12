@@ -42,7 +42,11 @@ async function main() {
     assert.strictEqual(session.role, 'director');
     assert.ok(session.allowedModules.includes('configuracion'), 'director debe ver configuración');
     session = await (await fetch(`${BASE}/api/auth/session`, { headers: auth(colaboradorToken) })).json();
-    assert.deepStrictEqual(session.allowedModules, ['ideas'], 'colaborador solo debe ver ideas');
+    // Configuración es de todos los roles desde daa98a9, pero recortada: los no-director
+    // solo ven Integraciones y Perfil (instalar la PWA, notificaciones y su cuenta).
+    // El acceso a los tabs de director se corta en el backend, no aquí.
+    assert.deepStrictEqual(session.allowedModules, ['ideas', 'configuracion'],
+      'colaborador ve su bandeja de ideas y su propia configuración, nada más');
 
     // 2. Login inválido → 401. Ruta protegida sin token → 401.
     assert.strictEqual(
@@ -88,8 +92,14 @@ async function main() {
 
     // 6. Pipeline de contenido completo: propuesta → borrador → en_revision → published.
     const proposals = await (await fetch(`${BASE}/api/editorial/proposals?status=propuesta`, { headers: auth(directorToken) })).json();
-    assert.ok(proposals.length >= 1, 'no hay propuestas sembradas para el check');
-    proposalId = proposals[0].id;
+    // Se descartan las de sensibilidad roja: publicarlas exige review_comment
+    // (editorial-review.js) y este bloque prueba el camino feliz. Tomar proposals[0]
+    // a ciegas ataba el check al orden del seed — si la primera fila resultaba roja,
+    // fallaba con un 400 que no tenía nada que ver con lo que se está probando.
+    // El gate de contenido sensible se prueba aparte, más abajo, con su propia fila.
+    const noSensibles = proposals.filter((p) => p.sensibilidad !== 'rojo');
+    assert.ok(noSensibles.length >= 1, 'no hay propuestas no sensibles sembradas para el check');
+    proposalId = noSensibles[0].id;
 
     let p = await (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/approve`, { method: 'PATCH', headers: auth(produccionToken) })).json();
     assert.strictEqual(p.status, 'borrador');
