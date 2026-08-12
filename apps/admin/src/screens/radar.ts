@@ -200,8 +200,8 @@ function renderRadarCompetencia(): string {
           <span>${badge(p.analyzed ? 'analizado' : 'nuevo')}</span>
           <span style="display:flex;gap:4px;flex-wrap:wrap;">
             ${canManage ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" title="Crear idea en la bandeja a partir de esta publicación" data-action="competitor-to-idea" data-id="${p.id}">→ Idea</button>` : ''}
-            ${canManage && !p.analyzed ? `<button type="button" class="padmin-icon-btn" title="Marcar analizado" data-action="analyze-competitor" data-id="${p.id}">✓</button>` : ''}
-            ${canManage ? `<button type="button" class="padmin-icon-btn" title="Eliminar" data-action="delete-competitor" data-id="${p.id}">🗑</button>` : ''}
+            ${canManage && !p.analyzed ? `<button type="button" class="padmin-icon-btn" title="Marcar analizado" aria-label="Marcar publicación como analizada" data-action="analyze-competitor" data-id="${p.id}">✓</button>` : ''}
+            ${canManage ? `<button type="button" class="padmin-icon-btn" title="Eliminar" aria-label="Eliminar publicación de competencia" data-action="delete-competitor" data-id="${p.id}">🗑</button>` : ''}
           </span>
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin publicaciones de competencia. Usa "Explorar competencia" para escanear con IA.</p></div>'}
@@ -327,9 +327,9 @@ function renderRadarTemas(): string {
           <span>${confidenceBadge(r.confidence)}</span>
           ${verificationBadge(r.verification_status)}
           <span style="display:flex;gap:4px;">
-            <button type="button" title="Ver" data-action="open-radar" data-id="${r.id}" class="padmin-icon-btn">👁</button>
-            ${canManage ? `<button type="button" title="Aprobar" data-action="approve-topic" data-id="${r.id}" class="padmin-icon-btn" ${r.status === 'Revisado' ? 'disabled' : ''}>✓</button>` : ''}
-            ${canManage ? `<button type="button" title="Eliminar" data-action="delete-topic" data-id="${r.id}" class="padmin-icon-btn">🗑</button>` : ''}
+            <button type="button" title="Ver ficha" aria-label="Ver ficha de verificación" data-action="open-radar" data-id="${r.id}" class="padmin-icon-btn">👁</button>
+            ${canManage ? `<button type="button" title="Aprobar" aria-label="Aprobar tema" data-action="approve-topic" data-id="${r.id}" class="padmin-icon-btn" ${r.status === 'Revisado' ? 'disabled' : ''}>✓</button>` : ''}
+            ${canManage ? `<button type="button" title="Eliminar" aria-label="Eliminar tema" data-action="delete-topic" data-id="${r.id}" class="padmin-icon-btn">🗑</button>` : ''}
           </span>
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">No hay temas con estos filtros.</p></div>'}

@@ -28,6 +28,39 @@ CREA_E2E_BASE_URL=http://127.0.0.1:<puerto> npx playwright test
 
 Reporte HTML: `npx playwright show-report report`.
 
+## Smoke de renderizado (sin API)
+
+`smoke-render.mjs` es aparte: **no** necesita Docker, DB ni sesión, y corre
+contra `vite dev`. Cubre el contrato de renderizado del panel — `#app` se
+repinta entero en cada `setState`, así que lo escrito debe estar en el state
+antes del repintado, el auto-dismiss del toast no debe repintar nada, y el
+foco/caret debe sobrevivir. Si eso se revierte, el Editor de nota pierde texto
+sin aviso y ningún test unitario lo nota.
+
+```bash
+cd apps/admin && npm run dev     # en otra terminal
+node e2e/smoke-render.mjs
+```
+
+También corre contra el build servido por el contenedor (valida el bundle de
+producción, no solo el dev server):
+
+```bash
+docker compose build api && docker compose up -d api
+CREA_ADMIN_DEV_URL=http://127.0.0.1:3010/admin/ node e2e/smoke-render.mjs
+```
+
+El contexto se abre con `serviceWorkers: 'block'`: con el SW de la PWA activo las
+peticiones salen desde él y **no pasan por `page.route`**, así que los mocks se
+ignoran y el test pega a la API real. Solo se manifiesta contra el contenedor —
+bajo `vite dev` el SW no llega a tomar el control.
+
+La API va simulada con `page.route`, y **todo se conduce desde la UI**: nada de
+`import()` dinámico de módulos de `src/`. Vite versiona las URLs de módulo, así
+que importar `store.ts` a mano puede devolver una *segunda instancia* con su
+propio estado — el test acabaría midiendo una copia en vez de la app, y pasando
+o fallando por razones falsas.
+
 ## Cómo está armado
 
 - `global-setup.ts` hace **un solo login real** (director) y guarda

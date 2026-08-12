@@ -1,7 +1,7 @@
 // CREA Panel Admin — acciones (submit/handle) y delegación de eventos por data-action.
 import {
   state, setState, setData, adminApi, adminApiBlob, loadScreenData, mergeKey, setProposalsKey, isSoundMuted,
-  loadRadarTopics, loadRadarSummary, loadRadarStats,
+  loadRadarTopics, loadRadarSummary, loadRadarStats, refreshCurrentScreen,
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
@@ -10,7 +10,7 @@ import {
 import { TABLE_PAGE_SIZE } from './util';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
 import { readNewsletterForm } from './screens/hermes';
-import { goTo, login, logout, verify2fa } from './auth';
+import { goTo, login, logout, verify2fa, loadNotifBadge } from './auth';
 import { promptPwaInstall, enablePushNotifications, disablePushNotifications } from './pwa';
 
 // ---------- lectura de formularios inline ----------
@@ -106,6 +106,10 @@ const clickHandlers: Record<string, (el: Element) => void> = {
     if (opening) {
       try { localStorage.setItem('crea-admin-last-notif-seen', new Date().toISOString()); } catch { /* modo privado */ }
     }
+  },
+  'refresh-screen': () => {
+    refreshCurrentScreen();
+    loadNotifBadge(true);
   },
   'toggle-sound': () => {
     const muted = !isSoundMuted();

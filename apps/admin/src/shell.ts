@@ -49,6 +49,12 @@ export function renderBellAndNotifs(): string {
     `</button>${panel}</span>`;
 }
 
+export function renderRefreshButton(): string {
+  return '<button type="button" class="padmin-sound-toggle" data-action="refresh-screen" title="Actualizar datos de esta pantalla" aria-label="Actualizar datos de esta pantalla">' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M20 4v4.5h-4.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+    '</button>';
+}
+
 export function renderSoundToggle(): string {
   const muted = !!state.soundMuted;
   const icon = muted
@@ -70,7 +76,7 @@ export function renderSidebar(): string {
     <div class="padmin-account">
       <div class="padmin-account-row">
         <div><p class="padmin-account-name">${esc(state.user!.name)}</p><p class="padmin-account-role">${esc(roleLabels[state.user!.role] || state.user!.role)}</p></div>
-        <span class="padmin-account-actions">${renderSoundToggle()}${renderBellAndNotifs()}</span>
+        <span class="padmin-account-actions">${renderRefreshButton()}${renderSoundToggle()}${renderBellAndNotifs()}</span>
       </div>
       <button type="button" class="padmin-logout" data-action="logout">Cerrar sesión</button>
     </div>

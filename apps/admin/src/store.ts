@@ -562,6 +562,17 @@ export function setRender(fn: () => void) { renderFn = fn; }
 let renderToastsFn: () => void = function () {};
 export function setRenderToasts(fn: () => void) { renderToastsFn = fn; }
 
+// Vive aquí y no en auth.ts (que importa store) para no cerrar el ciclo de imports.
+// Mismo reset que logout(), más el aviso de por qué se cayó la sesión.
+function expireSession() {
+  state.token = null;
+  try { localStorage.removeItem('crea-admin-token'); } catch { /* modo privado */ }
+  location.hash = '';
+  setState(Object.assign(initialState(), {
+    loginError: 'Tu sesión expiró. Vuelve a iniciar sesión.',
+  }));
+}
+
 export interface ApiOpts {
   method?: string;
   body?: unknown;
@@ -583,6 +594,12 @@ export function adminApi<T = any>(path: string, opts: ApiOpts = {}): Promise<T> 
     if (res.status === 204) return null as T;
     return res.json().catch(() => null).then((json) => {
       if (!res.ok) {
+        // Sesión expirada o revocada: sin esto, el token muerto seguía en localStorage
+        // y CADA pantalla mostraba "API respondió 401" sin decir que hay que volver a
+        // entrar — el usuario quedaba atascado hasta limpiar el navegador a mano.
+        // Solo con sesión activa: un 401 de /auth/login es "contraseña incorrecta" y
+        // lo maneja el propio formulario.
+        if (res.status === 401 && state.user) expireSession();
         const err = new Error((json && json.error) || 'API respondió ' + res.status) as ApiError;
         err.status = res.status;
         err.fields = json && json.fields;

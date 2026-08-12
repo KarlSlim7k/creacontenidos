@@ -63,6 +63,17 @@
 
 /* ---------- shell: sidebar + content ---------- */
 .padmin-shell { display: flex; min-height: 100vh; min-height: 100dvh; }
+/* Fuera de pantalla hasta recibir foco (no display:none, que lo sacaría del orden
+   de tabulación y lo volvería inalcanzable). Primer tabulable de la página. */
+.padmin-skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 300;
+  background: var(--brand); color: #fff; padding: 10px 16px;
+  border-radius: 0 0 6px 0; font-size: var(--fs-md); font-weight: 600;
+}
+.padmin-skip-link:focus { left: 0; }
+/* El contenido recibe foco por el skip link, pero no debe dibujar anillo al hacerlo:
+   es un destino de navegación, no un control. */
+.padmin-content:focus { outline: none; }
 .padmin-sidebar { width: 220px; flex-shrink: 0; background: var(--surface); border-right: 0.5px solid var(--line-soft); display: flex; flex-direction: column; padding: 20px 0; }
 .padmin-sidebar-brand { padding: 0 20px 20px; display: flex; align-items: center; gap: 8px; }
 .padmin-sidebar-brand img { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; }
@@ -161,8 +172,16 @@
 .padmin-btn-brand { background: var(--brand); color: #fff; }
 .padmin-btn-danger { background: var(--danger); color: #fff; }
 .padmin-btn-danger-outline { border: 0.5px solid var(--line-soft); color: var(--danger); background: var(--surface); }
-.padmin-btn-sm { font-size: 11px; font-weight: 600; padding: 7px 10px; border-radius: 6px; cursor: pointer; border: none; }
-.padmin-icon-btn { border: none; background: none; cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 4px; }
+.padmin-btn-sm { font-size: var(--fs-xs); font-weight: 600; padding: 7px 10px; border-radius: 6px; cursor: pointer; border: none; }
+/* Target táctil: el tamaño anterior (~22px) quedaba por debajo del mínimo de
+   WCAG 2.5.8 y era difícil de acertar con el pulgar — y estos botones borran cosas.
+   32px en escritorio para no romper la densidad de las tablas; 44px en teléfono,
+   donde el panel se usa como PWA. */
+.padmin-icon-btn {
+  border: none; background: none; cursor: pointer; font-size: var(--fs-lg); border-radius: 4px;
+  min-width: 32px; min-height: 32px; padding: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 
 /* Estados interactivos compartidos — sin esto los botones disabled se ven idénticos
    a los activos y el teclado no tiene anillo de foco. */
@@ -247,6 +266,24 @@
 /* Dominio | Etiqueta | Confianza | Activa | Notas | Acciones */
 .padmin-cols-fuentes { grid-template-columns: 1.2fr 1.4fr 90px 90px 1fr 100px; min-width: 640px; }
 
+/* En teléfono las plantillas de arriba obligaban a scroll horizontal (min-width de
+   540-760px contra una pantalla de ~360px): se leía una columna a la vez y las
+   acciones quedaban fuera de vista. Cada fila pasa a ser una tarjeta apilada y se
+   ocultan los encabezados, que sin sus columnas ya no alinean con nada. Es CSS puro:
+   ninguna pantalla necesita saber que existe este modo.
+   ponytail: sin data-label por celda — el contenido ya se explica solo (título,
+   badge de estado, botones). Si alguna tabla queda ambigua, ahí sí toca etiquetarla. */
+@media (max-width: 640px) {
+  .padmin-table-head { display: none; }
+  .padmin-table-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+    min-width: 0; padding: 12px 16px;
+  }
+  /* El primer hijo es la celda identificadora (título, nombre, dominio): ocupa
+     su propia línea para que la fila se lea como tarjeta y no como sopa de chips. */
+  .padmin-table-row > *:first-child { flex: 1 0 100%; }
+}
+
 /* ---------- radar (temas/competencia/fuentes) ---------- */
 .padmin-radar-post-text { display: block; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.5; overflow-wrap: anywhere; word-break: break-word; }
 .padmin-radar-row { padding-top: 13px; padding-bottom: 13px; }
@@ -325,9 +362,11 @@
      móvil lo evita sin bloquear el pinch-zoom (accesibilidad). */
   .padmin-field input, .padmin-field textarea, .padmin-field select,
   .padmin-body-textarea, .padmin-modal-textarea, .padmin-sponsor-input { font-size: 16px; }
-  /* Touch targets ~36px. Techo conocido: no es 44px (HIG) en chips/tabs porque
-     reventaría las filas de filtros; subir si hay quejas de usabilidad. */
-  .padmin-icon-btn { min-width: 36px; min-height: 36px; padding: 6px 8px; }
+  /* Los botones de icono sí van a 44px (HIG): son ✓/🗑/✕ de una sola pulsación que
+     aprueban o BORRAN, y viven sueltos al final de la fila — subirlos no aprieta nada.
+     Techo conocido, sin cambios: chips y tabs se quedan en ~36px porque a 44
+     reventarían las filas de filtros de RADAR; subir si hay quejas de usabilidad. */
+  .padmin-icon-btn { min-width: 44px; min-height: 44px; padding: 6px 8px; }
   .padmin-chip, .padmin-tab { padding: 8px 14px; }
   .padmin-btn-sm { padding: 9px 12px; }
   .padmin-hermes-row { padding-left: 12px; padding-right: 12px; }

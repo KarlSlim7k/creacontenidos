@@ -84,10 +84,10 @@ export function renderLeads(): string {
           <span style="font-size:12px;color:var(--text-2);line-height:1.4;" title="${esc(l.message || '')}">${esc((l.message || '—').slice(0, 140))}${(l.message || '').length > 140 ? '…' : ''}</span>
           <span>${badge(l.status)}</span>
           <span style="display:flex;gap:4px;flex-wrap:wrap;">
-            ${l.status === 'nuevo' ? `<button type="button" class="padmin-icon-btn" title="Marcar contactado" data-action="mark-lead" data-id="${l.id}" data-status="contactado">✓</button>` : ''}
+            ${l.status === 'nuevo' ? `<button type="button" class="padmin-icon-btn" title="Marcar contactado" aria-label="Marcar lead como contactado" data-action="mark-lead" data-id="${l.id}" data-status="contactado">✓</button>` : ''}
             ${l.status !== 'descartado' ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="convert-lead" data-id="${l.id}">→ Cliente</button>` : ''}
-            ${l.status !== 'descartado' ? `<button type="button" class="padmin-icon-btn" title="Descartar" data-action="mark-lead" data-id="${l.id}" data-status="descartado">✕</button>` : ''}
-            ${canDelete ? `<button type="button" class="padmin-icon-btn" title="Eliminar" data-action="delete-lead" data-id="${l.id}">🗑</button>` : ''}
+            ${l.status !== 'descartado' ? `<button type="button" class="padmin-icon-btn" title="Descartar" aria-label="Descartar lead" data-action="mark-lead" data-id="${l.id}" data-status="descartado">✕</button>` : ''}
+            ${canDelete ? `<button type="button" class="padmin-icon-btn" title="Eliminar" aria-label="Eliminar lead" data-action="delete-lead" data-id="${l.id}">🗑</button>` : ''}
           </span>
         </div>`
       ).join('') : `<div class="padmin-row"><p class="padmin-row-meta">${leads.length ? 'Sin leads con ese estado.' : 'Todavía no llegan mensajes del formulario de contacto.'}</p></div>`}
