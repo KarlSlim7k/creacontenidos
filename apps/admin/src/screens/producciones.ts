@@ -6,8 +6,8 @@ export function renderProducciones(): string {
   const posts = state.data.socialPosts;
   if (!posts) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const { pageItems, page, totalPages } = paginateRows(posts, state.produccionesPage);
-  const errorHtml = state.socialFormError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.socialFormError)}</p>` : '';
-  const formHtml = state.socialFormOpen ? (
+  const errorHtml = state.formError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.formError)}</p>` : '';
+  const formHtml = state.form?.kind === 'social' ? (
     `<div class="padmin-card" style="padding:18px;margin-bottom:18px;max-width:760px;">
       ${errorHtml}
       <form data-action="submit-social">

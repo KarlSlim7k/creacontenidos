@@ -1,12 +1,13 @@
 // CREA Panel Admin — acciones (submit/handle) y delegación de eventos por data-action.
 import {
   state, setState, setData, adminApi, adminApiBlob, loadScreenData, mergeKey, setProposalsKey, isSoundMuted,
-  loadRadarTopics, loadRadarSummary, loadRadarStats, RADAR_TABLE_PAGE_SIZE,
+  loadRadarTopics, loadRadarSummary, loadRadarStats,
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
   type EditChatHunk, type MyProfile, type EditorialSettings, type TwoFaSetup,
 } from './store';
+import { TABLE_PAGE_SIZE } from './util';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
 import { readNewsletterForm } from './screens/hermes';
 import { goTo, login, logout, verify2fa } from './auth';
@@ -27,6 +28,17 @@ function attr(el: Element, name: string): string {
 function firstFieldError(err: ApiError): string {
   const fields = err.fields as Record<string, string> | undefined;
   return (fields && Object.values(fields)[0]) || err.message || 'Error';
+}
+
+// Un solo estado de formulario (ver State.form): abrir siempre limpia el error del
+// formulario anterior y cerrar siempre lo limpia todo — antes cada uno de los cinco
+// repetía su propio trío de campos y alguno se olvidaba (socialBusy quedaba colgado).
+function openForm(kind: 'user' | 'service' | 'fbAccount' | 'client' | 'social', editingId: number | null = null) {
+  setState({ form: { kind, editingId }, formError: null, socialBusy: false });
+}
+
+function closeForm() {
+  setState({ form: null, formError: null, socialBusy: false });
 }
 
 // ---------- click delegation ----------
@@ -115,7 +127,7 @@ const clickHandlers: Record<string, (el: Element) => void> = {
     const p = Math.max(0, Number(attr(el, 'data-value')) || 0);
     if (state.radarTab === 'temas' && state.radarTopicsHasMore) {
       const loaded = (state.data.topics || []).length;
-      if ((p + 1) * RADAR_TABLE_PAGE_SIZE > loaded) loadRadarTopics(false);
+      if ((p + 1) * TABLE_PAGE_SIZE > loaded) loadRadarTopics(false);
     }
     setState({ radarPage: p });
   },
@@ -188,23 +200,23 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'confirm-reject-propuesta': (el) => submitRejectProposal(Number(attr(el, 'data-id'))),
   'advance-client': (el) => submitAdvanceClient(Number(attr(el, 'data-id')), attr(el, 'data-stage')),
   'delete-idea': (el) => submitDeleteIdea(Number(attr(el, 'data-id'))),
-  'open-client-form': () => setState({ clientFormOpen: true, clientFormError: null }),
-  'close-client-form': () => setState({ clientFormOpen: false, clientFormError: null }),
+  'open-client-form': () => openForm('client'),
+  'close-client-form': () => closeForm(),
   'delete-client': (el) => submitDeleteClient(Number(attr(el, 'data-id'))),
   'delete-propuesta': (el) => submitDeleteProposal(Number(attr(el, 'data-id'))),
   'save-draft': (el) => submitDraft(Number(attr(el, 'data-id')), false),
   'submit-review': (el) => submitDraft(Number(attr(el, 'data-id')), true),
-  'open-new-user': () => setState({ newUserOpen: true, newUserError: null, editingUserId: null }),
-  'open-edit-user': (el) => setState({ newUserOpen: true, newUserError: null, editingUserId: Number(attr(el, 'data-id')) }),
-  'close-new-user': () => setState({ newUserOpen: false, newUserError: null, editingUserId: null }),
+  'open-new-user': () => openForm('user'),
+  'open-edit-user': (el) => openForm('user', Number(attr(el, 'data-id'))),
+  'close-new-user': () => closeForm(),
   'toggle-user-active': (el) => submitToggleUser(Number(attr(el, 'data-id')), attr(el, 'data-active') === 'true'),
-  'open-new-service': () => setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: null }),
-  'edit-service': (el) => setState({ serviceFormOpen: true, serviceFormError: null, editingServiceId: Number(attr(el, 'data-id')) }),
-  'close-service-form': () => setState({ serviceFormOpen: false, serviceFormError: null, editingServiceId: null }),
+  'open-new-service': () => openForm('service'),
+  'edit-service': (el) => openForm('service', Number(attr(el, 'data-id'))),
+  'close-service-form': () => closeForm(),
   'delete-service': (el) => submitDeleteService(Number(attr(el, 'data-id'))),
-  'open-new-fb-account': () => setState({ fbAccountFormOpen: true, fbAccountFormError: null, editingFbAccountId: null }),
-  'edit-fb-account': (el) => setState({ fbAccountFormOpen: true, fbAccountFormError: null, editingFbAccountId: Number(attr(el, 'data-id')) }),
-  'close-fb-account-form': () => setState({ fbAccountFormOpen: false, fbAccountFormError: null, editingFbAccountId: null }),
+  'open-new-fb-account': () => openForm('fbAccount'),
+  'edit-fb-account': (el) => openForm('fbAccount', Number(attr(el, 'data-id'))),
+  'close-fb-account-form': () => closeForm(),
   'delete-fb-account': (el) => submitDeleteFbAccount(Number(attr(el, 'data-id'))),
   'generate-draft': () => {
     if (!state.editorProposalId) return;
@@ -385,8 +397,8 @@ const clickHandlers: Record<string, (el: Element) => void> = {
       })
       .catch((err: ApiError) => { setState({ generatingProposal: false, errorMsg: err.message }); });
   },
-  'open-social-form': () => setState({ socialFormOpen: true, socialFormError: null }),
-  'close-social-form': () => setState({ socialFormOpen: false, socialFormError: null, socialBusy: false }),
+  'open-social-form': () => openForm('social'),
+  'close-social-form': () => closeForm(),
   'toggle-social': (el) => submitToggleSocial(Number(attr(el, 'data-id')), attr(el, 'data-pub') === 'true'),
   'refetch-social': (el) => submitRefetchSocial(Number(attr(el, 'data-id'))),
   'delete-social': (el) => submitDeleteSocial(Number(attr(el, 'data-id'))),
@@ -761,7 +773,7 @@ export function handleSubmit(e: SubmitEvent) {
   } else if (action === 'submit-new-user') {
     e.preventDefault();
     const nuPassword = q('#nu-password').value;
-    const nuId = state.editingUserId;
+    const nuId = state.form?.kind === 'user' ? state.form.editingId : null;
     const nuBody: { name: string; email: string; role: string; password?: string } = {
       name: q('#nu-name').value.trim(),
       email: q('#nu-email').value.trim(),
@@ -772,13 +784,13 @@ export function handleSubmit(e: SubmitEvent) {
       ? adminApi<AdminUser>('/api/auth/users/' + nuId, { method: 'PATCH', body: nuBody })
       : adminApi<AdminUser>('/api/auth/users', { method: 'POST', body: nuBody });
     nuReq.then((saved) => {
-      setState({ newUserOpen: false, newUserError: null, editingUserId: null });
+      closeForm();
       const list = nuId
         ? (state.data.users || []).map((u) => u.id === nuId ? saved : u)
         : (state.data.users || []).concat([saved]);
       setData({ users: list });
     }).catch((err: ApiError) => {
-      setState({ newUserError: firstFieldError(err) });
+      setState({ formError: firstFieldError(err) });
     });
   } else if (action === 'submit-service') {
     e.preventDefault();
@@ -791,18 +803,18 @@ export function handleSubmit(e: SubmitEvent) {
       sort_order: Number(q('#sv-order').value) || 0,
       active: q('#sv-active').checked,
     };
-    const svId = state.editingServiceId;
+    const svId = state.form?.kind === 'service' ? state.form.editingId : null;
     const req = svId
       ? adminApi<Service>('/api/commercial/services/' + svId, { method: 'PATCH', body: svBody })
       : adminApi<Service>('/api/commercial/services', { method: 'POST', body: svBody });
     req.then((saved) => {
-      setState({ serviceFormOpen: false, serviceFormError: null, editingServiceId: null });
+      closeForm();
       const list = svId
         ? (state.data.services || []).map((s) => s.id === svId ? saved : s)
         : (state.data.services || []).concat([saved]);
       setData({ services: list });
     }).catch((err: ApiError) => {
-      setState({ serviceFormError: firstFieldError(err) });
+      setState({ formError: firstFieldError(err) });
     });
   } else if (action === 'submit-fb-account') {
     e.preventDefault();
@@ -811,18 +823,18 @@ export function handleSubmit(e: SubmitEvent) {
       handle_or_url: q('#fba-handle').value.trim(),
       active: q('#fba-active').checked,
     };
-    const fbaId = state.editingFbAccountId;
+    const fbaId = state.form?.kind === 'fbAccount' ? state.form.editingId : null;
     const fbaReq = fbaId
       ? adminApi<FbAccount>('/api/listening/competitors/accounts/' + fbaId, { method: 'PATCH', body: fbaBody })
       : adminApi<FbAccount>('/api/listening/competitors/accounts', { method: 'POST', body: fbaBody });
     fbaReq.then((saved) => {
-      setState({ fbAccountFormOpen: false, fbAccountFormError: null, editingFbAccountId: null });
+      closeForm();
       const list = fbaId
         ? (state.data.fbAccounts || []).map((a) => a.id === fbaId ? saved : a)
         : (state.data.fbAccounts || []).concat([saved]);
       setData({ fbAccounts: list });
     }).catch((err: ApiError) => {
-      setState({ fbAccountFormError: firstFieldError(err) });
+      setState({ formError: firstFieldError(err) });
     });
   } else if (action === 'submit-newsletter-settings') {
     e.preventDefault();
@@ -913,25 +925,25 @@ export function handleSubmit(e: SubmitEvent) {
       phone: q('#nc-phone').value.trim(),
       email: q('#nc-email').value.trim(),
     } }).then((created) => {
-      setState({ clientFormOpen: false, clientFormError: null });
+      closeForm();
       setData({ clients: (state.data.clients || []).concat([created]) });
     }).catch((err: ApiError) => {
-      setState({ clientFormError: firstFieldError(err) });
+      setState({ formError: firstFieldError(err) });
     });
   } else if (action === 'submit-social') {
     e.preventDefault();
     const url = q('#social-url').value.trim();
     const pos = parseInt(q('#social-position').value, 10);
     if (!url) return;
-    setState({ socialBusy: true, socialFormError: null });
+    setState({ socialBusy: true, formError: null });
     adminApi<SocialPost>('/api/admin/social', { method: 'POST', body: {
       external_url: url,
       position: isNaN(pos) ? 0 : pos,
     } }).then((created) => {
-      setState({ socialFormOpen: false, socialBusy: false, socialFormError: null });
+      closeForm();
       setData({ socialPosts: (state.data.socialPosts || []).concat([created]) });
     }).catch((err: ApiError) => {
-      setState({ socialBusy: false, socialFormError: (err.fields as Record<string, string> | undefined)?.external_url || err.message });
+      setState({ socialBusy: false, formError: (err.fields as Record<string, string> | undefined)?.external_url || err.message });
     });
   }
 }

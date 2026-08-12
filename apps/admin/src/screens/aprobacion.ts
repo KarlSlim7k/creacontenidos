@@ -1,15 +1,15 @@
 // CREA Panel Admin — pantallas Aprobación y Distribución.
 import { state, type Proposal, type DistLogEntry, type DistChannel } from '../store';
-import { esc, loadingCard, errorCard, relativeTime } from '../util';
+import { esc, loadingCard, errorCard, emptyCard, relativeTime } from '../util';
 
 const transparencyLabels = ['100% humano', 'Asistido por IA', 'Generado con IA'];
 
-function renderAprobacionDesktop(piecesInReview: Proposal[]): string {
+function renderReviewList(piecesInReview: Proposal[]): string {
   return `<div class="padmin-card">${piecesInReview.map((p) => {
     const selected = state.transparency[p.id];
     const chips = transparencyLabels.map((label) => {
       const active = selected === label;
-      return `<button type="button" class="padmin-chip${active ? ' active' : ''}" data-action="set-transparency" data-piece="${p.id}" data-label="${esc(label)}">${esc(label)}</button>`;
+      return `<button type="button" class="padmin-chip${active ? ' active' : ''}" aria-pressed="${active}" data-action="set-transparency" data-piece="${p.id}" data-label="${esc(label)}">${esc(label)}</button>`;
     }).join('');
     return `<div style="padding:16px 18px;border-bottom:0.5px solid var(--line-soft);">
       <div class="padmin-review-head">
@@ -78,7 +78,7 @@ export function renderAprobacion(): string {
   return `<div>
     <h1 class="padmin-h1">Aprobación</h1>
     <p class="padmin-lede">Piezas pendientes de revisión editorial.</p>
-    ${piecesInReview.length ? renderAprobacionDesktop(piecesInReview) : loadingCard('Nada en revisión.')}
+    ${piecesInReview.length ? renderReviewList(piecesInReview) : emptyCard('Nada en revisión.')}
     ${renderDistribucion()}
     ${renderComentarioModal()}
   </div>`;

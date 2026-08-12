@@ -452,20 +452,14 @@ export interface State {
   selectedRadarId: number | null;
   configTab: string;
   showNotifications: boolean;
-  newUserOpen: boolean;
-  newUserError: string | null;
-  editingUserId: number | null;
-  serviceFormOpen: boolean;
-  serviceFormError: string | null;
-  editingServiceId: number | null;
-  fbAccountFormOpen: boolean;
-  fbAccountFormError: string | null;
-  editingFbAccountId: number | null;
-  socialFormOpen: boolean;
-  socialFormError: string | null;
+  /** Formulario de alta/edición abierto. Los cinco (usuario, servicio, cuenta FB,
+   * cliente, producción) repetían el mismo trío abierto/error/editandoId, y cerrar
+   * uno exigía acordarse de limpiar sus tres campos. Solo puede haber uno abierto
+   * a la vez —viven en pantallas distintas—, así que un estado basta.
+   * editingId null = alta; con id = edición. */
+  form: { kind: 'user' | 'service' | 'fbAccount' | 'client' | 'social'; editingId: number | null } | null;
+  formError: string | null;
   socialBusy: boolean;
-  clientFormOpen: boolean;
-  clientFormError: string | null;
   newsletterContent: NewsletterContent | null;
   newsletterBusy: boolean;
   newsletterSending: boolean;
@@ -474,6 +468,9 @@ export interface State {
   newsletterAudioBusy: boolean;
   newsletterAudioUrl: string | null;
   demoNote: string | null;
+  /** Confirmación destructiva por frase escrita (borrados masivos). null = cerrada. */
+  dangerConfirm: { action: string; title: string; body: string; phrase: string } | null;
+  dangerConfirmError: string | null;
   errorMsg: string | null;
   // Distinto de errorMsg: ese es un toast que se auto-oculta a los 6s (store.ts
   // setState). dataError persiste hasta la próxima navegación de pantalla —
@@ -513,7 +510,12 @@ export function initialData(): AdminData {
   };
 }
 
-export const state: State = {
+// Factory y no literal, por la misma razón que initialData(): logout() necesita volver
+// al estado inicial COMPLETO. Antes enumeraba a mano qué limpiar y ya se le escapaban
+// campos (radarPage, configTab, transparency, qaResult sobrevivían a cerrar sesión);
+// cada campo nuevo del State era una fuga más que nadie iba a recordar agregar.
+export function initialState(): State {
+  return {
   token: null, user: null, allowedModules: [],
   screen: 'login', loginError: null, loginTwoFaRequired: false,
   twoFaSetup: null, twoFaBackupCodes: null, twoFaBusy: false,
@@ -535,19 +537,20 @@ export const state: State = {
   pickerPreview: null,
   selectedRadarId: null,
   configTab: 'usuarios', showNotifications: false,
-  newUserOpen: false, newUserError: null, editingUserId: null,
-  serviceFormOpen: false, serviceFormError: null, editingServiceId: null,
-  fbAccountFormOpen: false, fbAccountFormError: null, editingFbAccountId: null,
-  socialFormOpen: false, socialFormError: null, socialBusy: false,
-  clientFormOpen: false, clientFormError: null,
+  form: null, formError: null, socialBusy: false,
   newsletterContent: null, newsletterBusy: false, newsletterSending: false,
   newsletterPreview: null, newsletterSubscriberCount: null,
   newsletterAudioBusy: false, newsletterAudioUrl: null,
-  demoNote: null, errorMsg: null, dataError: null, successMsg: null, soundMuted: false,
+  demoNote: null, dangerConfirm: null, dangerConfirmError: null,
+  // isSoundMuted() y no false: es preferencia por dispositivo (localStorage), así que
+  // sobrevive a cerrar sesión — es de quien usa la máquina, no de la sesión.
+  errorMsg: null, dataError: null, successMsg: null, soundMuted: isSoundMuted(),
   pwaInstallAvailable: false,
   pushEnabled: null, pushBusy: false, pushError: null,
-};
-state.soundMuted = isSoundMuted();
+  };
+}
+
+export const state: State = initialState();
 
 // render() se registra desde router.ts (evita import circular: store no importa vistas).
 let renderFn: () => void = function () {};
@@ -680,8 +683,6 @@ export function invalidateProposals() {
 // ---------- RADAR: carga server-side (filtros + paginación viven en la API) ----------
 
 export const RADAR_PAGE = 50;
-/** Filas por página en las tablas de RADAR (temas/competencia/fuentes). */
-export const RADAR_TABLE_PAGE_SIZE = 10;
 
 // Pide RADAR_PAGE+1 filas: si llegan PAGE+1 hay más páginas — evita un COUNT
 // extra en el API solo para mostrar "Cargar más".
@@ -729,6 +730,36 @@ export function loadRadarStats() {
     });
 }
 
+// Botón ↻ del shell. Las políticas de caché del panel son tres distintas
+// (proposalsByKey cachea para siempre, RADAR por tab, el resto refetchea) y ninguna
+// pantalla salvo RADAR tenía forma de forzar recarga. Tirar TODO el caché y recargar
+// la pantalla activa es derrochador a propósito: es un botón manual, no un poll, y
+// así no hay que mantener un mapa pantalla → claves que invalidar.
+export function refreshCurrentScreen() {
+  const screen = state.screen;
+  setState({ data: initialData(), dataError: null });
+  // El Editor con una pieza abierta se excluye a propósito: su dato vivo es el
+  // borrador que se está escribiendo, y recargarlo desde el servidor lo pisa con la
+  // última versión guardada. Se refrescan las listas del picker, nunca la pieza
+  // abierta. (Sin este guard, ↻ deshacía justo lo que editorDraft protege.)
+  if (screen === 'editor' && state.editorDraft) {
+    loadProposals('borrador', 'status=borrador');
+    loadProposals('en_revision', 'status=en_revision');
+    return;
+  }
+  loadScreenData(screen);
+}
+
+// Los ~20 fetches de loadScreenData eran la misma línea copiada: pedir, guardar bajo
+// una clave de AdminData, y ante error poner el toast + dataError (que es lo que
+// evita que la pantalla se quede en "Cargando…" para siempre). Ahora se declara qué
+// se pide y dónde va; el manejo de error es imposible de olvidar.
+function fetchInto<K extends keyof AdminData>(path: string, key: K) {
+  adminApi<AdminData[K]>(path)
+    .then((r) => { setData({ [key]: r } as Partial<AdminData>); })
+    .catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+}
+
 export function loadScreenData(screen: Screen, extra?: number | null) {
   state.dataError = null;
   if (screen === 'dashboard') {
@@ -736,7 +767,7 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     if (state.user!.role === 'produccion') loadProposals('mine', 'author_id=' + state.user!.id);
     if (!state.data.ideas) adminApi<Idea[]>('/api/editorial/ideas').then((r) => { setData({ ideas: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
   } else if (screen === 'ideas') {
-    adminApi<Idea[]>('/api/editorial/ideas').then((r) => { setData({ ideas: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    fetchInto('/api/editorial/ideas', 'ideas');
   } else if (screen === 'editor') {
     const id = extra != null ? extra : state.editorProposalId;
     loadProposals('borrador', 'status=borrador');
@@ -763,21 +794,21 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     adminApi<DistChannel[]>('/api/distribution/channels').then((r) => { setData({ distChannels: r }); }).catch(() => { /* best-effort */ });
     adminApi<DistLogEntry[]>('/api/distribution/log?limit=30').then((r) => { setData({ distLog: r }); }).catch(() => { /* best-effort */ });
   } else if (screen === 'comercial') {
-    adminApi<Client[]>('/api/commercial/clients').then((r) => { setData({ clients: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    fetchInto('/api/commercial/clients', 'clients');
   } else if (screen === 'leads') {
-    adminApi<Lead[]>('/api/commercial/leads').then((r) => { setData({ leads: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    fetchInto('/api/commercial/leads', 'leads');
   } else if (screen === 'metricas') {
-    adminApi<EditorialMetrics>('/api/editorial/metrics').then((r) => { setData({ metrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    fetchInto('/api/editorial/metrics', 'metrics');
   } else if (screen === 'radar') {
     // Carga perezosa por tab con caché: cambiar de tab no refetchea lo que ya
     // está cargado (los datos se refrescan con el botón ↻ o tras mutaciones).
     if (state.radarTab === 'competencia') {
       if (!state.data.competitors) {
-        adminApi<CompetitorPost[]>('/api/listening/competitors').then((r) => { setData({ competitors: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+        fetchInto('/api/listening/competitors', 'competitors');
       }
     } else if (state.radarTab === 'fuentes') {
       if (!state.data.radarSources) {
-        adminApi<RadarSource[]>('/api/listening/radar-sources').then((r) => { setData({ radarSources: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+        fetchInto('/api/listening/radar-sources', 'radarSources');
       }
     } else {
       if (!state.data.topics) loadRadarTopics(true);
@@ -788,7 +819,7 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     loadProposals('propuesta', 'status=propuesta');
     loadProposals('rechazada', 'status=rechazada');
   } else if (screen === 'producciones') {
-    adminApi<SocialPost[]>('/api/admin/social').then((r) => { setData({ socialPosts: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    fetchInto('/api/admin/social', 'socialPosts');
   } else if (screen === 'publicadas') {
     loadProposals('published', 'status=published');
   } else if (screen === 'configuracion') {
@@ -796,24 +827,24 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     // configTab heredado ('usuarios' por default) no debe disparar fetches director-only.
     const isDirector = state.user!.role === 'director';
     const tab = isDirector ? state.configTab : (state.configTab === 'perfil' ? 'perfil' : 'integraciones');
-    if (tab === 'usuarios') adminApi<AdminUser[]>('/api/auth/users').then((r) => { setData({ users: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (tab === 'permisos' && !state.data.roleModules) adminApi<RoleModules>('/api/auth/roles').then((r) => { setData({ roleModules: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (tab === 'integraciones') adminApi<Integration[]>('/api/admin/integrations').then((r) => { setData({ integrations: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (tab === 'usuarios') fetchInto('/api/auth/users', 'users');
+    if (tab === 'permisos' && !state.data.roleModules) fetchInto('/api/auth/roles', 'roleModules');
+    if (tab === 'integraciones') fetchInto('/api/admin/integrations', 'integrations');
     if (tab === 'newsletter') {
-      adminApi<NewsletterSettings>('/api/newsletter/settings').then((r) => { setData({ newsletterSettings: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-      adminApi<NewsletterEvent[]>('/api/newsletter/events').then((r) => { setData({ newsletterEvents: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+      fetchInto('/api/newsletter/settings', 'newsletterSettings');
+      fetchInto('/api/newsletter/events', 'newsletterEvents');
     }
-    if (tab === 'servicios') adminApi<Service[]>('/api/commercial/services').then((r) => { setData({ services: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (tab === 'cuentas-fb') adminApi<FbAccount[]>('/api/listening/competitors/accounts').then((r) => { setData({ fbAccounts: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-    if (tab === 'metricas-sitio') adminApi<SiteMetrics>('/api/admin/site-metrics').then((r) => { setData({ siteMetrics: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (tab === 'servicios') fetchInto('/api/commercial/services', 'services');
+    if (tab === 'cuentas-fb') fetchInto('/api/listening/competitors/accounts', 'fbAccounts');
+    if (tab === 'metricas-sitio') fetchInto('/api/admin/site-metrics', 'siteMetrics');
     if (tab === 'perfil') {
-      adminApi<MyProfile>('/api/auth/me').then((r) => { setData({ myProfile: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
-      if (isDirector) adminApi<EditorialSettings>('/api/admin/editorial-settings').then((r) => { setData({ editorialSettings: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+      fetchInto('/api/auth/me', 'myProfile');
+      if (isDirector) fetchInto('/api/admin/editorial-settings', 'editorialSettings');
     }
   } else if (screen === 'hermes') {
-    adminApi<ActivityEntry[]>('/api/admin/activity?limit=20').then((r) => { setData({ activity: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    fetchInto('/api/admin/activity?limit=20', 'activity');
   } else if (screen === 'pipeline') {
-    adminApi<PipelineStep[]>('/api/editorial/pipeline').then((r) => { setData({ pipeline: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    fetchInto('/api/editorial/pipeline', 'pipeline');
     adminApi<{ count: number }>('/api/newsletter/subscribers/count').then((r) => { setState({ newsletterSubscriberCount: r.count }); }).catch(() => { /* best-effort */ });
     if (!state.newsletterContent) {
       adminApi<NewsletterContent | null>('/api/newsletter/pending').then((r) => { if (r) setState({ newsletterContent: r }); }).catch(() => { /* best-effort */ });
