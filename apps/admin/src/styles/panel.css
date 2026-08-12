@@ -140,7 +140,25 @@
     var(--surface);
 }
 .padmin-stat-card { background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 8px; padding: 18px; }
-.padmin-stat-label { font-size: 11px; color: var(--text-mute); margin: 0 0 8px; }
+/* Variante <button> de la misma tarjeta: hereda el look y añade afordancia. width/
+   text-align/font porque el reset del navegador los pisa en <button>. */
+.padmin-stat-card-link {
+  display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+  transition: border-color .15s ease, transform .1s ease;
+}
+.padmin-stat-card-link:hover { border-color: var(--brand); }
+.padmin-stat-card-link:active { transform: scale(0.99); }
+.padmin-stat-label { font-size: var(--fs-xs); color: var(--text-mute); margin: 0 0 8px; }
+/* Aviso de fallos del agente en el inicio: informa sin bloquear (no es un toast,
+   no caduca, y solo aparece cuando hay algo roto que mirar). */
+.padmin-alert {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--accent-soft); border: 0.5px solid var(--accent);
+  border-radius: 8px; padding: 10px 14px; margin: 0 0 20px;
+  font-size: var(--fs-sm); color: var(--accent-text);
+}
+.padmin-alert-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.padmin-alert .padmin-logout { margin-left: auto; padding: 0; }
 .padmin-stat-value { font-weight: 700; font-size: 26px; color: var(--text); margin: 0; }
 .padmin-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 0.5px solid var(--line-soft); }
 .padmin-row:last-child { border-bottom: none; }

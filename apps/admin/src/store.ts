@@ -786,7 +786,15 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
   if (screen === 'dashboard') {
     loadProposals('en_revision', 'status=en_revision');
     if (state.user!.role === 'produccion') loadProposals('mine', 'author_id=' + state.user!.id);
-    if (!state.data.ideas) adminApi<Idea[]>('/api/editorial/ideas').then((r) => { setData({ ideas: r }); }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+    if (!state.data.ideas) fetchInto('/api/editorial/ideas', 'ideas');
+    // Tarjetas y avisos del inicio del director. Best-effort a propósito: si alguno
+    // falla, su tarjeta muestra "—" en vez de tumbar toda la pantalla de inicio.
+    if (state.user!.role === 'director') {
+      loadProposals('propuesta', 'status=propuesta');
+      loadProposals('published', 'status=published');
+      adminApi<Lead[]>('/api/commercial/leads').then((r) => { setData({ leads: r }); }).catch(() => { /* tarjeta en "—" */ });
+      adminApi<ActivityEntry[]>('/api/admin/activity?limit=20').then((r) => { setData({ activity: r }); }).catch(() => { /* sin aviso de fallos */ });
+    }
   } else if (screen === 'ideas') {
     fetchInto('/api/editorial/ideas', 'ideas');
   } else if (screen === 'editor') {
