@@ -43,7 +43,7 @@ function renderPickerPreview(): string {
   const p = state.pickerPreview;
   return `<div class="padmin-overlay">
     <div class="padmin-overlay-bg" data-action="close-picker-preview"></div>
-    <div class="padmin-modal" style="width:720px;padding:18px;">
+    <div class="padmin-modal" role="dialog" aria-modal="true" aria-label="Vista previa de la nota" style="width:720px;padding:18px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <p style="font-size:11px;font-weight:600;color:var(--text-mute);letter-spacing:0.06em;margin:0;">VISTA PREVIA — ${esc(p.title || '')}</p>
         <button type="button" class="padmin-drawer-close" data-action="close-picker-preview">Cerrar &times;</button>
@@ -102,14 +102,14 @@ export function renderEditor(): string {
     <div class="padmin-editor-card padmin-editor-main">
       ${sensBadge}
       <div class="padmin-field" style="margin-bottom:16px;">
-        <label style="font-size:11px;color:var(--text-mute);">Directriz editorial (opcional)</label>
+        <label class="padmin-t-small">Directriz editorial (opcional)</label>
         <textarea id="editor-directive" placeholder="Ej: enfocar en impacto económico, no político. Incluir versión ciudadana, no solo oficial." style="min-height:60px;font-size:13px;">${esc(d.editorial_directive)}</textarea>
         <p style="font-size:11px;color:var(--text-mute);margin:4px 0 0;">Se aplica antes de generar título/cuerpo con IA. Vacío = voz estándar de CREA.</p>
       </div>
       <label style="font-size:11px;color:var(--text-mute);display:block;margin-bottom:8px;">Título</label>
       <input id="editor-title" class="padmin-title-input" value="${esc(d.title)}" style="width:100%;box-sizing:border-box;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:12px;">
-        <label style="font-size:11px;color:var(--text-mute);">Cuerpo</label>
+        <label class="padmin-t-small">Cuerpo</label>
         <button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-draft" ${state.generatingDraft ? 'disabled' : ''}>${state.generatingDraft ? 'Generando…' : 'Generar borrador con IA'}</button>
       </div>
       <textarea id="editor-body" class="padmin-body-textarea">${esc(d.body)}</textarea>
@@ -127,13 +127,13 @@ export function renderEditor(): string {
       <div class="padmin-field"><label>Autor / firma</label><input id="editor-author" type="text" value="${esc(d.author_name)}"></div>
       <div class="padmin-field"><label>Imagen de portada (URL)</label><input id="editor-cover" type="text" value="${esc(d.cover_image_url)}" placeholder="https://..." onchange="document.getElementById('editor-cover-thumb').src=this.value;document.getElementById('editor-cover-thumb').style.display=this.value?'block':'none';"></div>
       ${d.cover_image_url ? `<img id="editor-cover-thumb" src="${esc(d.cover_image_url)}" alt="" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" onerror="this.style.display='none';">` : `<img id="editor-cover-thumb" style="display:none;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" onerror="this.style.display='none';">`}
-      ${isSensitive ? `<div class="padmin-field-inline padmin-field"><input id="editor-skip-image" type="checkbox" ${skipImageDefault ? 'checked' : ''} onchange="document.getElementById('editor-ia-image-block').style.display=this.checked?'none':'';"><label for="editor-skip-image" style="font-size:13px;color:var(--text);">No generar imagen (nota sensible)</label></div>` : ''}
+      ${isSensitive ? `<div class="padmin-field-inline padmin-field"><input id="editor-skip-image" type="checkbox" ${skipImageDefault ? 'checked' : ''} onchange="document.getElementById('editor-ia-image-block').style.display=this.checked?'none':'';"><label for="editor-skip-image" class="padmin-t-body">No generar imagen (nota sensible)</label></div>` : ''}
       <div class="padmin-ia-image" id="editor-ia-image-block" style="display:${isSensitive && skipImageDefault ? 'none' : ''};">
         <p class="padmin-ia-image-title">Generación de imagen de portada con IA</p>
         <button type="button" class="padmin-btn" data-action="generate-image" style="width:100%;margin-bottom:12px;" ${state.generatingImage ? 'disabled' : ''}>${state.generatingImage ? 'Generando imagen…' : 'Generar imagen con IA'}</button>
         <div class="padmin-field"><label>Prompt sugerido (editable)</label><textarea id="editor-image-prompt" style="min-height:110px;font-size:12px;">${esc(imagePrompt)}</textarea></div>
       </div>
-      <div class="padmin-field-inline padmin-field"><input id="editor-sponsored" type="checkbox" ${d.is_sponsored ? 'checked' : ''} onchange="document.getElementById('editor-sponsor-name-field').style.display=this.checked?'':'none';"><label for="editor-sponsored" style="font-size:13px;color:var(--text);">Nota patrocinada (publicidad)</label></div>
+      <div class="padmin-field-inline padmin-field"><input id="editor-sponsored" type="checkbox" ${d.is_sponsored ? 'checked' : ''} onchange="document.getElementById('editor-sponsor-name-field').style.display=this.checked?'':'none';"><label for="editor-sponsored" class="padmin-t-body">Nota patrocinada (publicidad)</label></div>
       <div class="padmin-field" id="editor-sponsor-name-field" style="margin-bottom:0;display:${d.is_sponsored ? '' : 'none'};"><label>Patrocinado por</label><input id="editor-sponsor-name" type="text" value="${esc(d.sponsor_name)}" placeholder="Nombre del negocio"></div>
       ${renderEditChat()}
     </aside>

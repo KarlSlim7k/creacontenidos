@@ -30,12 +30,19 @@ async function main() {
   // ---------- stubs mínimos de navegador ----------
   const listeners = {};
   const appEl = { innerHTML: '', addEventListener(ev, fn) { listeners[ev] = fn; }, querySelectorAll: () => [] };
+  // #toasts existe en index.html desde que los avisos se pintan fuera de #app (su
+  // auto-dismiss no debe repintar la pantalla): main.ts le registra su propia
+  // delegación de click y router.ts le escribe innerHTML.
+  const toastsEl = { innerHTML: '', addEventListener(ev, fn) { listeners['toasts:' + ev] = fn; } };
   const fakeInput = { value: '', checked: false, focus() {}, style: {} };
   globalThis.document = {
     querySelector: (sel) => (sel.startsWith('meta') ? { content: 'http://localhost:3000' } : fakeInput),
-    getElementById: (id) => (id === 'app' ? appEl : fakeInput),
+    querySelectorAll: () => [],   // manageOverlayFocus busca overlays en cada render
+    getElementById: (id) => (id === 'app' ? appEl : (id === 'toasts' ? toastsEl : fakeInput)),
     addEventListener: (ev, fn) => { listeners['doc:' + ev] = fn; },
+    activeElement: null,
   };
+  globalThis.CSS = { escape: (s) => String(s) };
   globalThis.location = { hostname: 'localhost', port: '', hash: '' };
   globalThis.localStorage = {
     _s: {},

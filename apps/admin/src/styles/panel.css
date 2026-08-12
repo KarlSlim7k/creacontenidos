@@ -16,6 +16,24 @@
   --accent-soft: #F3E4D4;
   --danger-soft: #FAE5E0;
   --bg-soft: #F0EFEA;
+  /* Superficies puntuales que estaban como hex sueltos por el archivo. Aquí no
+     porque hoy cambien, sino porque el día que se encienda el tema oscuro
+     (tokens.css ya define theme-estudio) hay que tocar un bloque y no cazar
+     literales en 400 líneas. */
+  --surface-2: #FBFBF9;   /* panel de metadatos del editor */
+  --hover-soft: #FAFAF8;  /* fila de notificación en hover */
+  --hover-line: #EEEDE8;  /* campana en hover */
+  --unread: #FBF6EC;      /* notificación sin leer */
+
+  /* Escala tipográfica. Eran 7 tamaños sueltos repetidos a mano; el 9px se eliminó
+     (ilegible incluso en escritorio) y ahora el mínimo real es 10px, reservado para
+     etiquetas en mayúsculas cortas. Cambiar la escala es cambiar estas cinco líneas.
+     ponytail: no es un sistema modular, son los tamaños que el panel ya usaba. */
+  --fs-label: 10px;  /* etiquetas de tabla, badges */
+  --fs-xs: 11px;     /* meta, notas al pie */
+  --fs-sm: 12px;     /* texto secundario */
+  --fs-md: 13px;     /* cuerpo del panel */
+  --fs-lg: 14px;     /* títulos de fila, énfasis */
   font-family: var(--font-body);
   background: var(--bg-admin);
   color: var(--text);
@@ -36,67 +54,78 @@
 .padmin-login-card { width: 100%; max-width: 360px; background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 10px; padding: 32px; }
 .padmin-login-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .padmin-login-brand .name { font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--text); }
-.padmin-login-brand .badge { font-size: 11px; color: var(--text-mute); border-left: 1px solid var(--line-soft); padding-left: 8px; }
-.padmin-login-sub { font-size: 12px; color: var(--text-mute); margin: 0 0 24px; }
+.padmin-login-brand .badge { font-size: var(--fs-xs); color: var(--text-mute); border-left: 1px solid var(--line-soft); padding-left: 8px; }
+.padmin-login-sub { font-size: var(--fs-sm); color: var(--text-mute); margin: 0 0 24px; }
 .padmin-demo-note { border-top: 1px dashed var(--line-soft); padding-top: 16px; margin-top: 6px; }
-.padmin-demo-note .label { font-size: 10px; color: var(--mute-2); letter-spacing: 0.06em; margin: 0 0 10px; }
+.padmin-demo-note .label { font-size: var(--fs-label); color: var(--mute-2); letter-spacing: 0.06em; margin: 0 0 10px; }
 .padmin-demo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.padmin-role-chip { font-size: 11px; padding: 6px 10px; border-radius: 20px; border: 0.5px solid var(--line-soft); color: var(--text); cursor: pointer; }
+.padmin-role-chip { font-size: var(--fs-xs); padding: 6px 10px; border-radius: 20px; border: 0.5px solid var(--line-soft); color: var(--text); cursor: pointer; }
 
 /* ---------- shell: sidebar + content ---------- */
 .padmin-shell { display: flex; min-height: 100vh; min-height: 100dvh; }
+/* Fuera de pantalla hasta recibir foco (no display:none, que lo sacaría del orden
+   de tabulación y lo volvería inalcanzable). Primer tabulable de la página. */
+.padmin-skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 300;
+  background: var(--brand); color: #fff; padding: 10px 16px;
+  border-radius: 0 0 6px 0; font-size: var(--fs-md); font-weight: 600;
+}
+.padmin-skip-link:focus { left: 0; }
+/* El contenido recibe foco por el skip link, pero no debe dibujar anillo al hacerlo:
+   es un destino de navegación, no un control. */
+.padmin-content:focus { outline: none; }
 .padmin-sidebar { width: 220px; flex-shrink: 0; background: var(--surface); border-right: 0.5px solid var(--line-soft); display: flex; flex-direction: column; padding: 20px 0; }
 .padmin-sidebar-brand { padding: 0 20px 20px; display: flex; align-items: center; gap: 8px; }
 .padmin-sidebar-brand img { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; }
 .padmin-sidebar-brand .name { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--text); }
-.padmin-sidebar-brand .badge { font-size: 10px; color: var(--text-mute); border-left: 1px solid var(--line-soft); padding-left: 8px; }
+.padmin-sidebar-brand .badge { font-size: var(--fs-label); color: var(--text-mute); border-left: 1px solid var(--line-soft); padding-left: 8px; }
 .padmin-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; flex: 1; }
-.padmin-nav-item { padding: 9px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; background: transparent; border: none; color: var(--text-2); text-align: left; }
+.padmin-nav-item { padding: 9px 12px; border-radius: 6px; font-size: var(--fs-md); font-weight: 500; cursor: pointer; background: transparent; border: none; color: var(--text-2); text-align: left; }
 .padmin-nav-item:hover:not(.active) { background: var(--bg-admin); }
 .padmin-nav-item.active { background: var(--brand-soft); color: var(--brand); }
 .padmin-account { padding: 14px 20px 0; border-top: 0.5px solid var(--line-soft); margin-top: 12px; position: relative; }
 .padmin-account-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.padmin-account-name { font-size: 12px; font-weight: 500; color: var(--text); margin: 0 0 2px; }
-.padmin-account-role { font-size: 11px; color: var(--text-mute); margin: 0; }
+.padmin-account-name { font-size: var(--fs-sm); font-weight: 500; color: var(--text); margin: 0 0 2px; }
+.padmin-account-role { font-size: var(--fs-xs); color: var(--text-mute); margin: 0; }
 .padmin-account-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .padmin-sound-toggle { width: 24px; height: 24px; border-radius: 6px; padding: 0; border: none; background: none; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.8; transition: background .15s ease, opacity .15s ease; color: var(--text-2); }
 .padmin-sound-toggle:hover { background: var(--bg-soft); opacity: 1; }
 .padmin-sound-toggle.muted { opacity: 0.45; color: var(--mute-2); }
 .padmin-bell-wrap { position: relative; flex-shrink: 0; }
 .padmin-bell { position: relative; width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; padding: 0; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--bg-admin); transition: background .15s ease, transform .1s ease; color: var(--text-2); }
-.padmin-bell:hover { background: #EEEDE8; }
+.padmin-bell:hover { background: var(--hover-line); }
 .padmin-bell:active { transform: scale(0.94); }
 .padmin-bell.has-unread { background: var(--accent-soft); }
-.padmin-bell-badge { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 3px; box-shadow: 0 0 0 2px #fff; animation: padmin-badge-pop .2s ease-out; }
+.padmin-bell-badge { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; border-radius: 8px; background: var(--accent); color: #fff; font-size: var(--fs-label); font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 3px; box-shadow: 0 0 0 2px #fff; animation: padmin-badge-pop .2s ease-out; }
 .padmin-notif-panel { position: absolute; bottom: 36px; left: 0; width: 280px; background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.14); z-index: 50; overflow: hidden; }
 .padmin-notif-title-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 0.5px solid var(--line-soft); }
-.padmin-notif-title { font-size: 11px; font-weight: 600; color: var(--text); margin: 0; }
-.padmin-notif-count { font-size: 10px; font-weight: 700; color: var(--accent); }
+.padmin-notif-title { font-size: var(--fs-xs); font-weight: 600; color: var(--text); margin: 0; }
+.padmin-notif-count { font-size: var(--fs-label); font-weight: 700; color: var(--accent); }
 .padmin-notif-list { max-height: 300px; overflow-y: auto; }
 .padmin-notif-item { padding: 10px 14px; border-bottom: 0.5px solid var(--line-soft); transition: background .1s ease; }
 .padmin-notif-item:last-child { border-bottom: none; }
-.padmin-notif-item:hover { background: #FAFAF8; }
-.padmin-notif-item.unread { background: #FBF6EC; }
-.padmin-notif-item p:first-child { font-size: 12px; color: var(--text); margin: 0 0 4px; line-height: 1.35; }
-.padmin-notif-time { font-size: 10px; color: var(--mute-2); margin: 0; }
+.padmin-notif-item:hover { background: var(--hover-soft); }
+.padmin-notif-item.unread { background: var(--unread); }
+.padmin-notif-item p:first-child { font-size: var(--fs-sm); color: var(--text); margin: 0 0 4px; line-height: 1.35; }
+.padmin-notif-time { font-size: var(--fs-label); color: var(--mute-2); margin: 0; }
 .padmin-notif-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: middle; }
 @keyframes padmin-badge-pop { from { transform: scale(0); } to { transform: scale(1); } }
 
 /* ---------- toasts (feedback global: errores de validación, confirmaciones) ---------- */
 .padmin-toast-stack { position: fixed; right: 20px; bottom: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
-.padmin-toast { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); font-size: 13px; line-height: 1.4; animation: padmin-toast-in .2s ease-out; }
+.padmin-toast { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); font-size: var(--fs-md); line-height: 1.4; animation: padmin-toast-in .2s ease-out; }
 .padmin-toast-error { background: #FCEEEA; color: #7A2E1D; border: 0.5px solid #E8B9A8; }
 .padmin-toast-success { background: #E9F1E6; color: #234A28; border: 0.5px solid #B7D2AE; }
-.padmin-toast-icon { font-size: 14px; line-height: 1.4; flex-shrink: 0; }
+.padmin-toast-icon { font-size: var(--fs-lg); line-height: 1.4; flex-shrink: 0; }
 .padmin-toast-msg { flex: 1; }
 .padmin-toast-close { background: none; border: none; font-size: 16px; line-height: 1; cursor: pointer; color: inherit; opacity: 0.6; padding: 0 0 0 4px; flex-shrink: 0; }
 .padmin-toast-close:hover { opacity: 1; }
 @keyframes padmin-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.padmin-logout { font-size: 11px; color: var(--accent-text); cursor: pointer; display: inline-block; padding: 10px 0; background: none; border: none; }
+.padmin-logout { font-size: var(--fs-xs); color: var(--accent-text); cursor: pointer; display: inline-block; padding: 10px 0; background: none; border: none; }
 
 .padmin-content { flex: 1; min-width: 0; overflow: auto; background: var(--bg-admin); padding: 28px 32px; }
 .padmin-h1 { font-weight: 600; font-size: 22px; color: var(--text); margin: 0 0 6px; }
-.padmin-lede { font-size: 13px; color: var(--text-mute); margin: 0 0 22px; }
+.padmin-lede { font-size: var(--fs-md); color: var(--text-mute); margin: 0 0 22px; }
 
 /* ---------- shared primitives ---------- */
 .padmin-card {
@@ -111,27 +140,66 @@
     var(--surface);
 }
 .padmin-stat-card { background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 8px; padding: 18px; }
-.padmin-stat-label { font-size: 11px; color: var(--text-mute); margin: 0 0 8px; }
+/* Variante <button> de la misma tarjeta: hereda el look y añade afordancia. width/
+   text-align/font porque el reset del navegador los pisa en <button>. */
+.padmin-stat-card-link {
+  display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+  transition: border-color .15s ease, transform .1s ease;
+}
+.padmin-stat-card-link:hover { border-color: var(--brand); }
+.padmin-stat-card-link:active { transform: scale(0.99); }
+.padmin-stat-label { font-size: var(--fs-xs); color: var(--text-mute); margin: 0 0 8px; }
+/* Aviso de fallos del agente en el inicio: informa sin bloquear (no es un toast,
+   no caduca, y solo aparece cuando hay algo roto que mirar). */
+.padmin-alert {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--accent-soft); border: 0.5px solid var(--accent);
+  border-radius: 8px; padding: 10px 14px; margin: 0 0 20px;
+  font-size: var(--fs-sm); color: var(--accent-text);
+}
+.padmin-alert-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.padmin-alert .padmin-logout { margin-left: auto; padding: 0; }
 .padmin-stat-value { font-weight: 700; font-size: 26px; color: var(--text); margin: 0; }
 .padmin-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 0.5px solid var(--line-soft); }
 .padmin-row:last-child { border-bottom: none; }
 .padmin-row.clickable { cursor: pointer; }
-.padmin-row-title { font-size: 13px; font-weight: 500; color: var(--text); margin: 0 0 2px; overflow-wrap: anywhere; }
+.padmin-row-title { font-size: var(--fs-md); font-weight: 500; color: var(--text); margin: 0 0 2px; overflow-wrap: anywhere; }
 /* Título de fila que es el disparador real de la acción (ver pickerRow del editor). */
 .padmin-row-title-btn { display: block; width: 100%; text-align: left; background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; }
-.padmin-row-meta { font-size: 11px; color: var(--text-mute); margin: 0; overflow-wrap: anywhere; }
-.padmin-badge { font-size: 10px; font-weight: 600; padding: 4px 8px; border-radius: 4px; display: inline-block; width: fit-content; }
-.padmin-chip { font-size: 11px; font-weight: 500; padding: 6px 12px; border-radius: 20px; cursor: pointer; border: 1px solid var(--line-soft); background: var(--surface); color: var(--text); }
+.padmin-row-meta { font-size: var(--fs-xs); color: var(--text-mute); margin: 0; overflow-wrap: anywhere; }
+.padmin-badge { font-size: var(--fs-label); font-weight: 600; padding: 4px 8px; border-radius: 4px; display: inline-block; width: fit-content; }
+.padmin-chip { font-size: var(--fs-xs); font-weight: 500; padding: 6px 12px; border-radius: 20px; cursor: pointer; border: 1px solid var(--line-soft); background: var(--surface); color: var(--text); }
 .padmin-chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 .padmin-chip.active-accent { background: var(--accent); color: #fff; border-color: var(--accent); }
-.padmin-section-title { font-size: 12px; font-weight: 600; color: var(--text); margin: 0 0 12px; }
-.padmin-btn { font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 6px; cursor: pointer; background: var(--accent); color: #fff; border: none; display: inline-block; }
-.padmin-btn-outline { font-size: 13px; font-weight: 500; padding: 10px 20px; border-radius: 6px; cursor: pointer; border: 0.5px solid var(--line-soft); color: var(--text); background: var(--surface); display: inline-block; }
+.padmin-section-title { font-size: var(--fs-sm); font-weight: 600; color: var(--text); margin: 0 0 12px; }
+
+/* Escala de texto del panel. Estos cuatro roles estaban repetidos como style="" inline
+   en ~30 lugares: cambiar la tipografía o preparar un tema oscuro obligaba a un
+   buscar-y-reemplazar por 12 archivos. Solo se extraen los patrones con significado
+   (tamaño + color); los márgenes sueltos siguen inline porque son de layout puntual
+   y una clase por cada uno sería indirección sin nombre real.
+   ponytail: no es un sistema tipográfico completo, son los 4 roles que ya existían. */
+.padmin-t-body { font-size: var(--fs-md); color: var(--text); }
+.padmin-t-mute { font-size: var(--fs-sm); color: var(--text-mute); }
+.padmin-t-small { font-size: var(--fs-xs); color: var(--text-mute); }
+.padmin-t-error { font-size: var(--fs-sm); color: var(--danger); }
+/* Párrafo explicativo debajo de un título de sección. */
+.padmin-t-hint { font-size: var(--fs-sm); color: var(--text-mute); margin: 0 0 14px; }
+.padmin-btn { font-size: var(--fs-md); font-weight: 600; padding: 10px 20px; border-radius: 6px; cursor: pointer; background: var(--accent); color: #fff; border: none; display: inline-block; }
+.padmin-btn-outline { font-size: var(--fs-md); font-weight: 500; padding: 10px 20px; border-radius: 6px; cursor: pointer; border: 0.5px solid var(--line-soft); color: var(--text); background: var(--surface); display: inline-block; }
 .padmin-btn-brand { background: var(--brand); color: #fff; }
 .padmin-btn-danger { background: var(--danger); color: #fff; }
 .padmin-btn-danger-outline { border: 0.5px solid var(--line-soft); color: var(--danger); background: var(--surface); }
-.padmin-btn-sm { font-size: 11px; font-weight: 600; padding: 7px 10px; border-radius: 6px; cursor: pointer; border: none; }
-.padmin-icon-btn { border: none; background: none; cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 4px; }
+.padmin-btn-sm { font-size: var(--fs-xs); font-weight: 600; padding: 7px 10px; border-radius: 6px; cursor: pointer; border: none; }
+/* Target táctil: el tamaño anterior (~22px) quedaba por debajo del mínimo de
+   WCAG 2.5.8 y era difícil de acertar con el pulgar — y estos botones borran cosas.
+   32px en escritorio para no romper la densidad de las tablas; 44px en teléfono,
+   donde el panel se usa como PWA. */
+.padmin-icon-btn {
+  border: none; background: none; cursor: pointer; font-size: var(--fs-lg); border-radius: 4px;
+  min-width: 32px; min-height: 32px; padding: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 
 /* Estados interactivos compartidos — sin esto los botones disabled se ven idénticos
    a los activos y el teclado no tiene anillo de foco. */
@@ -144,10 +212,10 @@
 .padmin button:focus-visible, .padmin [data-action]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .padmin-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-.padmin-field label { font-size: 11px; color: var(--text-mute); }
+.padmin-field label { font-size: var(--fs-xs); color: var(--text-mute); }
 .padmin-field input, .padmin-field textarea, .padmin-field select {
   border: 0.5px solid var(--line-soft); border-radius: 6px; background: var(--bg-admin); color: var(--text);
-  font: inherit; font-size: 13px; padding: 10px 12px; width: 100%;
+  font: inherit; font-size: var(--fs-md); padding: 10px 12px; width: 100%;
 }
 .padmin-field textarea { resize: vertical; min-height: 90px; }
 /* Checkbox + label en una fila (ej. "Activo", "Envío automático") — .padmin-field
@@ -156,7 +224,7 @@
 .padmin-field-inline { flex-direction: row; align-items: center; gap: 8px; }
 .padmin-field-inline input[type="checkbox"] { width: auto; }
 .padmin-field-inline label { margin: 0; }
-.padmin-demo-hint { font-size: 11px; color: var(--accent-text); margin: 10px 0 0; }
+.padmin-demo-hint { font-size: var(--fs-xs); color: var(--accent-text); margin: 10px 0 0; }
 
 /* ---------- grids utilitarios ---------- */
 .padmin-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
@@ -168,15 +236,15 @@
 
 /* ---------- kanban ---------- */
 .padmin-kanban { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
-.padmin-kanban-col-title { font-size: 11px; font-weight: 600; color: var(--text-mute); letter-spacing: 0.06em; margin: 0 0 10px; }
+.padmin-kanban-col-title { font-size: var(--fs-xs); font-weight: 600; color: var(--text-mute); letter-spacing: 0.06em; margin: 0 0 10px; }
 .padmin-kanban-cards { display: flex; flex-direction: column; gap: 10px; }
 .padmin-idea-card { background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 8px; padding: 14px; }
 .padmin-idea-card.discarded { opacity: 0.7; }
-.padmin-idea-cat { font-size: 9px; font-weight: 600; color: var(--brand); background: var(--brand-soft); display: inline-block; padding: 3px 7px; border-radius: 4px; letter-spacing: 0.06em; margin: 0 0 8px; }
-.padmin-idea-title { font-size: 13px; font-weight: 500; color: var(--text); margin: 0 0 10px; line-height: 1.35; }
+.padmin-idea-cat { font-size: var(--fs-label); font-weight: 600; color: var(--brand); background: var(--brand-soft); display: inline-block; padding: 3px 7px; border-radius: 4px; letter-spacing: 0.06em; margin: 0 0 8px; }
+.padmin-idea-title { font-size: var(--fs-md); font-weight: 500; color: var(--text); margin: 0 0 10px; line-height: 1.35; }
 .padmin-idea-foot { display: flex; justify-content: space-between; align-items: center; }
-.padmin-idea-score { font-size: 11px; color: var(--text-mute); }
-.padmin-idea-avatar { width: 20px; height: 20px; border-radius: 50%; background: var(--line-soft); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: var(--text); }
+.padmin-idea-score { font-size: var(--fs-xs); color: var(--text-mute); }
+.padmin-idea-avatar { width: 20px; height: 20px; border-radius: 50%; background: var(--line-soft); display: flex; align-items: center; justify-content: center; font-size: var(--fs-label); font-weight: 600; color: var(--text); }
 
 @media (max-width: 900px) {
   .padmin-kanban { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -185,9 +253,15 @@
   .padmin-kanban { grid-template-columns: 1fr; }
 }
 
+/* Pager compartido por todas las tablas (util.ts renderPager). Vive dentro de la
+   .padmin-card en unas pantallas y suelto debajo en RADAR: sin borde propio, el
+   separador lo pone la fila de arriba. */
+.padmin-pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }
+.padmin-pager-count { font-size: var(--fs-sm); color: var(--text-mute); }
+
 /* ---------- table-ish grids ---------- */
 .padmin-table-head { display: grid; gap: 8px; padding: 9px 16px; border-bottom: 0.5px solid var(--line-soft); }
-.padmin-table-head span { font-size: 10px; font-weight: 600; color: var(--mute-2); letter-spacing: 0.06em; }
+.padmin-table-head span { font-size: var(--fs-label); font-weight: 600; color: var(--mute-2); letter-spacing: 0.06em; }
 .padmin-table-row { display: grid; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 0.5px solid var(--line-soft); }
 .padmin-table-row:last-child { border-bottom: none; }
 .padmin-table-row.clickable { cursor: pointer; }
@@ -210,27 +284,45 @@
 /* Dominio | Etiqueta | Confianza | Activa | Notas | Acciones */
 .padmin-cols-fuentes { grid-template-columns: 1.2fr 1.4fr 90px 90px 1fr 100px; min-width: 640px; }
 
+/* En teléfono las plantillas de arriba obligaban a scroll horizontal (min-width de
+   540-760px contra una pantalla de ~360px): se leía una columna a la vez y las
+   acciones quedaban fuera de vista. Cada fila pasa a ser una tarjeta apilada y se
+   ocultan los encabezados, que sin sus columnas ya no alinean con nada. Es CSS puro:
+   ninguna pantalla necesita saber que existe este modo.
+   ponytail: sin data-label por celda — el contenido ya se explica solo (título,
+   badge de estado, botones). Si alguna tabla queda ambigua, ahí sí toca etiquetarla. */
+@media (max-width: 640px) {
+  .padmin-table-head { display: none; }
+  .padmin-table-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+    min-width: 0; padding: 12px 16px;
+  }
+  /* El primer hijo es la celda identificadora (título, nombre, dominio): ocupa
+     su propia línea para que la fila se lea como tarjeta y no como sopa de chips. */
+  .padmin-table-row > *:first-child { flex: 1 0 100%; }
+}
+
 /* ---------- radar (temas/competencia/fuentes) ---------- */
-.padmin-radar-post-text { display: block; font-size: 12px; color: var(--text-2); line-height: 1.5; overflow-wrap: anywhere; word-break: break-word; }
+.padmin-radar-post-text { display: block; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.5; overflow-wrap: anywhere; word-break: break-word; }
 .padmin-radar-row { padding-top: 13px; padding-bottom: 13px; }
 /* Bloque informativo liviano compartido por las 3 tabs: calibración (temas),
    barra de acciones (competencia), nota de contexto (fuentes). Misma "unidad
    de sección" para que las tabs lean consistentes entre sí. */
 .padmin-radar-block { margin: 0 0 16px; padding: 14px 16px; background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 7px; }
 .padmin-radar-calibration-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
-.padmin-radar-calibration-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; }
+.padmin-radar-calibration-label { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; }
 .padmin-radar-calibration-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.padmin-radar-pill { display: inline-flex; align-items: baseline; gap: 4px; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 20px; }
+.padmin-radar-pill { display: inline-flex; align-items: baseline; gap: 4px; font-size: var(--fs-sm); font-weight: 600; padding: 5px 10px; border-radius: 20px; }
 .padmin-radar-pill span { font-weight: 400; opacity: 0.85; }
-.padmin-radar-calibration-meta { margin: 0; padding-top: 10px; border-top: 0.5px solid var(--line-soft); font-size: 12px; color: var(--text-mute); line-height: 1.5; }
+.padmin-radar-calibration-meta { margin: 0; padding-top: 10px; border-top: 0.5px solid var(--line-soft); font-size: var(--fs-sm); color: var(--text-mute); line-height: 1.5; }
 .padmin-radar-filters { margin-bottom: 16px; }
 .padmin-radar-filter-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.padmin-radar-filter-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin-right: 2px; }
+.padmin-radar-filter-label { font-size: var(--fs-label); font-weight: 700; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin-right: 2px; }
 .padmin-radar-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 
 /* ---------- editor picker ---------- */
 .padmin-picker-thumb { width: 56px; height: 40px; object-fit: cover; border-radius: 5px; flex-shrink: 0; border: 0.5px solid var(--line-soft); }
-.padmin-picker-thumb-empty { display: flex; align-items: center; justify-content: center; text-align: center; font-size: 8px; line-height: 1.2; color: var(--mute-2); background: var(--bg-soft); }
+.padmin-picker-thumb-empty { display: flex; align-items: center; justify-content: center; text-align: center; font-size: var(--fs-label); line-height: 1.2; color: var(--mute-2); background: var(--bg-soft); }
 @media (max-width: 640px) {
   .padmin-picker-thumb { display: none; }
   .padmin-row { flex-wrap: wrap; }
@@ -243,29 +335,29 @@
    align-items:start para que el panel no se estire y el sticky funcione. */
 .padmin-editor-cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 .padmin-editor-main .padmin-body-textarea { min-height: 380px; margin-bottom: 0; }
-.padmin-editor-meta { background: #FBFBF9; box-shadow: 0 1px 3px rgba(0,0,0,0.06); position: sticky; top: 0; }
-.padmin-editor-meta-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin: 0 0 14px; }
+.padmin-editor-meta { background: var(--surface-2); box-shadow: 0 1px 3px rgba(0,0,0,0.06); position: sticky; top: 0; }
+.padmin-editor-meta-title { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin: 0 0 14px; }
 .padmin-ia-image { border-top: 0.5px solid var(--line-soft); padding-top: 16px; margin-bottom: 16px; }
-.padmin-ia-image-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin: 0 0 10px; }
+.padmin-ia-image-title { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin: 0 0 10px; }
 .padmin-title-input { font-family: var(--font-display); font-size: 22px; color: var(--text); border: 0.5px solid var(--line-soft); border-radius: 6px; padding: 12px 14px; margin-bottom: 18px; background: var(--bg-admin); width: 100%; }
-.padmin-body-textarea { min-height: 140px; border: 0.5px solid var(--line-soft); border-radius: 6px; background: var(--bg-admin); margin-bottom: 18px; padding: 12px 14px; font-size: 13px; color: var(--text); line-height: 1.5; width: 100%; font-family: inherit; resize: vertical; }
+.padmin-body-textarea { min-height: 140px; border: 0.5px solid var(--line-soft); border-radius: 6px; background: var(--bg-admin); margin-bottom: 18px; padding: 12px 14px; font-size: var(--fs-md); color: var(--text); line-height: 1.5; width: 100%; font-family: inherit; resize: vertical; }
 .padmin-editor-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; margin-bottom: 18px; }
 @media (max-width: 900px) { .padmin-editor-cols { grid-template-columns: 1fr; } .padmin-editor-meta { position: static; } }
 .padmin-preview-frame { width: 100%; height: clamp(320px, 70vh, 640px); border: 0.5px solid var(--line-soft); border-radius: 6px; background: #fff; }
 .padmin-chat { border-top: 0.5px solid var(--line-soft); padding-top: 16px; }
 .padmin-chat-messages { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; margin-bottom: 8px; }
-.padmin-chat-msg { font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 6px; }
+.padmin-chat-msg { font-size: var(--fs-sm); line-height: 1.5; padding: 8px 10px; border-radius: 6px; }
 .padmin-chat-msg-user { background: var(--bg-admin); color: var(--text); align-self: flex-end; }
 .padmin-chat-msg-assistant { background: var(--bg-3); color: var(--text); }
-.padmin-chat-empty { font-size: 12px; color: var(--text-mute); margin: 0; }
-.padmin-chat-error { font-size: 12px; color: var(--danger); margin: 8px 0 0; }
-.padmin-chat-input { flex: 1; font-size: 12px; padding: 8px 10px; border: 0.5px solid var(--line-soft); border-radius: 6px; background: var(--bg-admin); color: var(--text); resize: vertical; font-family: inherit; }
-.padmin-chat-legend { font-size: 10px; color: var(--text-mute); margin: 10px 0 0; }
+.padmin-chat-empty { font-size: var(--fs-sm); color: var(--text-mute); margin: 0; }
+.padmin-chat-error { font-size: var(--fs-sm); color: var(--danger); margin: 8px 0 0; }
+.padmin-chat-input { flex: 1; font-size: var(--fs-sm); padding: 8px 10px; border: 0.5px solid var(--line-soft); border-radius: 6px; background: var(--bg-admin); color: var(--text); resize: vertical; font-family: inherit; }
+.padmin-chat-legend { font-size: var(--fs-label); color: var(--text-mute); margin: 10px 0 0; }
 .padmin-chat-pending { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
 .padmin-chat-hunk { border: 0.5px solid var(--line-soft); border-radius: 6px; padding: 10px; background: var(--surface); }
-.padmin-chat-hunk-label { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin: 0 0 6px; }
-.padmin-chat-hunk-old { font-size: 12px; color: var(--danger); text-decoration: line-through; margin: 0 0 4px; }
-.padmin-chat-hunk-new { font-size: 12px; color: var(--brand); margin: 0; }
+.padmin-chat-hunk-label { font-size: var(--fs-label); font-weight: 600; letter-spacing: 0.06em; color: var(--text-mute); text-transform: uppercase; margin: 0 0 6px; }
+.padmin-chat-hunk-old { font-size: var(--fs-sm); color: var(--danger); text-decoration: line-through; margin: 0 0 4px; }
+.padmin-chat-hunk-new { font-size: var(--fs-sm); color: var(--brand); margin: 0; }
 
 /* Botón hamburguesa: solo existe en móvil. */
 .padmin-menu-toggle { display: none; background: none; border: none; cursor: pointer; color: var(--text-2); padding: 6px; border-radius: 6px; margin-left: auto; }
@@ -288,9 +380,11 @@
      móvil lo evita sin bloquear el pinch-zoom (accesibilidad). */
   .padmin-field input, .padmin-field textarea, .padmin-field select,
   .padmin-body-textarea, .padmin-modal-textarea, .padmin-sponsor-input { font-size: 16px; }
-  /* Touch targets ~36px. Techo conocido: no es 44px (HIG) en chips/tabs porque
-     reventaría las filas de filtros; subir si hay quejas de usabilidad. */
-  .padmin-icon-btn { min-width: 36px; min-height: 36px; padding: 6px 8px; }
+  /* Los botones de icono sí van a 44px (HIG): son ✓/🗑/✕ de una sola pulsación que
+     aprueban o BORRAN, y viven sueltos al final de la fila — subirlos no aprieta nada.
+     Techo conocido, sin cambios: chips y tabs se quedan en ~36px porque a 44
+     reventarían las filas de filtros de RADAR; subir si hay quejas de usabilidad. */
+  .padmin-icon-btn { min-width: 44px; min-height: 44px; padding: 6px 8px; }
   .padmin-chip, .padmin-tab { padding: 8px 14px; }
   .padmin-btn-sm { padding: 9px 12px; }
   .padmin-hermes-row { padding-left: 12px; padding-right: 12px; }
@@ -308,11 +402,11 @@
 .padmin-review-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .padmin-modal-textarea {
   width: 100%; min-height: 100px; border: 0.5px solid var(--line-soft); border-radius: 6px;
-  background: var(--bg-admin); padding: 10px 12px; font-size: 13px; font-family: inherit;
+  background: var(--bg-admin); padding: 10px 12px; font-size: var(--fs-md); font-family: inherit;
   box-sizing: border-box; resize: vertical; margin-bottom: 16px;
 }
 .padmin-sponsor-input {
-  width: 100%; font-size: 11px; padding: 5px 7px; border: 0.5px solid var(--line-soft);
+  width: 100%; font-size: var(--fs-xs); padding: 5px 7px; border: 0.5px solid var(--line-soft);
   border-radius: 5px; box-sizing: border-box; margin-bottom: 6px;
 }
 @media (max-width: 640px) {
@@ -325,10 +419,10 @@
 .padmin-overlay-bg { position: absolute; inset: 0; background: rgba(31,42,34,0.35); }
 .padmin-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 420px; max-width: calc(100vw - 32px); background: var(--surface); border-radius: 10px; padding: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
 .padmin-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100vw; background: var(--surface); box-shadow: -8px 0 24px rgba(0,0,0,0.14); padding: 28px 28px 32px; overflow: auto; }
-.padmin-drawer-eyebrow { font-size: 10px; font-weight: 600; color: var(--mute-2); letter-spacing: 0.06em; margin: 0; }
-.padmin-drawer-close { cursor: pointer; font-size: 13px; color: var(--text-mute); background: none; border: none; padding: 0; }
-.padmin-drawer-section-title { font-size: 11px; font-weight: 600; color: var(--text); letter-spacing: 0.06em; margin: 0 0 8px; }
-.padmin-drawer-section-body { font-size: 13px; color: var(--text-2); line-height: 1.5; margin: 0 0 20px; }
+.padmin-drawer-eyebrow { font-size: var(--fs-label); font-weight: 600; color: var(--mute-2); letter-spacing: 0.06em; margin: 0; }
+.padmin-drawer-close { cursor: pointer; font-size: var(--fs-md); color: var(--text-mute); background: none; border: none; padding: 0; }
+.padmin-drawer-section-title { font-size: var(--fs-xs); font-weight: 600; color: var(--text); letter-spacing: 0.06em; margin: 0 0 8px; }
+.padmin-drawer-section-body { font-size: var(--fs-md); color: var(--text-2); line-height: 1.5; margin: 0 0 20px; }
 @media (max-width: 640px) {
   .padmin-modal { top: 16px; transform: translateX(-50%); max-height: calc(100dvh - 32px); overflow: auto; padding: 20px; }
   .padmin-drawer { width: 100%; padding: 20px 16px 28px; }
@@ -336,7 +430,7 @@
 
 /* ---------- hermes (log oscuro — colores propios, no del tema claro) ---------- */
 .padmin-hermes-log { background: #15201A; border-radius: 8px; padding: 4px 0; margin-bottom: 28px; }
-.padmin-hermes-row { display: flex; align-items: center; gap: 14px; padding: 9px 18px; font-family: Menlo, Consolas, monospace; font-size: 12px; border-bottom: 0.5px solid #23301F; }
+.padmin-hermes-row { display: flex; align-items: center; gap: 14px; padding: 9px 18px; font-family: Menlo, Consolas, monospace; font-size: var(--fs-sm); border-bottom: 0.5px solid #23301F; }
 .padmin-hermes-row:last-child { border-bottom: none; }
 .padmin-hermes-time { color: #7CB084; flex-shrink: 0; width: 62px; white-space: nowrap; }
 .padmin-hermes-task { color: #F2EFE6; flex: 1; min-width: 0; overflow-wrap: anywhere; }
@@ -357,7 +451,7 @@
 
 /* ---------- config ---------- */
 .padmin-tabs { display: flex; gap: 6px; margin-bottom: 20px; overflow-x: auto; }
-.padmin-tab { font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 20px; cursor: pointer; border: 1px solid var(--line-soft); background: var(--surface); color: var(--text); }
+.padmin-tab { font-size: var(--fs-sm); font-weight: 600; padding: 8px 16px; border-radius: 20px; cursor: pointer; border: 1px solid var(--line-soft); background: var(--surface); color: var(--text); }
 .padmin-tab.active { background: var(--brand); color: #fff; }
 .padmin-integraciones-grid { display: grid; grid-template-columns: repeat(2, minmax(0,320px)); gap: 14px; }
 @media (max-width: 640px) { .padmin-integraciones-grid { grid-template-columns: 1fr; } }
@@ -366,4 +460,4 @@
 
 /* ---------- chart ---------- */
 .padmin-chart-labels { display: flex; justify-content: space-between; margin-top: 6px; }
-.padmin-chart-labels span { font-size: 10px; color: var(--mute-2); }
+.padmin-chart-labels span { font-size: var(--fs-label); color: var(--mute-2); }

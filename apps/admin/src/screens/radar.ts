@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantalla RADAR (social listening + verificación editorial).
-import { state, RADAR_TABLE_PAGE_SIZE, type Topic, type CompetitorPost, type RadarSource, type RadarStats } from '../store';
-import { esc, loadingCard, errorCard, badge, statusStyle } from '../util';
+import { state, type Topic, type CompetitorPost, type RadarSource, type RadarStats } from '../store';
+import { esc, loadingCard, errorCard, badge, statusStyle, paginateRows, renderPager } from '../util';
 
 function canManageRadar(): boolean {
   return state.user!.role === 'director' || state.user!.role === 'produccion';
@@ -20,7 +20,7 @@ function confidenceBand(c: number | null): { className: string; text: string } {
 
 function confidenceBadge(c: number | null): string {
   const b = confidenceBand(c);
-  if (b.text === '—') return `<span style="font-size:12px;color:var(--text-mute);">—</span>`;
+  if (b.text === '—') return `<span class="padmin-t-mute">—</span>`;
   const st = statusStyle(b.className === 'high' ? 'high' : b.className === 'mid' ? 'medium' : 'low');
   return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:24px;border-radius:12px;font-size:12px;font-weight:700;background:${st.bg};color:${st.color};">${esc(b.text)}</span>`;
 }
@@ -35,30 +35,10 @@ function riskFlagText(flag: string | { code?: string; message?: string }): strin
   return flag.message || flag.code || JSON.stringify(flag);
 }
 
-function paginateRows<T>(items: T[], page: number): { pageItems: T[]; page: number; totalPages: number } {
-  const totalPages = Math.max(1, Math.ceil(items.length / RADAR_TABLE_PAGE_SIZE));
-  const clamped = Math.min(Math.max(page, 0), totalPages - 1);
-  return { pageItems: items.slice(clamped * RADAR_TABLE_PAGE_SIZE, clamped * RADAR_TABLE_PAGE_SIZE + RADAR_TABLE_PAGE_SIZE), page: clamped, totalPages };
-}
-
-// Contador "Mostrando A–B de N" + Anterior/Siguiente. Un solo state.radarPage
-// para las 3 tablas (temas/competencia/fuentes): se clampea por tabla en
-// paginateRows, así que cambiar de tab nunca deja una página inválida.
-function renderPager(page: number, totalPages: number, totalItems: number, hasMore?: boolean): string {
-  if (!totalItems) return '';
-  const start = page * RADAR_TABLE_PAGE_SIZE + 1;
-  const end = Math.min(start + RADAR_TABLE_PAGE_SIZE - 1, totalItems);
-  const canPrev = page > 0;
-  const canNext = page < totalPages - 1 || !!hasMore;
-  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap;">
-    <span style="font-size:12px;color:var(--text-mute);">Mostrando ${start}–${end} de ${totalItems}${hasMore ? '+' : ''}</span>
-    <span style="display:flex;gap:6px;align-items:center;">
-      <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="set-radar-page" data-value="${page - 1}" ${canPrev ? '' : 'disabled'}>‹ Anterior</button>
-      <span style="font-size:12px;color:var(--text-mute);">Página ${page + 1}${hasMore ? '' : ` de ${totalPages}`}</span>
-      <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="set-radar-page" data-value="${page + 1}" ${canNext ? '' : 'disabled'}>Siguiente ›</button>
-    </span>
-  </div>`;
-}
+// Un solo state.radarPage para las 3 tablas (temas/competencia/fuentes): paginateRows
+// clampea por tabla, así que cambiar de tab nunca deja una página inválida.
+const radarPager = (page: number, totalPages: number, total: number, hasMore?: boolean) =>
+  renderPager(page, totalPages, total, 'set-radar-page', hasMore);
 
 function renderRadarDetail(): string {
   if (state.selectedRadarId == null) return '';
@@ -98,13 +78,13 @@ function renderRadarDetail(): string {
 
   return `<div class="padmin-overlay">
     <div class="padmin-overlay-bg" data-action="close-radar"></div>
-    <div class="padmin-drawer">
+    <div class="padmin-drawer" role="dialog" aria-modal="true" aria-label="Ficha de verificación: ${esc(topic.title)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;"><p class="padmin-drawer-eyebrow">FICHA DE VERIFICACIÓN · RADAR</p><button type="button" class="padmin-drawer-close" data-action="close-radar">Cerrar &times;</button></div>
       <h2 style="font-size:16px;font-weight:600;color:var(--text);margin:0 0 12px;line-height:1.35;">${esc(topic.title)}</h2>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center;">
         ${verificationBadge(topic.verification_status)}
-        <span style="font-size:11px;color:var(--text-mute);">${esc(conf)}</span>
-        <span style="font-size:11px;color:var(--text-mute);">Workflow: <b style="color:var(--text);">${esc(topic.status)}</b></span>
+        <span class="padmin-t-small">${esc(conf)}</span>
+        <span class="padmin-t-small">Workflow: <b style="color:var(--text);">${esc(topic.status)}</b></span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px;">
         <div style="padding:10px;background:var(--bg-soft,#f8faf7);border-radius:6px;"><span style="display:block;font-size:10px;color:var(--text-mute);text-transform:uppercase;">Evidencia</span><b style="display:block;margin-top:4px;font-size:14px;">${sourceCount != null ? esc(String(sourceCount)) + ' fuente(s)' : '—'}</b></div>
@@ -126,7 +106,7 @@ function renderRadarDetail(): string {
           ${topic.verification_status === 'risk' ? '<p style="width:100%;margin:0 0 8px;font-size:12px;color:var(--danger);">Riesgo alto: generar propuesta requiere confirmación explícita (force).</p>' : ''}
           ${(topic.verification_status === 'checking' || topic.verification_status === 'signal') ? `<p style="width:100%;margin:0 0 8px;font-size:12px;color:var(--accent-text);">${topic.verification_status === 'checking' ? 'En verificación: se puede generar, pero conviene corroborar.' : 'Solo señal: la propuesta puede necesitar más research.'}</p>` : ''}
           <div class="padmin-field" style="width:100%;margin:0 0 8px;">
-            <label style="font-size:11px;color:var(--text-mute);">Directriz editorial (opcional)</label>
+            <label class="padmin-t-small">Directriz editorial (opcional)</label>
             <textarea id="proposal-directive-${topic.id}" placeholder="Ej: tono crítico, incluir versión ciudadana. Vacío = default de Configuración → Perfil." style="min-height:50px;font-size:12px;width:100%;box-sizing:border-box;"></textarea>
           </div>
           <select id="proposal-format-${topic.id}" style="font-size:12px;border:0.5px solid var(--line-soft);border-radius:6px;padding:6px 8px;background:#fff;">
@@ -141,12 +121,12 @@ function renderRadarDetail(): string {
 }
 
 export function renderRadar(): string {
-  const tabs = '<div class="padmin-tabs">' + [
+  const tabs = '<div class="padmin-tabs" role="group" aria-label="Vistas de RADAR">' + [
     { id: 'temas', label: 'Temas' },
     { id: 'competencia', label: 'Competencia' },
     { id: 'fuentes', label: 'Fuentes' },
   ].map((t) =>
-    `<button type="button" class="padmin-tab${state.radarTab === t.id ? ' active' : ''}" data-action="set-radar-tab" data-tab="${t.id}">${t.label}</button>`
+    `<button type="button" class="padmin-tab${state.radarTab === t.id ? ' active' : ''}"${state.radarTab === t.id ? ' aria-current="true"' : ''} data-action="set-radar-tab" data-tab="${t.id}">${t.label}</button>`
   ).join('') + '</div>';
   const body = state.radarTab === 'competencia'
     ? renderRadarCompetencia()
@@ -183,13 +163,13 @@ function renderRadarFuentes(): string {
           <span style="font-size:12px;color:var(--text);">${esc(s.label)}</span>
           <span>${trustBadge(s.trust)}</span>
           ${badge(s.active ? 'activo' : 'inactivo', s.active ? 'Activa' : 'Off')}
-          <span style="font-size:11px;color:var(--text-mute);">${esc(s.notes || '—')}</span>
+          <span class="padmin-t-small">${esc(s.notes || '—')}</span>
           <span>${canManage
             ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="toggle-radar-source" data-id="${s.id}" data-active="${s.active ? 'true' : 'false'}">${s.active ? 'Desactivar' : 'Activar'}</button>`
             : '—'}</span>
         </div>`).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin fuentes. Corré la migración 035 o agregá dominios vía API.</p></div>'}
     </div>
-    ${renderPager(page, totalPages, sources.length)}
+    ${radarPager(page, totalPages, sources.length)}
   </div>`;
 }
 
@@ -215,18 +195,18 @@ function renderRadarCompetencia(): string {
           <div style="min-width:0;"><p class="padmin-row-title">${esc(p.source_account || '—')}</p><p class="padmin-row-meta" style="text-transform:uppercase;">${esc(p.source_platform || '')}</p></div>
           <div style="min-width:0;"><span class="padmin-radar-post-text" title="${esc(text)}">${esc(text.slice(0, 160))}${text.length > 160 ? '…' : ''}</span>
             ${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener" style="display:block;font-size:11px;color:var(--accent-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(p.post_url)}</a>` : ''}</div>
-          <span style="font-size:11px;color:var(--text-mute);">${p.post_date ? new Date(p.post_date).toLocaleDateString('es-MX') : '—'}</span>
+          <span class="padmin-t-small">${p.post_date ? new Date(p.post_date).toLocaleDateString('es-MX') : '—'}</span>
           <span style="font-size:12px;font-weight:600;color:var(--text);">${inter}</span>
           <span>${badge(p.analyzed ? 'analizado' : 'nuevo')}</span>
           <span style="display:flex;gap:4px;flex-wrap:wrap;">
             ${canManage ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" title="Crear idea en la bandeja a partir de esta publicación" data-action="competitor-to-idea" data-id="${p.id}">→ Idea</button>` : ''}
-            ${canManage && !p.analyzed ? `<button type="button" class="padmin-icon-btn" title="Marcar analizado" data-action="analyze-competitor" data-id="${p.id}">✓</button>` : ''}
-            ${canManage ? `<button type="button" class="padmin-icon-btn" title="Eliminar" data-action="delete-competitor" data-id="${p.id}">🗑</button>` : ''}
+            ${canManage && !p.analyzed ? `<button type="button" class="padmin-icon-btn" title="Marcar analizado" aria-label="Marcar publicación como analizada" data-action="analyze-competitor" data-id="${p.id}">✓</button>` : ''}
+            ${canManage ? `<button type="button" class="padmin-icon-btn" title="Eliminar" aria-label="Eliminar publicación de competencia" data-action="delete-competitor" data-id="${p.id}">🗑</button>` : ''}
           </span>
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin publicaciones de competencia. Usa "Explorar competencia" para escanear con IA.</p></div>'}
     </div>
-    ${renderPager(page, totalPages, posts.length)}`;
+    ${radarPager(page, totalPages, posts.length)}`;
 }
 
 function renderSummary(): string {
@@ -266,7 +246,7 @@ function renderCalibration(stats: RadarStats | null): string {
     return `<span class="padmin-radar-pill" style="background:${st.bg};color:${st.color};">${esc(label)} ${count}${detail ? `<span>(${esc(detail)})</span>` : ''}</span>`;
   };
   const dayChip = (d: number) =>
-    `<button type="button" class="padmin-chip${days === d ? ' active' : ''}" data-action="set-radar-stats-days" data-value="${d}">${d}d</button>`;
+    `<button type="button" class="padmin-chip${days === d ? ' active' : ''}" aria-pressed="${days === d}" aria-label="Ventana de ${d} días" data-action="set-radar-stats-days" data-value="${d}">${d}d</button>`;
   const hints = (stats.hints || []).map((h) =>
     `<li style="margin:4px 0;font-size:12px;color:var(--text-2);">${esc(h)}</li>`
   ).join('');
@@ -308,7 +288,7 @@ function renderRadarTemas(): string {
     { id: 'none', label: 'Sin evaluar' },
   ];
   const chip = (active: boolean, action: string, value: string, label: string, accent?: boolean) =>
-    `<button type="button" class="padmin-chip${active ? (accent ? ' active-accent' : ' active') : ''}" data-action="${action}" data-value="${esc(value)}">${esc(label)}</button>`;
+    `<button type="button" class="padmin-chip${active ? (accent ? ' active-accent' : ' active') : ''}" aria-pressed="${active}" data-action="${action}" data-value="${esc(value)}">${esc(label)}</button>`;
 
   const sourceChips = sources.map((src) => chip(state.radarSource === src, 'set-radar-source', src, src)).join('');
   const workflowChips = workflowStatuses.map((st) => chip(state.radarStatus === st, 'set-radar-status', st, st, true)).join('');
@@ -342,18 +322,18 @@ function renderRadarTemas(): string {
         // pantalla. El acceso por teclado a la ficha va por el botón 👁.
         return `<div class="padmin-table-row clickable padmin-radar-row padmin-cols-radar" data-action="open-radar" data-id="${r.id}">
           <div style="min-width:0;"><span style="font-size:13px;color:var(--text);display:block;">${esc(r.title)}</span>${sub ? `<span style="font-size:11px;color:var(--text-mute);display:block;margin-top:2px;">${sub}</span>` : ''}</div>
-          <span style="font-size:12px;color:var(--text-mute);">${esc(r.source || '—')}</span>
+          <span class="padmin-t-mute">${esc(r.source || '—')}</span>
           <span style="font-size:12px;color:var(--text);font-weight:600;">${r.mentions}</span>
           <span>${confidenceBadge(r.confidence)}</span>
           ${verificationBadge(r.verification_status)}
           <span style="display:flex;gap:4px;">
-            <button type="button" title="Ver" data-action="open-radar" data-id="${r.id}" class="padmin-icon-btn">👁</button>
-            ${canManage ? `<button type="button" title="Aprobar" data-action="approve-topic" data-id="${r.id}" class="padmin-icon-btn" ${r.status === 'Revisado' ? 'disabled' : ''}>✓</button>` : ''}
-            ${canManage ? `<button type="button" title="Eliminar" data-action="delete-topic" data-id="${r.id}" class="padmin-icon-btn">🗑</button>` : ''}
+            <button type="button" title="Ver ficha" aria-label="Ver ficha de verificación" data-action="open-radar" data-id="${r.id}" class="padmin-icon-btn">👁</button>
+            ${canManage ? `<button type="button" title="Aprobar" aria-label="Aprobar tema" data-action="approve-topic" data-id="${r.id}" class="padmin-icon-btn" ${r.status === 'Revisado' ? 'disabled' : ''}>✓</button>` : ''}
+            ${canManage ? `<button type="button" title="Eliminar" aria-label="Eliminar tema" data-action="delete-topic" data-id="${r.id}" class="padmin-icon-btn">🗑</button>` : ''}
           </span>
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">No hay temas con estos filtros.</p></div>'}
     </div>
-    ${renderPager(page, totalPages, topics.length, state.radarTopicsHasMore)}
+    ${radarPager(page, totalPages, topics.length, state.radarTopicsHasMore)}
     ${renderRadarDetail()}`;
 }

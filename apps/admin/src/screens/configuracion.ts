@@ -57,9 +57,10 @@ function renderPushCard(): string {
 export function renderConfigUsuarios(): string {
   const users = state.data.users;
   if (!users) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
-  const editing = state.editingUserId != null ? users.find((u: AdminUser) => u.id === state.editingUserId) : null;
-  const errorHtml = state.newUserError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.newUserError)}</p>` : '';
-  const formHtml = state.newUserOpen ? (
+  const editingId = state.form?.kind === 'user' ? state.form.editingId : null;
+  const editing = editingId != null ? users.find((u: AdminUser) => u.id === editingId) : null;
+  const errorHtml = state.formError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.formError)}</p>` : '';
+  const formHtml = state.form?.kind === 'user' ? (
     `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:760px;">
       ${errorHtml}
       <form data-action="submit-new-user" class="padmin-grid2" style="gap:10px;">
@@ -76,8 +77,8 @@ export function renderConfigUsuarios(): string {
     <div class="padmin-table-head padmin-cols-users"><span>NOMBRE</span><span>ROL</span><span>ESTADO</span><span></span></div>
     ${users.map((u: AdminUser) => {
       return `<div class="padmin-table-row padmin-cols-users">
-        <span style="font-size:13px;color:var(--text);">${esc(u.name)}</span>
-        <span style="font-size:12px;color:var(--text-mute);">${esc(roleLabels[u.role] || u.role)}</span>
+        <span class="padmin-t-body">${esc(u.name)}</span>
+        <span class="padmin-t-mute">${esc(roleLabels[u.role] || u.role)}</span>
         ${badge(u.active ? 'activo' : 'inactivo')}
         <span style="display:flex;gap:4px;flex-wrap:wrap;">
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="open-edit-user" data-id="${u.id}">Editar</button>
@@ -95,7 +96,7 @@ export function renderConfigPermisos(): string {
   return `<div class="padmin-card" style="max-width:780px;overflow:auto;">
     <div class="padmin-table-head padmin-cols-permisos"><span>MÓDULO</span><span>DIRECTOR</span><span>PRODUCCIÓN</span><span>COMERCIAL</span><span>COLABORADOR</span></div>
     ${navItemsAll.map((n) =>
-      `<div class="padmin-table-row padmin-cols-permisos"><span style="font-size:13px;color:var(--text);">${esc(n.label)}</span>${roleOrder.map((r) =>
+      `<div class="padmin-table-row padmin-cols-permisos"><span class="padmin-t-body">${esc(n.label)}</span>${roleOrder.map((r) =>
         `<span style="font-weight:600;">${mark((roles[r] || []).indexOf(n.id) !== -1)}</span>`
       ).join('')}</div>`
     ).join('')}</div>`;
@@ -123,7 +124,7 @@ export function renderConfigNewsletter(): string {
         <input id="nls-enabled" type="checkbox"${settings.enabled ? ' checked' : ''}>
         <label for="nls-enabled">Envío automático diario activo</label>
       </div>
-      <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">A la hora configurada, el sistema genera el contenido (clima real + IA) y lo deja pendiente de aprobación en Pipeline → Buenos días, Perote. Nunca se envía solo.</p>
+      <p class="padmin-t-hint">A la hora configurada, el sistema genera el contenido (clima real + IA) y lo deja pendiente de aprobación en Pipeline → Buenos días, Perote. Nunca se envía solo.</p>
       <div class="padmin-editor-grid2">
         <div class="padmin-field" style="margin:0;"><label>Hora</label><select id="nls-hour">${hours.map((h) => `<option value="${h}"${h === settings.send_hour ? ' selected' : ''}>${String(h).padStart(2, '0')}</option>`).join('')}</select></div>
         <div class="padmin-field" style="margin:0;"><label>Minuto</label><select id="nls-minute">${minutes.map((m) => `<option value="${m}"${m === settings.send_minute ? ' selected' : ''}>${String(m).padStart(2, '0')}</option>`).join('')}</select></div>
@@ -139,7 +140,7 @@ export function renderConfigAgenda(): string {
   const events = state.data.newsletterEvents;
   return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-top:16px;">
     <p class="padmin-section-title" style="margin-bottom:10px;">Agenda del newsletter</p>
-    <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Eventos reales del día (cortes de agua, eventos culturales, partidos, trámites). Sin esto, la sección "Agenda" del newsletter queda vacía — nunca se inventa.</p>
+    <p class="padmin-t-hint">Eventos reales del día (cortes de agua, eventos culturales, partidos, trámites). Sin esto, la sección "Agenda" del newsletter queda vacía — nunca se inventa.</p>
     <form data-action="submit-newsletter-event" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
       <input id="ne-date" type="date" required style="flex:0 0 150px;">
       <input id="ne-title" type="text" placeholder="Ej. Corte de agua en colonia Centro, 9am-2pm" required style="flex:1;min-width:200px;">
@@ -155,9 +156,10 @@ export function renderConfigAgenda(): string {
 export function renderConfigServicios(): string {
   const services = state.data.services;
   if (!services) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
-  const editing = state.editingServiceId != null ? services.find((s: Service) => s.id === state.editingServiceId) : null;
-  const errorHtml = state.serviceFormError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.serviceFormError)}</p>` : '';
-  const formHtml = state.serviceFormOpen ? (
+  const editingId = state.form?.kind === 'service' ? state.form.editingId : null;
+  const editing = editingId != null ? services.find((s: Service) => s.id === editingId) : null;
+  const errorHtml = state.formError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.formError)}</p>` : '';
+  const formHtml = state.form?.kind === 'service' ? (
     `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">
       ${errorHtml}
       <form data-action="submit-service" class="padmin-grid2" style="gap:10px;">
@@ -177,8 +179,8 @@ export function renderConfigServicios(): string {
     <div class="padmin-table-head padmin-cols-services"><span>NOMBRE</span><span>PRECIO</span><span>ESTADO</span><span></span></div>
     ${services.length ? services.map((s: Service) => {
       return `<div class="padmin-table-row padmin-cols-services">
-        <span style="font-size:13px;color:var(--text);">${esc(s.name)}</span>
-        <span style="font-size:12px;color:var(--text-mute);">${esc(s.price_label)}</span>
+        <span class="padmin-t-body">${esc(s.name)}</span>
+        <span class="padmin-t-mute">${esc(s.price_label)}</span>
         ${badge(s.active ? 'activo' : 'inactivo')}
         <span style="display:flex;gap:6px;flex-wrap:wrap;">
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="edit-service" data-id="${s.id}">Editar</button>
@@ -192,9 +194,10 @@ export function renderConfigServicios(): string {
 export function renderConfigCuentasFb(): string {
   const accounts = state.data.fbAccounts;
   if (!accounts) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
-  const editing = state.editingFbAccountId != null ? accounts.find((a: FbAccount) => a.id === state.editingFbAccountId) : null;
-  const errorHtml = state.fbAccountFormError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.fbAccountFormError)}</p>` : '';
-  const formHtml = state.fbAccountFormOpen ? (
+  const editingId = state.form?.kind === 'fbAccount' ? state.form.editingId : null;
+  const editing = editingId != null ? accounts.find((a: FbAccount) => a.id === editingId) : null;
+  const errorHtml = state.formError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.formError)}</p>` : '';
+  const formHtml = state.form?.kind === 'fbAccount' ? (
     `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:760px;">
       ${errorHtml}
       <form data-action="submit-fb-account" class="padmin-grid2" style="gap:10px;">
@@ -211,8 +214,8 @@ export function renderConfigCuentasFb(): string {
     <div class="padmin-table-head padmin-cols-services"><span>MEDIO</span><span>CUENTA</span><span>ESTADO</span><span></span></div>
     ${accounts.length ? accounts.map((a: FbAccount) => {
       return `<div class="padmin-table-row padmin-cols-services">
-        <span style="font-size:13px;color:var(--text);">${esc(a.label)}</span>
-        <span style="font-size:12px;color:var(--text-mute);">${esc(a.handle_or_url)}</span>
+        <span class="padmin-t-body">${esc(a.label)}</span>
+        <span class="padmin-t-mute">${esc(a.handle_or_url)}</span>
         ${badge(a.active ? 'activo' : 'inactivo', a.active ? 'Activa' : 'Inactiva')}
         <span style="display:flex;gap:6px;flex-wrap:wrap;">
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="edit-fb-account" data-id="${a.id}">Editar</button>
@@ -248,7 +251,7 @@ function renderTwoFactorCard(enabled: boolean): string {
   if (state.twoFaBackupCodes) {
     return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
       <p class="padmin-section-title" style="margin-bottom:6px;">Guarda tus códigos de respaldo</p>
-      <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Cada uno sirve una sola vez si pierdes acceso a tu app de autenticación. No se vuelven a mostrar.</p>
+      <p class="padmin-t-hint">Cada uno sirve una sola vez si pierdes acceso a tu app de autenticación. No se vuelven a mostrar.</p>
       <div id="tfa-backup-codes" style="font-family:monospace;font-size:14px;background:var(--bg-soft);border-radius:6px;padding:12px;margin-bottom:14px;line-height:1.8;">${state.twoFaBackupCodes.map((c) => esc(c)).join('<br>')}</div>
       <button type="button" class="padmin-btn padmin-btn-sm" data-action="dismiss-2fa-backup-codes">Ya los guardé</button>
     </div>`;
@@ -256,7 +259,7 @@ function renderTwoFactorCard(enabled: boolean): string {
   if (state.twoFaSetup) {
     return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
       <p class="padmin-section-title" style="margin-bottom:6px;">Activar verificación en dos pasos</p>
-      <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Escanea el código con Google Authenticator, Authy o similar, luego confirma con el código de 6 dígitos que te muestre la app.</p>
+      <p class="padmin-t-hint">Escanea el código con Google Authenticator, Authy o similar, luego confirma con el código de 6 dígitos que te muestre la app.</p>
       <img src="${esc(state.twoFaSetup.qr_data_url)}" alt="Código QR" width="180" height="180" style="display:block;margin-bottom:10px;">
       <p style="font-size:11px;color:var(--mute-2);margin:0 0 14px;word-break:break-all;">O ingresa manualmente: <code>${esc(state.twoFaSetup.secret)}</code></p>
       ${errorHtml}
@@ -267,13 +270,13 @@ function renderTwoFactorCard(enabled: boolean): string {
     </div>`;
   }
   const body = enabled
-    ? `<p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Activada — se pide un código además de tu contraseña al iniciar sesión.</p>
+    ? `<p class="padmin-t-hint">Activada — se pide un código además de tu contraseña al iniciar sesión.</p>
        ${errorHtml}
        <form data-action="submit-2fa-disable" class="padmin-grid2" style="gap:10px;">
          <div class="padmin-field" style="margin:0;"><label>Código actual (o uno de respaldo), para desactivar</label><input id="tfa-disable-code" type="text" inputmode="numeric" required></div>
          <div style="grid-column:1 / -1;"><button type="submit" class="padmin-btn-outline padmin-btn-sm" ${state.twoFaBusy ? 'disabled' : ''}>Desactivar 2FA</button></div>
        </form>`
-    : `<p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">No activada — agrega una capa extra de seguridad a tu cuenta.</p>
+    : `<p class="padmin-t-hint">No activada — agrega una capa extra de seguridad a tu cuenta.</p>
        ${errorHtml}
        <button type="button" class="padmin-btn padmin-btn-sm" data-action="start-2fa-setup" ${state.twoFaBusy ? 'disabled' : ''}>${state.twoFaBusy ? 'Generando…' : 'Activar 2FA'}</button>`;
   return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
@@ -289,7 +292,7 @@ export function renderConfigPerfil(): string {
   if (!me || (isDirector && !settings)) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const directivaCard = !isDirector ? '' : `<div class="padmin-card" style="max-width:480px;padding:20px;">
     <p class="padmin-section-title" style="margin-bottom:6px;">Directriz editorial</p>
-    <p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">Instrucción general que la IA aplica antes de redactar cualquier propuesta o borrador — precarga el campo por-nota en RADAR y el Editor cuando esa nota no trae una directriz propia. Vacío = voz estándar de CREA.</p>
+    <p class="padmin-t-hint">Instrucción general que la IA aplica antes de redactar cualquier propuesta o borrador — precarga el campo por-nota en RADAR y el Editor cuando esa nota no trae una directriz propia. Vacío = voz estándar de CREA.</p>
     <form data-action="submit-editorial-settings">
       <div class="padmin-field" style="margin:0 0 12px;">
         <textarea id="es-directive" style="min-height:110px;" placeholder="Ej: priorizar impacto económico sobre político. Incluir siempre versión ciudadana, no solo oficial.">${esc(settings!.default_directive || '')}</textarea>
@@ -320,9 +323,12 @@ export function renderConfiguracion(): string {
   // así que un configTab heredado se recorta a uno de los dos disponibles.
   const tab = isDirector ? state.configTab : (state.configTab === 'perfil' ? 'perfil' : 'integraciones');
   const body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : (tab === 'metricas-sitio' ? renderConfigMetricas() : (tab === 'cuentas-fb' ? renderConfigCuentasFb() : (tab === 'perfil' ? renderConfigPerfil() : renderConfigUsuarios()))))));
+  // aria-current y no role="tab": role="tab" obliga a tabpanel + aria-controls +
+  // navegación con flechas, y a medias es peor que nada. Estos son botones que
+  // cambian la vista, y aria-current marca cuál está activo sin prometer más.
   const tabBtn = (id: string, label: string) => {
     const active = tab === id;
-    return `<button type="button" class="padmin-tab${active ? ' active' : ''}" data-action="set-config-tab" data-tab="${id}">${label}</button>`;
+    return `<button type="button" class="padmin-tab${active ? ' active' : ''}"${active ? ' aria-current="true"' : ''} data-action="set-config-tab" data-tab="${id}">${label}</button>`;
   };
   const tabs = isDirector
     ? `${tabBtn('usuarios', 'Usuarios')}${tabBtn('permisos', 'Permisos')}${tabBtn('integraciones', 'Integraciones')}${tabBtn('newsletter', 'Newsletter')}${tabBtn('servicios', 'Servicios')}${tabBtn('cuentas-fb', 'Cuentas FB')}${tabBtn('metricas-sitio', 'Métricas del sitio')}${tabBtn('perfil', 'Perfil')}`
@@ -330,7 +336,7 @@ export function renderConfiguracion(): string {
   return `<div>
     <h1 class="padmin-h1">Configuración</h1>
     <p class="padmin-lede">${isDirector ? 'Usuarios, permisos e integraciones del panel. Solo visible para Director.' : 'Instalación de la app, notificaciones y tu cuenta.'}</p>
-    <div class="padmin-tabs">${tabs}</div>
+    <div class="padmin-tabs" role="group" aria-label="Secciones de configuración">${tabs}</div>
     ${body}
   </div>`;
 }

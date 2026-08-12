@@ -17,7 +17,7 @@ export function renderHermes(): string {
     }).join('')}</div>` : '<p class="padmin-lede">Sin actividad registrada todavía.</p>'}
     ${skills.length ? `<p class="padmin-section-title" style="margin-top:20px;margin-bottom:4px;">Skills generados desde tareas repetidas</p>
       <div class="padmin-card">${skills.map((sk) =>
-        `<div class="padmin-row"><span style="font-size:13px;color:var(--text);">${esc(sk.name)}</span><span style="font-size:12px;font-weight:600;color:var(--text-mute);">${sk.count} usos</span></div>`
+        `<div class="padmin-row"><span class="padmin-t-body">${esc(sk.name)}</span><span style="font-size:12px;font-weight:600;color:var(--text-mute);">${sk.count} usos</span></div>`
       ).join('')}</div>` : ''}
   </div>`;
 }
@@ -75,7 +75,7 @@ export function readNewsletterForm() {
 
 function renderNewsletterCard(): string {
   const count = state.newsletterSubscriberCount;
-  const countHtml = `<p style="font-size:12px;color:var(--text-mute);margin:0 0 14px;">${count == null ? 'Cargando suscriptores…' : count + ' suscriptor' + (count === 1 ? '' : 'es') + ' activos en Resend.'}</p>`;
+  const countHtml = `<p class="padmin-t-hint">${count == null ? 'Cargando suscriptores…' : count + ' suscriptor' + (count === 1 ? '' : 'es') + ' activos en Resend.'}</p>`;
 
   if (!state.newsletterContent) {
     return `<div class="padmin-card" style="max-width:640px;margin-top:28px;padding:20px;">

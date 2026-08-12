@@ -31,8 +31,8 @@ export function renderComercial(): string {
   if (!clients) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const canMove = state.user!.role === 'comercial' || state.user!.role === 'director';
   const canDelete = state.user!.role === 'director';
-  const errorHtml = state.clientFormError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.clientFormError)}</p>` : '';
-  const formHtml = state.clientFormOpen ? (
+  const errorHtml = state.formError ? `<p class="padmin-lede" style="color:var(--danger);">${esc(state.formError)}</p>` : '';
+  const formHtml = state.form?.kind === 'client' ? (
     `<div class="padmin-card" style="padding:16px;margin-bottom:16px;max-width:640px;">
       ${errorHtml}
       <form data-action="submit-new-client" class="padmin-grid2" style="gap:10px;">
@@ -64,7 +64,7 @@ export function renderLeads(): string {
   const statuses = ['todos', 'nuevo', 'contactado', 'descartado'];
   const chips = statuses.map((st) => {
     const active = state.leadsStatus === st;
-    return `<button type="button" class="padmin-chip${active ? ' active' : ''}" data-action="set-leads-status" data-value="${st}">${st === 'todos' ? 'Todos' : STATUS_LABEL[st]}</button>`;
+    return `<button type="button" class="padmin-chip${active ? ' active' : ''}" aria-pressed="${active}" data-action="set-leads-status" data-value="${st}">${st === 'todos' ? 'Todos' : STATUS_LABEL[st]}</button>`;
   }).join('');
   const filtered = leads.filter((l: Lead) => state.leadsStatus === 'todos' || l.status === state.leadsStatus);
   const nuevos = leads.filter((l: Lead) => l.status === 'nuevo').length;
@@ -73,21 +73,21 @@ export function renderLeads(): string {
   return `<div>
     <h1 class="padmin-h1">Leads</h1>
     <p class="padmin-lede">Mensajes del formulario de contacto del sitio. ${nuevos ? nuevos + ' sin atender.' : 'Sin pendientes.'}</p>
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;">${chips}</div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap;" role="group" aria-label="Filtrar leads por estado">${chips}</div>
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-leads"><span>RECIBIDO</span><span>CONTACTO</span><span>INTERÉS</span><span>MENSAJE</span><span>ESTADO</span><span>ACCIONES</span></div>
       ${filtered.length ? pageItems.map((l: Lead) =>
         `<div class="padmin-table-row padmin-cols-leads">
-          <span style="font-size:11px;color:var(--text-mute);">${esc(relativeTime(l.created_at))}</span>
+          <span class="padmin-t-small">${esc(relativeTime(l.created_at))}</span>
           <div style="min-width:0;"><p class="padmin-row-title">${esc(l.name)}${l.company ? ' · ' + esc(l.company) : ''}</p><p class="padmin-row-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(l.email || '')}</p></div>
-          <span style="font-size:12px;color:var(--text-mute);">${esc(l.service_interest || '—')}</span>
+          <span class="padmin-t-mute">${esc(l.service_interest || '—')}</span>
           <span style="font-size:12px;color:var(--text-2);line-height:1.4;" title="${esc(l.message || '')}">${esc((l.message || '—').slice(0, 140))}${(l.message || '').length > 140 ? '…' : ''}</span>
           <span>${badge(l.status)}</span>
           <span style="display:flex;gap:4px;flex-wrap:wrap;">
-            ${l.status === 'nuevo' ? `<button type="button" class="padmin-icon-btn" title="Marcar contactado" data-action="mark-lead" data-id="${l.id}" data-status="contactado">✓</button>` : ''}
+            ${l.status === 'nuevo' ? `<button type="button" class="padmin-icon-btn" title="Marcar contactado" aria-label="Marcar lead como contactado" data-action="mark-lead" data-id="${l.id}" data-status="contactado">✓</button>` : ''}
             ${l.status !== 'descartado' ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="convert-lead" data-id="${l.id}">→ Cliente</button>` : ''}
-            ${l.status !== 'descartado' ? `<button type="button" class="padmin-icon-btn" title="Descartar" data-action="mark-lead" data-id="${l.id}" data-status="descartado">✕</button>` : ''}
-            ${canDelete ? `<button type="button" class="padmin-icon-btn" title="Eliminar" data-action="delete-lead" data-id="${l.id}">🗑</button>` : ''}
+            ${l.status !== 'descartado' ? `<button type="button" class="padmin-icon-btn" title="Descartar" aria-label="Descartar lead" data-action="mark-lead" data-id="${l.id}" data-status="descartado">✕</button>` : ''}
+            ${canDelete ? `<button type="button" class="padmin-icon-btn" title="Eliminar" aria-label="Eliminar lead" data-action="delete-lead" data-id="${l.id}">🗑</button>` : ''}
           </span>
         </div>`
       ).join('') : `<div class="padmin-row"><p class="padmin-row-meta">${leads.length ? 'Sin leads con ese estado.' : 'Todavía no llegan mensajes del formulario de contacto.'}</p></div>`}

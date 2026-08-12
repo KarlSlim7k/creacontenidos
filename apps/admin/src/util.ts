@@ -1,9 +1,13 @@
 // CREA Panel Admin — helpers de presentación compartidos por todos los módulos.
 import type { Screen } from './store';
 
+// La comilla simple también se escapa aunque hoy todos los atributos del panel usen
+// dobles: el día que alguien escriba style='...' o data-x='...' con un valor de la DB,
+// esto es XSS. Un carácter aquí evita depender de una convención no verificable.
 export function esc(str: unknown): string {
   return String(str == null ? '' : str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 export function relativeTime(iso: string | null | undefined): string {
@@ -61,11 +65,11 @@ export function badge(statusKey: string, label?: string): string {
   return `<span class="padmin-badge" style="background:${st.bg};color:${st.color};">${esc(label || STATUS_LABEL[statusKey] || statusKey)}</span>`;
 }
 
-// Paginación cliente genérica (10 filas/página) para tablas que ya cargan todo el
-// dataset de un jalón (Leads, Producciones) — a diferencia de RADAR, que pagina sobre
-// datos que pueden crecer desde el servidor (ver paginateRows/renderPager locales de
-// radar.ts, con su propio manejo de "hasMore"). No se unificaron para no arriesgar el
-// flujo de RADAR ya probado (12/12 e2e); estas versiones son la mitad más simple.
+// Paginación cliente (10 filas/página) para TODAS las tablas del panel, RADAR incluida.
+// Antes había dos copias casi iguales (esta y una local en radar.ts) con el mismo
+// tamaño de página; la única diferencia real era `hasMore`, que aquí es un parámetro
+// opcional: RADAR pagina sobre datos que el servidor puede seguir alimentando, y el
+// resto no. Una copia menos que mantener sincronizada.
 export const TABLE_PAGE_SIZE = 10;
 
 export function paginateRows<T>(items: T[], page: number): { pageItems: T[]; page: number; totalPages: number } {
@@ -74,15 +78,18 @@ export function paginateRows<T>(items: T[], page: number): { pageItems: T[]; pag
   return { pageItems: items.slice(clamped * TABLE_PAGE_SIZE, clamped * TABLE_PAGE_SIZE + TABLE_PAGE_SIZE), page: clamped, totalPages };
 }
 
-export function renderPager(page: number, totalPages: number, totalItems: number, action: string): string {
-  if (totalPages <= 1) return '';
+// hasMore: el servidor puede tener más filas de las cargadas (RADAR). Cambia dos cosas
+// — "Siguiente" sigue activo en la última página local, y el total se muestra como "N+"
+// porque todavía no se conoce. Sin hasMore se comporta como paginación cerrada.
+export function renderPager(page: number, totalPages: number, totalItems: number, action: string, hasMore?: boolean): string {
+  if (totalPages <= 1 && !hasMore) return '';
   const start = page * TABLE_PAGE_SIZE + 1;
   const end = Math.min(start + TABLE_PAGE_SIZE - 1, totalItems);
   const canPrev = page > 0;
-  const canNext = page < totalPages - 1;
-  return `<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;border-top:0.5px solid var(--line-soft);">
+  const canNext = page < totalPages - 1 || !!hasMore;
+  return `<div class="padmin-pager">
     <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="${action}" data-value="${page - 1}" ${canPrev ? '' : 'disabled'}>‹ Anterior</button>
-    <span style="font-size:12px;color:var(--text-mute);">Mostrando ${start}–${end} de ${totalItems}</span>
+    <span class="padmin-pager-count">Mostrando ${start}–${end} de ${totalItems}${hasMore ? '+' : ''}</span>
     <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="${action}" data-value="${page + 1}" ${canNext ? '' : 'disabled'}>Siguiente ›</button>
   </div>`;
 }
@@ -91,8 +98,25 @@ export function loadingCard(label?: string): string {
   return `<div class="padmin-card" style="padding:20px;"><p class="padmin-lede" style="margin:0;">${esc(label || 'Cargando…')}</p></div>`;
 }
 
+// Mismo aspecto que loadingCard pero distinto significado: "no hay nada" no es
+// "todavía no llega". Se usaba loadingCard() para estados vacíos, así que un listado
+// vacío y uno cargando eran indistinguibles — y con role="status" el lector de
+// pantalla anuncia el resultado en vez de dejar al usuario esperando.
+export function emptyCard(label: string): string {
+  return `<div class="padmin-card" style="padding:20px;"><p class="padmin-lede" style="margin:0;" role="status">${esc(label)}</p></div>`;
+}
+
 export function errorCard(err: { message?: string } | null | undefined): string {
   return `<div class="padmin-card" style="padding:20px;"><p class="padmin-lede" style="margin:0;">No pudimos cargar los datos (${esc(err && err.message)}).</p></div>`;
+}
+
+// Estaba fijo en "Buenos días", así que mentía desde el mediodía — y el panel se usa
+// sobre todo en el cierre de la tarde. Hora local del dispositivo, sin librería.
+export function greeting(now: Date = new Date()): string {
+  const h = now.getHours();
+  if (h < 12) return 'Buenos días';
+  if (h < 19) return 'Buenas tardes';
+  return 'Buenas noches';
 }
 
 export function landingFor(role: string): Screen {

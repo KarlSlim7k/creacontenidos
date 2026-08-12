@@ -1,5 +1,5 @@
 // CREA Panel Admin — auth, login y navegación entre pantallas.
-import { state, setState, setData, adminApi, loadScreenData, initialData, type Screen, type ApiError, type ActivityEntry } from './store';
+import { state, setState, setData, adminApi, loadScreenData, initialState, type Screen, type ApiError, type ActivityEntry } from './store';
 import { landingFor, esc } from './util';
 import { hashFor, screenFromHash } from './hash-router';
 // Import circular con router.ts (router importa renderLogin de aquí): seguro porque
@@ -67,21 +67,27 @@ export function verify2fa(code: string) {
     });
 }
 
-export function loadNotifBadge() {
+// Se refresca al navegar (ver goTo), no solo al iniciar sesión: antes el badge se
+// cargaba una vez y mentía hasta recargar la página. Throttle de 30s para que
+// moverse rápido entre pantallas no dispare un fetch por click.
+// limit=20 y no 5: con 5, el "9+" de renderBellAndNotifs era inalcanzable.
+let lastNotifFetch = 0;
+export function loadNotifBadge(force?: boolean) {
   if (state.user!.role !== 'director') return;
-  adminApi<ActivityEntry[]>('/api/admin/activity?limit=5').then((r) => { setData({ notifications: r }); }).catch(() => { /* badge best-effort */ });
+  const now = Date.now();
+  if (!force && now - lastNotifFetch < 30000) return;
+  lastNotifFetch = now;
+  adminApi<ActivityEntry[]>('/api/admin/activity?limit=20').then((r) => { setData({ notifications: r }); }).catch(() => { /* badge best-effort */ });
 }
 
+// Reset total y no lista de campos: enumerar a mano dejaba vivos los que nadie se
+// acordaba de agregar (filtros de RADAR, tab de Configuración, borradores del editor,
+// resultados de QA) — datos del usuario anterior visibles tras cambiar de sesión.
 export function logout() {
   state.token = null;
   try { localStorage.removeItem('crea-admin-token'); } catch { /* noop */ }
   location.hash = '';
-  setState({
-    user: null, allowedModules: [], screen: 'login', loginError: null, loginTwoFaRequired: false,
-    twoFaSetup: null, twoFaBackupCodes: null, twoFaBusy: false,
-    errorMsg: null, successMsg: null,
-    data: initialData(),
-  });
+  setState(initialState());
 }
 
 export function tryResumeSession() {
@@ -118,10 +124,14 @@ export function goTo(id: Screen, extra?: number | null) {
     setState({ screen: 'denegado', deniedTarget: id, showNotifications: false });
     return;
   }
-  const patch: Partial<typeof state> = { screen: id, deniedTarget: null, showNotifications: false, mobileNavOpen: false };
+  // errorMsg se limpia al navegar: los toasts de error ya no caducan solos (ver
+  // setState), así que sin esto el fallo de una pantalla perseguiría al usuario por
+  // todo el panel. successMsg no hace falta, ese sí caduca.
+  const patch: Partial<typeof state> = { screen: id, deniedTarget: null, showNotifications: false, mobileNavOpen: false, errorMsg: null };
   if (id === 'editor') (patch as any).editorProposalId = (extra != null ? extra : null);
   setState(patch);
   loadScreenData(id, extra);
+  loadNotifBadge();
   location.hash = hashFor(id, extra);
 }
 
