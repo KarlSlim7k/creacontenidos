@@ -36,6 +36,7 @@ async function main() {
   const toastsEl = { innerHTML: '', addEventListener(ev, fn) { listeners['toasts:' + ev] = fn; } };
   const fakeInput = { value: '', checked: false, focus() {}, style: {} };
   globalThis.document = {
+    cookie: 'crea_admin_csrf=test',
     querySelector: (sel) => (sel.startsWith('meta') ? { content: 'http://localhost:3000' } : fakeInput),
     querySelectorAll: () => [],   // manageOverlayFocus busca overlays en cada render
     getElementById: (id) => (id === 'app' ? appEl : (id === 'toasts' ? toastsEl : fakeInput)),
@@ -53,7 +54,11 @@ async function main() {
   globalThis.window = globalThis;
   globalThis.confirm = () => false;
   globalThis.addEventListener = (ev, fn) => { listeners['win:' + ev] = fn; }; // hashchange: nunca se dispara, el test navega mutando state.screen directo
-  globalThis.fetch = () => new Promise(() => {}); // nunca resuelve: solo se prueba render síncrono
+  globalThis.fetch = (url) => Promise.resolve({
+    status: String(url).endsWith('/logout') ? 204 : 401,
+    ok: String(url).endsWith('/logout'),
+    json: () => Promise.resolve({ error: 'sin sesión de prueba' }),
+  });
 
   // ---------- carga del grafo ----------
   const { state } = await vite.ssrLoadModule('/src/store.ts');
@@ -63,7 +68,29 @@ async function main() {
 
   // DOMContentLoaded → delegación + tryResumeSession (sin token → login)
   listeners['doc:DOMContentLoaded']();
+  await new Promise((resolve) => setImmediate(resolve));
   assert(appEl.innerHTML.includes('padmin-login'), 'login no renderizó');
+  assert(appEl.innerHTML.includes('data-action="toggle-password"'), 'login no incluye control para mostrar contraseña');
+
+  // El ojito cambia tipo, icono y nombre accesible sin repintar el formulario.
+  const showEye = { hidden: false };
+  const hideEye = { hidden: true };
+  const toggleAttrs = { 'data-action': 'toggle-password', 'data-target': 'pl-pass' };
+  const toggle = {
+    getAttribute: (name) => toggleAttrs[name] || null,
+    setAttribute: (name, value) => { toggleAttrs[name] = value; },
+    querySelector: (selector) => selector === '[data-eye-show]' ? showEye : hideEye,
+  };
+  fakeInput.type = 'password';
+  actions.handleClick({ target: { closest: (selector) => selector === '[data-action]' ? toggle : null } });
+  assert.strictEqual(fakeInput.type, 'text');
+  assert.strictEqual(toggleAttrs['aria-label'], 'Ocultar contraseña');
+  assert.strictEqual(showEye.hidden, true);
+  assert.strictEqual(hideEye.hidden, false);
+  actions.handleClick({ target: { closest: (selector) => selector === '[data-action]' ? toggle : null } });
+  assert.strictEqual(fakeInput.type, 'password');
+  assert.strictEqual(toggleAttrs['aria-label'], 'Mostrar contraseña');
+  console.log('✓ ojito de contraseña alterna estado y accesibilidad');
 
   // ---------- sesión + datos falsos para todas las pantallas ----------
   const prop = { id: 1, title: 'Nota', body: 'Cuerpo', section: 'Local', dek: 'd', slug: 's', status: 'borrador', author_id: 7, author_name: 'Ana', cover_image_url: '', is_sponsored: false, sponsor_name: '', updated_at: '2026-07-01', published_at: '2026-07-01', view_count: 3, review_comment: '', format: 'nota', angulo: 'a', sensibilidad: 'verde' };
@@ -152,6 +179,7 @@ async function main() {
   const fakeEvent = (action) => ({ target: { closest: () => ({ getAttribute: (a) => (a === 'data-action' ? action : null) }) }, preventDefault() {} });
   actions.handleClick(fakeEvent('toggle-sound'));
   actions.handleClick(fakeEvent('logout'));
+  await new Promise((resolve) => setImmediate(resolve));
   assert(appEl.innerHTML.includes('padmin-login'), 'logout no regresó al login');
   console.log('✓ logout regresa al login');
 

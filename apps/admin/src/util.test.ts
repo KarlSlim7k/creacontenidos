@@ -2,7 +2,7 @@
 // sin runner ni deps: node --test src/util.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { esc, greeting } from './util.ts';
+import { esc, greeting, safeHttpUrl } from './util.ts';
 
 test('esc escapa los cinco caracteres peligrosos en HTML', () => {
   assert.strictEqual(esc('<b>'), '&lt;b&gt;');
@@ -33,4 +33,12 @@ test('greeting cambia con la hora local', () => {
   assert.strictEqual(at(18), 'Buenas tardes');
   assert.strictEqual(at(19), 'Buenas noches');
   assert.strictEqual(at(23), 'Buenas noches');
+});
+
+test('safeHttpUrl permite HTTP(S)/rutas y bloquea esquemas activos', () => {
+  assert.strictEqual(safeHttpUrl('https://example.com/x'), 'https://example.com/x');
+  assert.strictEqual(safeHttpUrl('/api/public/images/123'), '/api/public/images/123');
+  assert.strictEqual(safeHttpUrl('javascript:alert(1)'), '');
+  assert.strictEqual(safeHttpUrl('data:text/html,<script>alert(1)</script>'), '');
+  assert.strictEqual(safeHttpUrl('not a valid url'), '');
 });

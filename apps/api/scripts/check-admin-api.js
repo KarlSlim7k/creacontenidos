@@ -9,6 +9,8 @@
 // RADAR de solo lectura, kanban comercial. Revierte la fila de propuesta que usa
 // para dejar el check re-ejecutable. Mata el server al final.
 const assert = require('node:assert');
+const { authenticator } = require('otplib');
+const { makeToken } = require('../src/lib/password-reset');
 const {
   DEV_PASSWORD, runMigrate, runSeed, createPool, startApi, stopApi, waitForHealth, login: loginAt, auth,
 } = require('./lib/check-helpers');
@@ -68,6 +70,21 @@ async function main() {
     // 4. Configuración/usuarios: 403 para rol no-director.
     assert.strictEqual((await fetch(`${BASE}/api/auth/users`, { headers: auth(comercialToken) })).status, 403);
     assert.strictEqual((await fetch(`${BASE}/api/auth/users`, { headers: auth(directorToken) })).status, 200);
+    assert.strictEqual((await fetch(`${BASE}/api/auth/users`, {
+      method: 'POST', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Largo', email: 'largo@test.mx', password: 'x'.repeat(73), role: 'colaborador' }),
+    })).status, 400, 'bcrypt solo usa 72 bytes: contraseñas más largas deben rechazarse');
+
+    // El nav oculto no es autorización: las familias editoriales deben cortar
+    // también llamadas directas de roles que no tienen esos módulos.
+    assert.strictEqual((await fetch(`${BASE}/api/editorial/proposals`, { headers: auth(colaboradorToken) })).status, 403);
+    assert.strictEqual((await fetch(`${BASE}/api/editorial/ideas`, { headers: auth(comercialToken) })).status, 403);
+    assert.strictEqual((await fetch(`${BASE}/api/editorial/pipeline`, { headers: auth(comercialToken) })).status, 403);
+    assert.strictEqual((await fetch(`${BASE}/api/editorial/metrics`, { headers: auth(comercialToken) })).status, 403);
+    assert.strictEqual((await fetch(`${BASE}/api/listening/topics`, { headers: auth(colaboradorToken) })).status, 403);
+    assert.strictEqual((await fetch(`${BASE}/api/content/qa-check`, {
+      method: 'POST', headers: { ...auth(comercialToken), 'Content-Type': 'application/json' }, body: '{}',
+    })).status, 403);
 
     // 5. Bandeja de ideas: colaborador crea una y solo ve las suyas; director ve todas.
     const created = await (await fetch(`${BASE}/api/editorial/ideas`, {
@@ -313,7 +330,99 @@ async function main() {
     const { rows: goneCheck } = await pool.query('SELECT id FROM content_proposals WHERE id = $1', [pubRow.id]);
     assert.strictEqual(goneCheck.length, 0, 'la nota publicada debió quedar eliminada');
 
-    console.log('OK: panel admin verificado (auth por rol, ideas por colaborador, pipeline propuesta→publicada, reopen/delete de publicadas, RADAR, comercial, permisos vivos, leads, distribución, competencia, métricas del sitio).');
+    // 15. El último director no puede desactivarse ni dejar al equipo sin acceso.
+    const { rows: [onlyDirector] } = await pool.query("SELECT id FROM users WHERE role = 'director' AND active = true");
+    assert.strictEqual((await fetch(`${BASE}/api/auth/users/${onlyDirector.id}`, {
+      method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: false }),
+    })).status, 409, 'se pudo desactivar al último director activo');
+
+    // 16. Activar/desactivar 2FA rota la sesión; un token previo no hereda el
+    // nuevo estado de seguridad y el login exige el segundo paso.
+    const setup2fa = await (await fetch(`${BASE}/api/auth/2fa/setup`, { method: 'POST', headers: auth(comercialToken) })).json();
+    const enableCode = authenticator.generate(setup2fa.secret);
+    const enable2fa = await (await fetch(`${BASE}/api/auth/2fa/enable`, {
+      method: 'POST', headers: { ...auth(comercialToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: enableCode }),
+    })).json();
+    assert.ok(enable2fa.token && enable2fa.backup_codes.length === 8);
+    assert.strictEqual((await fetch(`${BASE}/api/auth/session`, { headers: auth(comercialToken) })).status, 401,
+      'activar 2FA no revocó la sesión anterior');
+    const pending2fa = await (await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'comercial@crearcontenidos.com', password: DEV_PASSWORD }),
+    })).json();
+    assert.strictEqual(pending2fa.requires_2fa, true);
+    const verified2fa = await (await fetch(`${BASE}/api/auth/2fa/verify`, {
+      method: 'POST', headers: { ...auth(pending2fa.token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: authenticator.generate(setup2fa.secret) }),
+    })).json();
+    assert.ok(verified2fa.token, '2FA válido no emitió sesión completa');
+    const disabled2fa = await (await fetch(`${BASE}/api/auth/2fa/disable`, {
+      method: 'POST', headers: { ...auth(verified2fa.token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: authenticator.generate(setup2fa.secret) }),
+    })).json();
+    assert.ok(disabled2fa.token && disabled2fa.ok);
+    assert.strictEqual((await fetch(`${BASE}/api/auth/session`, { headers: auth(verified2fa.token) })).status, 401,
+      'desactivar 2FA no revocó la sesión anterior');
+
+    // 17. Navegador: sesión sólo en cookie HttpOnly, CSRF obligatorio y logout
+    // revoca la versión del JWT (reusar la cookie anterior debe dar 401).
+    const cookieLogin = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'tomas.ibarra@crearcontenidos.com', password: DEV_PASSWORD }),
+    });
+    const setCookies = cookieLogin.headers.getSetCookie();
+    assert.ok(setCookies.some((c) => c.startsWith('crea_admin_session=') && c.includes('HttpOnly') && c.includes('SameSite=Strict')));
+    const cookieHeader = setCookies.map((c) => c.split(';', 1)[0]).join('; ');
+    const csrfCookie = setCookies.find((c) => c.startsWith('crea_admin_csrf='));
+    const csrf = decodeURIComponent(csrfCookie.split(';', 1)[0].split('=').slice(1).join('='));
+    assert.strictEqual((await fetch(`${BASE}/api/auth/session`, { headers: { Cookie: cookieHeader } })).status, 200);
+    assert.strictEqual((await fetch(`${BASE}/api/auth/logout`, { method: 'POST', headers: { Cookie: cookieHeader } })).status, 403,
+      'logout con cookie pasó sin CSRF');
+    assert.strictEqual((await fetch(`${BASE}/api/auth/logout`, {
+      method: 'POST', headers: { Cookie: cookieHeader, 'X-CSRF-Token': csrf },
+    })).status, 204);
+    assert.strictEqual((await fetch(`${BASE}/api/auth/session`, { headers: { Cookie: cookieHeader } })).status, 401,
+      'la cookie anterior siguió válida después de logout');
+
+    // 18. Recuperación: token de un solo uso incluso bajo carrera, revoca sesiones
+    // y limpia cookies residuales. Sólo una de dos contraseñas simultáneas gana.
+    const forgotStatuses = [];
+    for (let i = 0; i < 4; i++) {
+      forgotStatuses.push((await fetch(`${BASE}/api/auth/forgot-password`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'nobody-check@example.com' }),
+      })).status);
+    }
+    assert.deepStrictEqual(forgotStatuses, [200, 200, 200, 429], 'forgot-password no limitó por cuenta');
+    const { rows: [resetUser] } = await pool.query(
+      "SELECT id, session_version FROM users WHERE email = 'tomas.ibarra@crearcontenidos.com'"
+    );
+    const resetToken = makeToken(resetUser.id, resetUser.session_version);
+    const resetPasswords = ['check-reset-A-2026', 'check-reset-B-2026'];
+    const resetResponses = await Promise.all(resetPasswords.map((password) => fetch(`${BASE}/api/auth/reset-password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: resetToken, password }),
+    })));
+    assert.deepStrictEqual(resetResponses.map((r) => r.status).sort(), [200, 400], 'el mismo token de reset ganó dos veces');
+    const winner = resetPasswords[resetResponses.findIndex((r) => r.status === 200)];
+    assert.ok(resetResponses.find((r) => r.status === 200).headers.getSetCookie().some((c) => c.includes('crea_admin_session=') && c.includes('Max-Age=0')),
+      'reset no limpió la cookie de sesión anterior');
+    assert.strictEqual((await fetch(`${BASE}/api/auth/reset-password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: resetToken, password: 'check-reset-C-2026' }),
+    })).status, 400, 'el token de reset pudo reutilizarse');
+    assert.strictEqual((await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'tomas.ibarra@crearcontenidos.com', password: DEV_PASSWORD }),
+    })).status, 401, 'la contraseña anterior siguió funcionando tras el reset');
+    assert.strictEqual((await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'tomas.ibarra@crearcontenidos.com', password: winner }),
+    })).status, 200, 'la contraseña ganadora del reset no funciona');
+
+    console.log('OK: panel admin verificado (roles, sesiones, CSRF, 2FA, recuperación de contraseña y módulos).');
   } finally {
     await stopApi(server);
     if (proposalId) {

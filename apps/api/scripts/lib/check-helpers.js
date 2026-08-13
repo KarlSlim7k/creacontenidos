@@ -32,7 +32,7 @@ function createPool() {
 function startApi({ port, env, stdio } = {}) {
   const proc = spawn('node', ['src/server.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(port), ...env },
+    env: { ...process.env, NODE_ENV: 'test', PORT: String(port), ...env },
     stdio: stdio || 'ignore',
   });
   return proc;
