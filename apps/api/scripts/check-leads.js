@@ -22,10 +22,10 @@ const VALID = {
   source_page: 'estudio/contacto',
 };
 
-function postLead(body) {
+function postLead(body, headers = {}) {
   return fetch(`${BASE}/api/public/leads`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
 }
@@ -93,9 +93,12 @@ async function main() {
     assert.deepStrictEqual(await res.json(), { ok: true });
     assert.strictEqual(await leadCount(), before, 'el honeypot insertó fila');
 
-    // 4. Ráfaga: 7 POSTs más (8 en total) → el límite estricto de 5/15min da 429.
+    // 4. Ráfaga: rota CF-Connecting-IP como haría un atacante directo. Al no venir
+    // desde un proxy Cloudflare real, la cabecera se ignora y el límite sigue aplicando.
     const statuses = [];
-    for (let i = 0; i < 7; i++) statuses.push((await postLead(VALID)).status);
+    for (let i = 0; i < 7; i++) {
+      statuses.push((await postLead(VALID, { 'CF-Connecting-IP': `203.0.113.${i + 1}` })).status);
+    }
     assert.ok(statuses.includes(429), `la ráfaga nunca recibió 429 (statuses: ${statuses})`);
     assert.ok(statuses.filter((s) => s === 201).length <= 4, 'el límite estricto dejó pasar más de 5 requests');
   } finally {

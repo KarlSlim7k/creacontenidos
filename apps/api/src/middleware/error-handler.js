@@ -4,9 +4,11 @@ function errorHandler(err, req, res, next) {
   // seguro pensado para el cliente. Los que no (500 sin status, ej. excepción de pg)
   // en producción se ocultan tras un mensaje genérico: el detalle va solo al log.
   const status = err.status || 500;
-  const safeMessage = err.status
-    ? (err.message || 'Error')
-    : (process.env.NODE_ENV === 'production' ? 'Error interno del servidor' : (err.message || 'Internal server error'));
+  const safeMessage = err.type === 'entity.parse.failed'
+    ? 'JSON inválido'
+    : (err.status
+      ? (err.message || 'Error')
+      : (process.env.NODE_ENV === 'production' ? 'Error interno del servidor' : (err.message || 'Internal server error')));
   res.status(status).json({ error: safeMessage });
 }
 
