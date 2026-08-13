@@ -42,6 +42,7 @@
   min-height: 100vh;
   min-height: 100dvh;
 }
+.padmin#toasts { min-height: 0; }
 .padmin a { color: inherit; text-decoration: none; }
 .padmin p { margin: 0; }
 .padmin button { font: inherit; cursor: pointer; }
