@@ -30,9 +30,9 @@ const app = express();
 
 // Un hop de proxy (Traefik de Dokploy). OJO: en prod hay Cloudflare DELANTE de
 // Traefik y Traefik NO preserva el XFF del cliente (verificado: el X-Forwarded-For
-// que llega es la IP del edge de CF, no el visitante). Por eso los rate limiters
-// NO se fían de req.ip: keyean por CF-Connecting-IP (ver lib/client-ip.js). Este
-// trust proxy solo fija req.ip como fallback razonable en dev/sin CF.
+// que llega es la IP del edge de CF, no el visitante). Los rate limiters solo
+// aceptan CF-Connecting-IP cuando req.ip confirma ese salto de Cloudflare; si no,
+// usan req.ip (ver lib/client-ip.js).
 app.set('trust proxy', 1);
 
 // Un solo host indexable. Destino fijo para no convertir Host/X-Forwarded-Host

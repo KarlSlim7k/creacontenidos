@@ -1,27 +1,33 @@
-// Doble opt-in del newsletter. Token sin estado (HMAC del email con JWT_SECRET):
-// no necesita tabla ni migración — confirmar es idempotente y un token viejo
-// sigue siendo válido (confirmar tarde no hace daño).
-// ponytail: sin expiración; si se requiere caducidad, meter un timestamp firmado.
+// Doble opt-in del newsletter. Token sin estado (email + timestamp, ambos firmados
+// con HMAC): no necesita tabla ni migración y caduca a las 72 horas.
 const crypto = require('crypto');
 const config = require('../config');
 
-function sign(email) {
-  return crypto.createHmac('sha256', config.jwtSecret || 'dev-secret').update(email).digest('base64url');
+const TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
+const TOKEN_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+function sign(payload) {
+  return crypto.createHmac('sha256', config.jwtSecret || 'dev-secret').update(payload).digest('base64url');
 }
 
-function makeToken(email) {
-  return Buffer.from(email).toString('base64url') + '.' + sign(email);
+function makeToken(email, now = Date.now()) {
+  const payload = Buffer.from(email).toString('base64url') + '.' + Math.floor(now / 1000).toString(36);
+  return payload + '.' + sign(payload);
 }
 
 // Devuelve el email si la firma es válida, o null. Comparación timing-safe.
-function readToken(token) {
-  const [ePart, sig] = String(token || '').split('.');
-  if (!ePart || !sig) return null;
+function readToken(token, now = Date.now()) {
+  const [ePart, issuedPart, sig, extra] = String(token || '').split('.');
+  if (!ePart || !issuedPart || !sig || extra || !/^[0-9a-z]+$/.test(issuedPart)) return null;
+  const payload = ePart + '.' + issuedPart;
+  const issuedAt = parseInt(issuedPart, 36) * 1000;
+  if (!Number.isSafeInteger(issuedAt)) return null;
   let email;
   try { email = Buffer.from(ePart, 'base64url').toString('utf8'); } catch { return null; }
   const a = Buffer.from(sig);
-  const b = Buffer.from(sign(email));
+  const b = Buffer.from(sign(payload));
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  if (issuedAt > now + TOKEN_CLOCK_SKEW_MS || now - issuedAt > TOKEN_TTL_MS) return null;
   return email;
 }
 
@@ -49,15 +55,18 @@ function confirmPage(title, body) {
       </div></body></html>`;
 }
 
-module.exports = { makeToken, readToken, confirmEmailHtml, confirmPage };
+module.exports = { makeToken, readToken, confirmEmailHtml, confirmPage, TOKEN_TTL_MS, TOKEN_CLOCK_SKEW_MS };
 
 // ponytail: self-check del camino de seguridad (firmar/verificar/rechazar).
 if (require.main === module) {
   const assert = require('assert');
-  const t = makeToken('a@b.com');
-  assert.strictEqual(readToken(t), 'a@b.com', 'token válido debe devolver el email');
+  const now = Date.now();
+  const t = makeToken('a@b.com', now);
+  assert.strictEqual(readToken(t, now), 'a@b.com', 'token válido debe devolver el email');
+  assert.strictEqual(readToken(makeToken('a@b.com', now + TOKEN_CLOCK_SKEW_MS), now), 'a@b.com', 'deriva de reloj tolerable debe aceptarse');
+  assert.strictEqual(readToken(t, now + TOKEN_TTL_MS + 1000), null, 'token vencido debe rechazarse');
   assert.strictEqual(readToken(t + 'x'), null, 'firma alterada debe rechazarse');
   assert.strictEqual(readToken('garbage'), null, 'token malformado debe rechazarse');
-  assert.strictEqual(readToken(Buffer.from('c@d.com').toString('base64url') + '.' + 'AAAA'), null, 'firma falsa debe rechazarse');
+  assert.strictEqual(readToken(Buffer.from('c@d.com').toString('base64url') + '.abc.AAAA'), null, 'firma falsa debe rechazarse');
   console.log('newsletter-optin self-check OK');
 }
