@@ -46,7 +46,7 @@ Los tres hallazgos fueron corregidos localmente el 2026-08-12 y cuentan con regr
 
   ```js
   const TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
-  if (issuedAt > now || now - issuedAt > TOKEN_TTL_MS) return null;
+  if (issuedAt > now + TOKEN_CLOCK_SKEW_MS || now - issuedAt > TOKEN_TTL_MS) return null;
   ```
 
 - Impacto: un enlace filtrado en logs, historial o correo puede reutilizarse indefinidamente para activar esa dirección. El correo también queda codificado, no cifrado, dentro del token.
