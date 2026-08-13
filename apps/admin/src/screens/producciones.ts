@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantallas Producciones (social embeds) y Publicadas.
 import { state, type SocialPost, type Proposal } from '../store';
-import { esc, loadingCard, errorCard, relativeTime, badge, paginateRows, renderPager } from '../util';
+import { esc, loadingCard, errorCard, relativeTime, badge, paginateRows, renderPager, safeHttpUrl } from '../util';
 
 export function renderProducciones(): string {
   const posts = state.data.socialPosts;
@@ -31,7 +31,7 @@ export function renderProducciones(): string {
       ${posts.length ? pageItems.map((p: SocialPost) => {
         const titleLine = p.title ? `<p class="padmin-row-title" style="margin:0 0 2px;">${esc(p.title)}</p>` : '<p class="padmin-row-title" style="margin:0 0 2px;color:var(--mute-2);">(sin título)</p>';
         return `<div class="padmin-table-row padmin-cols-social">
-          ${p.thumbnail_url ? `<img src="${esc(p.thumbnail_url)}" alt="" style="width:42px;height:42px;object-fit:cover;border-radius:4px;background:var(--line-soft);">` : '<div style="width:42px;height:42px;background:var(--line-soft);border-radius:4px;"></div>'}
+          ${safeHttpUrl(p.thumbnail_url) ? `<img src="${esc(safeHttpUrl(p.thumbnail_url))}" alt="" style="width:42px;height:42px;object-fit:cover;border-radius:4px;background:var(--line-soft);" data-image-error="hide">` : '<div style="width:42px;height:42px;background:var(--line-soft);border-radius:4px;"></div>'}
           <span style="font-size:12px;font-weight:600;color:var(--brand);text-transform:uppercase;">${esc(p.network)}</span>
           <div style="min-width:0;">${titleLine}<p class="padmin-row-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:380px;">${esc(p.external_url)}</p></div>
           <span style="font-size:12px;color:var(--text);">${p.position}</span>

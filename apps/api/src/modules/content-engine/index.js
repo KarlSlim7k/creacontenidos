@@ -7,6 +7,10 @@ const { sendPushToRoles } = require('../../lib/push');
 
 const router = express.Router();
 
+// Todo este router consume IA o modifica contenido editorial. El menú oculto
+// del frontend no impedía que comercial/colaborador llamaran estas URLs.
+router.use(requireAuth, requireRole('director', 'produccion'));
+
 // Cada endpoint pega a APIs de pago (OpenRouter/Claude/Perplexity). Tope por
 // usuario para que una cuenta comprometida no queme el presupuesto. Va DESPUÉS
 // de requireAuth en cada ruta, así req.user.id ya existe como clave.

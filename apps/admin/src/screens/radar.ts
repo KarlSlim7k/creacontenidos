@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantalla RADAR (social listening + verificación editorial).
 import { state, type Topic, type CompetitorPost, type RadarSource, type RadarStats } from '../store';
-import { esc, loadingCard, errorCard, badge, statusStyle, paginateRows, renderPager } from '../util';
+import { esc, loadingCard, errorCard, badge, statusStyle, paginateRows, renderPager, safeHttpUrl } from '../util';
 
 function canManageRadar(): boolean {
   return state.user!.role === 'director' || state.user!.role === 'produccion';
@@ -194,7 +194,7 @@ function renderRadarCompetencia(): string {
         return `<div class="padmin-table-row padmin-radar-row padmin-cols-competencia">
           <div style="min-width:0;"><p class="padmin-row-title">${esc(p.source_account || '—')}</p><p class="padmin-row-meta" style="text-transform:uppercase;">${esc(p.source_platform || '')}</p></div>
           <div style="min-width:0;"><span class="padmin-radar-post-text" title="${esc(text)}">${esc(text.slice(0, 160))}${text.length > 160 ? '…' : ''}</span>
-            ${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener" style="display:block;font-size:11px;color:var(--accent-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(p.post_url)}</a>` : ''}</div>
+            ${safeHttpUrl(p.post_url) ? `<a href="${esc(safeHttpUrl(p.post_url))}" target="_blank" rel="noopener" style="display:block;font-size:11px;color:var(--accent-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(p.post_url)}</a>` : ''}</div>
           <span class="padmin-t-small">${p.post_date ? new Date(p.post_date).toLocaleDateString('es-MX') : '—'}</span>
           <span style="font-size:12px;font-weight:600;color:var(--text);">${inter}</span>
           <span>${badge(p.analyzed ? 'analizado' : 'nuevo')}</span>

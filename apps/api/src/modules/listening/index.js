@@ -8,6 +8,10 @@ const { detectAndSaveTopics, insertTopicIfNew } = require('../../lib/topic-detec
 
 const router = express.Router();
 
+// RADAR completo es módulo editorial: aplicar el rol una vez cubre también las
+// lecturas que antes solo tenían requireAuth y evita que una ruta nueva lo olvide.
+router.use(requireAuth, requireRole('director', 'produccion'));
+
 // Ajustar a los competidores reales del territorio; el body de /competitors/detect
 // puede sobrescribirlos por request ({ competitors: [...] }).
 const DEFAULT_COMPETITORS = ['Diario de Xalapa', 'AVC Noticias', 'El Dictamen'];
