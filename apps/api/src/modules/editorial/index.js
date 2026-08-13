@@ -12,7 +12,7 @@ const router = express.Router();
 // --- Bandeja de ideas ---
 
 // GET /api/editorial/ideas — colaborador ve solo las suyas; director/producción ven todas (kanban).
-router.get('/ideas', requireAuth, async (req, res, next) => {
+router.get('/ideas', requireAuth, requireRole('director', 'produccion', 'colaborador'), async (req, res, next) => {
   try {
     const params = [];
     let where = '';
@@ -33,8 +33,8 @@ router.get('/ideas', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/editorial/ideas — cualquier usuario autenticado propone una idea (a su propio nombre).
-router.post('/ideas', requireAuth, async (req, res, next) => {
+// POST /api/editorial/ideas — roles con Bandeja de ideas proponen a su propio nombre.
+router.post('/ideas', requireAuth, requireRole('director', 'produccion', 'colaborador'), async (req, res, next) => {
   try {
     const { title, category, description } = req.body || {};
     if (typeof title !== 'string' || !title.trim() || title.length > 300) {
@@ -84,6 +84,10 @@ router.delete('/ideas/:id', requireAuth, requireRole('director'), async (req, re
 
 // --- Propuestas / piezas (content_proposals) ---
 // Pipeline: 'propuesta' → 'borrador' → 'en_revision' → 'published' (gate) | 'rechazada'.
+
+// Toda la familia /proposals pertenece a Editor/Producción. La navegación del
+// SPA no es una frontera de seguridad: la API necesita el mismo gate.
+router.use('/proposals', requireAuth, requireRole('director', 'produccion'));
 
 const PROPOSAL_FIELDS = `id, topic_id, format, title, body, dek, section, slug, cover_image_url,
   author_name, is_sponsored, sponsor_name, image_prompt, editorial_directive,
@@ -315,7 +319,7 @@ router.delete('/proposals/:id', requireAuth, requireRole('director'), async (req
 // derivado de newsletter_editions (generación/envío) + activity_log (audio) + topics
 // (listening). Antes 3 de los 6 pasos quedaban fijos en "pendiente" sin consultar nada;
 // ahora sí reflejan lo que de verdad pasó hoy.
-router.get('/pipeline', requireAuth, async (req, res, next) => {
+router.get('/pipeline', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const [topicsResult, editionResult, audioResult] = await Promise.all([
       pool.query(`SELECT max(detected_at) AS at FROM topics WHERE detected_at >= now() - interval '48 hours'`),
@@ -355,7 +359,7 @@ router.get('/pipeline', requireAuth, async (req, res, next) => {
 // en vez de simular números.
 const WEEKLY_GOAL = 10;
 
-router.get('/metrics', requireAuth, async (req, res, next) => {
+router.get('/metrics', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const { rows: [{ count }] } = await pool.query(
       `SELECT count(*)::int AS count FROM content_proposals

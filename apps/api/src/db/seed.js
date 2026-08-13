@@ -5,7 +5,14 @@ const config = require('../config');
 
 const SEEDS_DIR = path.join(__dirname, 'seeds');
 
+function assertSeedAllowed(nodeEnv = process.env.NODE_ENV || 'development') {
+  if (nodeEnv === 'production') {
+    throw new Error('Seed bloqueado en producción: contiene cuentas y credenciales exclusivas de desarrollo.');
+  }
+}
+
 async function run() {
+  assertSeedAllowed();
   const pool = new Pool({ connectionString: config.databaseUrl });
   const files = fs.readdirSync(SEEDS_DIR).filter((f) => f.endsWith('.sql')).sort();
 
@@ -19,7 +26,11 @@ async function run() {
   await pool.end();
 }
 
-run().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  run().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = { assertSeedAllowed };

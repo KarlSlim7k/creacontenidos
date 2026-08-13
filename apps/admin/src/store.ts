@@ -389,15 +389,20 @@ export interface EditChatHunk {
 }
 
 export interface State {
-  token: string | null;
   user: User | null;
   allowedModules: string[];
   screen: Screen;
   loginError: string | null;
-  /** true entre "password OK" y "código 2FA verificado" — login() deja el token
-   * pendiente en `token` (adminApi ya lo manda como Bearer) y renderLogin() muestra
-   * el segundo paso en vez del form de email/password. */
+  loginBusy: boolean;
+  requiresTwoFaSetup: boolean;
+  /** true entre "password OK" y "código 2FA verificado"; la cookie pendiente es
+   * HttpOnly y sólo /2fa/verify puede canjearla por una sesión completa. */
   loginTwoFaRequired: boolean;
+  /** Sub-pantalla del login: formulario normal, "olvidé mi contraseña", confirmación
+   * de envío, o elegir nueva contraseña (llegado por el link del correo). */
+  loginView: 'password' | 'forgot' | 'forgot-sent' | 'reset';
+  /** Token del link de recuperación (parseado del hash #reset/<token> en main.ts). */
+  resetToken: string | null;
   /** Setup de 2FA en progreso (QR mostrado, esperando el código de confirmación). */
   twoFaSetup: TwoFaSetup | null;
   /** Códigos de respaldo recién generados — se muestran una sola vez tras /2fa/enable. */
@@ -516,8 +521,9 @@ export function initialData(): AdminData {
 // cada campo nuevo del State era una fuga más que nadie iba a recordar agregar.
 export function initialState(): State {
   return {
-  token: null, user: null, allowedModules: [],
-  screen: 'login', loginError: null, loginTwoFaRequired: false,
+  user: null, allowedModules: [],
+  screen: 'login', loginError: null, loginBusy: false, loginTwoFaRequired: false, requiresTwoFaSetup: false,
+  loginView: 'password', resetToken: null,
   twoFaSetup: null, twoFaBackupCodes: null, twoFaBusy: false,
   data: initialData(),
   distBusy: null,
@@ -565,8 +571,6 @@ export function setRenderToasts(fn: () => void) { renderToastsFn = fn; }
 // Vive aquí y no en auth.ts (que importa store) para no cerrar el ciclo de imports.
 // Mismo reset que logout(), más el aviso de por qué se cayó la sesión.
 function expireSession() {
-  state.token = null;
-  try { localStorage.removeItem('crea-admin-token'); } catch { /* modo privado */ }
   location.hash = '';
   setState(Object.assign(initialState(), {
     loginError: 'Tu sesión expiró. Vuelve a iniciar sesión.',
@@ -583,12 +587,23 @@ export interface ApiError extends Error {
   fields?: unknown;
 }
 
+function csrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|;\s*)crea_admin_csrf=([^;]*)/);
+  if (!match) return null;
+  try { return decodeURIComponent(match[1]); } catch { return null; }
+}
+
 export function adminApi<T = any>(path: string, opts: ApiOpts = {}): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (state.token) headers.Authorization = 'Bearer ' + state.token;
+  const method = opts.method || 'GET';
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const csrf = csrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
   return fetch(CREA_API_BASE + path, {
-    method: opts.method || 'GET',
+    method,
     headers,
+    credentials: 'same-origin',
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   }).then((res) => {
     if (res.status === 204) return null as T;
@@ -612,10 +627,15 @@ export function adminApi<T = any>(path: string, opts: ApiOpts = {}): Promise<T> 
 
 export function adminApiBlob(path: string, opts: ApiOpts = {}): Promise<Blob> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (state.token) headers.Authorization = 'Bearer ' + state.token;
+  const method = opts.method || 'GET';
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const csrf = csrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
   return fetch(CREA_API_BASE + path, {
-    method: opts.method || 'GET',
+    method,
     headers,
+    credentials: 'same-origin',
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   }).then((res) => {
     if (!res.ok) {
@@ -868,7 +888,7 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     if (tab === 'metricas-sitio') fetchInto('/api/admin/site-metrics', 'siteMetrics');
     if (tab === 'perfil') {
       fetchInto('/api/auth/me', 'myProfile');
-      if (isDirector) fetchInto('/api/admin/editorial-settings', 'editorialSettings');
+      if (isDirector && !state.requiresTwoFaSetup) fetchInto('/api/admin/editorial-settings', 'editorialSettings');
     }
   } else if (screen === 'hermes') {
     fetchInto('/api/admin/activity?limit=20', 'activity');

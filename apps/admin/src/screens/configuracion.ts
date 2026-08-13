@@ -68,6 +68,7 @@ export function renderConfigUsuarios(): string {
         <div class="padmin-field" style="margin:0;"><label>Correo</label><input id="nu-email" type="email" required value="${esc(editing ? editing.email : '')}"></div>
         <div class="padmin-field" style="margin:0;"><label>${editing ? 'Nueva contraseña (opcional)' : 'Contraseña'}</label><input id="nu-password" type="password"${editing ? '' : ' required'}></div>
         <div class="padmin-field" style="margin:0;"><label>Rol</label><select id="nu-role">${Object.keys(roleLabels).map((r) => `<option value="${r}"${editing && editing.role === r ? ' selected' : ''}>${esc(roleLabels[r])}</option>`).join('')}</select></div>
+        <div class="padmin-field" style="margin:0;"><label>Código 2FA del director</label><input id="nu-2fa-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="64" required></div>
         <div style="grid-column:1 / -1;display:flex;gap:8px;"><button type="submit" class="padmin-btn padmin-btn-sm">${editing ? 'Guardar cambios' : 'Crear usuario'}</button><button type="button" class="padmin-btn-outline" data-action="close-new-user">Cancelar</button></div>
       </form>
     </div>`
@@ -264,18 +265,19 @@ function renderTwoFactorCard(enabled: boolean): string {
       <p style="font-size:11px;color:var(--mute-2);margin:0 0 14px;word-break:break-all;">O ingresa manualmente: <code>${esc(state.twoFaSetup.secret)}</code></p>
       ${errorHtml}
       <form data-action="submit-2fa-enable" class="padmin-grid2" style="gap:10px;">
-        <div class="padmin-field" style="margin:0;"><label>Código de 6 dígitos</label><input id="tfa-enable-code" type="text" inputmode="numeric" required autofocus></div>
+        <div class="padmin-field" style="margin:0;"><label>Código de 6 dígitos</label><input id="tfa-enable-code" type="text" inputmode="numeric" maxlength="64" required autofocus></div>
         <div style="grid-column:1 / -1;display:flex;gap:8px;"><button type="submit" class="padmin-btn padmin-btn-sm" ${state.twoFaBusy ? 'disabled' : ''}>Confirmar</button><button type="button" class="padmin-btn-outline" data-action="cancel-2fa-setup">Cancelar</button></div>
       </form>
     </div>`;
   }
   const body = enabled
     ? `<p class="padmin-t-hint">Activada — se pide un código además de tu contraseña al iniciar sesión.</p>
+       ${state.user!.role === 'director' ? '<p class="padmin-t-hint">Es obligatoria para cuentas Director y no puede desactivarse.</p>' : `
        ${errorHtml}
        <form data-action="submit-2fa-disable" class="padmin-grid2" style="gap:10px;">
-         <div class="padmin-field" style="margin:0;"><label>Código actual (o uno de respaldo), para desactivar</label><input id="tfa-disable-code" type="text" inputmode="numeric" required></div>
+         <div class="padmin-field" style="margin:0;"><label>Código actual (o uno de respaldo), para desactivar</label><input id="tfa-disable-code" type="text" inputmode="numeric" maxlength="64" required></div>
          <div style="grid-column:1 / -1;"><button type="submit" class="padmin-btn-outline padmin-btn-sm" ${state.twoFaBusy ? 'disabled' : ''}>Desactivar 2FA</button></div>
-       </form>`
+       </form>`}`
     : `<p class="padmin-t-hint">No activada — agrega una capa extra de seguridad a tu cuenta.</p>
        ${errorHtml}
        <button type="button" class="padmin-btn padmin-btn-sm" data-action="start-2fa-setup" ${state.twoFaBusy ? 'disabled' : ''}>${state.twoFaBusy ? 'Generando…' : 'Activar 2FA'}</button>`;
@@ -289,8 +291,8 @@ export function renderConfigPerfil(): string {
   const me = state.data.myProfile;
   const isDirector = state.user!.role === 'director';
   const settings = state.data.editorialSettings;
-  if (!me || (isDirector && !settings)) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
-  const directivaCard = !isDirector ? '' : `<div class="padmin-card" style="max-width:480px;padding:20px;">
+  if (!me || (isDirector && !state.requiresTwoFaSetup && !settings)) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
+  const directivaCard = !isDirector || state.requiresTwoFaSetup ? '' : `<div class="padmin-card" style="max-width:480px;padding:20px;">
     <p class="padmin-section-title" style="margin-bottom:6px;">Directriz editorial</p>
     <p class="padmin-t-hint">Instrucción general que la IA aplica antes de redactar cualquier propuesta o borrador — precarga el campo por-nota en RADAR y el Editor cuando esa nota no trae una directriz propia. Vacío = voz estándar de CREA.</p>
     <form data-action="submit-editorial-settings">
@@ -302,12 +304,16 @@ export function renderConfigPerfil(): string {
     <p style="font-size:11px;color:var(--mute-2);margin:12px 0 0;">Actualizado ${esc(relativeTime(settings!.updated_at))}.</p>
   </div>`;
   return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
+    ${state.requiresTwoFaSetup ? '<p class="padmin-lede" style="color:var(--danger);">Activa la verificación en dos pasos para desbloquear el panel Director.</p>' : ''}
     <p class="padmin-section-title" style="margin-bottom:10px;">Mi cuenta</p>
     <form data-action="submit-my-profile" class="padmin-grid2" style="gap:10px;">
       <div class="padmin-field" style="margin:0;"><label>Nombre</label><input id="me-name" type="text" required value="${esc(me.name)}"></div>
       <div class="padmin-field" style="margin:0;"><label>Correo</label><input id="me-email" type="email" required value="${esc(me.email)}"></div>
       <div class="padmin-field" style="margin:0;"><label>Rol</label><input type="text" value="${esc(roleLabels[me.role] || me.role)}" disabled></div>
       <div class="padmin-field" style="margin:0;"><label>Nueva contraseña (opcional)</label><input id="me-password" type="password" placeholder="Dejar vacío para no cambiar"></div>
+      <div class="padmin-field" style="margin:0;"><label>Confirmar nueva contraseña</label><input id="me-password-confirm" type="password" placeholder="Repite la nueva contraseña"></div>
+      <div class="padmin-field" style="margin:0;"><label>Contraseña actual (si cambias correo o contraseña)</label><input id="me-current-password" type="password" autocomplete="current-password"></div>
+      ${me.two_factor_enabled ? '<div class="padmin-field" style="margin:0;"><label>Código 2FA para cambios sensibles</label><input id="me-2fa-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="64"></div>' : ''}
       ${state.errorMsg ? `<p style="grid-column:1 / -1;font-size:12px;color:var(--danger);margin:0;">${esc(state.errorMsg)}</p>` : ''}
       <div style="grid-column:1 / -1;"><button type="submit" class="padmin-btn padmin-btn-sm">Guardar cambios</button></div>
     </form>
@@ -321,7 +327,7 @@ export function renderConfiguracion(): string {
   // Roles no-director solo tienen Integraciones y Perfil — el resto de tabs (usuarios,
   // permisos, newsletter, servicios, cuentas-fb, métricas) son exclusivos de Director,
   // así que un configTab heredado se recorta a uno de los dos disponibles.
-  const tab = isDirector ? state.configTab : (state.configTab === 'perfil' ? 'perfil' : 'integraciones');
+  const tab = state.requiresTwoFaSetup ? 'perfil' : (isDirector ? state.configTab : (state.configTab === 'perfil' ? 'perfil' : 'integraciones'));
   const body = tab === 'permisos' ? renderConfigPermisos() : (tab === 'integraciones' ? renderConfigIntegraciones() : (tab === 'newsletter' ? renderConfigNewsletter() : (tab === 'servicios' ? renderConfigServicios() : (tab === 'metricas-sitio' ? renderConfigMetricas() : (tab === 'cuentas-fb' ? renderConfigCuentasFb() : (tab === 'perfil' ? renderConfigPerfil() : renderConfigUsuarios()))))));
   // aria-current y no role="tab": role="tab" obliga a tabpanel + aria-controls +
   // navegación con flechas, y a medias es peor que nada. Estos son botones que
@@ -330,7 +336,7 @@ export function renderConfiguracion(): string {
     const active = tab === id;
     return `<button type="button" class="padmin-tab${active ? ' active' : ''}"${active ? ' aria-current="true"' : ''} data-action="set-config-tab" data-tab="${id}">${label}</button>`;
   };
-  const tabs = isDirector
+  const tabs = state.requiresTwoFaSetup ? tabBtn('perfil', 'Activar 2FA') : isDirector
     ? `${tabBtn('usuarios', 'Usuarios')}${tabBtn('permisos', 'Permisos')}${tabBtn('integraciones', 'Integraciones')}${tabBtn('newsletter', 'Newsletter')}${tabBtn('servicios', 'Servicios')}${tabBtn('cuentas-fb', 'Cuentas FB')}${tabBtn('metricas-sitio', 'Métricas del sitio')}${tabBtn('perfil', 'Perfil')}`
     : `${tabBtn('integraciones', 'Integraciones')}${tabBtn('perfil', 'Perfil')}`;
   return `<div>

@@ -11,12 +11,13 @@ interface NotaPreviewInput {
   title?: string | null;
   dek?: string | null;
 }
-import { esc, badge, loadingCard, errorCard, initialsOf } from '../util';
+import { esc, badge, loadingCard, errorCard, initialsOf, safeHttpUrl } from '../util';
 
 function pickerRow(p: Proposal, editable: boolean): string {
   const fecha = p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '';
-  const thumb = p.cover_image_url
-    ? `<img src="${esc(p.cover_image_url)}" alt="" class="padmin-picker-thumb" onerror="this.style.visibility='hidden';">`
+  const thumbUrl = safeHttpUrl(p.cover_image_url);
+  const thumb = thumbUrl
+    ? `<img src="${esc(thumbUrl)}" alt="" class="padmin-picker-thumb" data-image-error="invisible">`
     : '<div class="padmin-picker-thumb padmin-picker-thumb-empty">Sin<br>imagen</div>';
   const meta = [p.section || '', fecha, p.author_name || ''].filter(Boolean).join(' · ');
   // El disparador por teclado es el título (botón real), no la fila: la fila lleva
@@ -48,7 +49,7 @@ function renderPickerPreview(): string {
         <p style="font-size:11px;font-weight:600;color:var(--text-mute);letter-spacing:0.06em;margin:0;">VISTA PREVIA — ${esc(p.title || '')}</p>
         <button type="button" class="padmin-drawer-close" data-action="close-picker-preview">Cerrar &times;</button>
       </div>
-      <iframe srcdoc="${esc(buildNotaPreviewDoc(p))}" class="padmin-preview-frame"></iframe>
+      <iframe srcdoc="${esc(buildNotaPreviewDoc(p))}" class="padmin-preview-frame" sandbox=""></iframe>
     </div>
   </div>`;
 }
@@ -125,15 +126,15 @@ export function renderEditor(): string {
         </div>
       </div>
       <div class="padmin-field"><label>Autor / firma</label><input id="editor-author" type="text" value="${esc(d.author_name)}"></div>
-      <div class="padmin-field"><label>Imagen de portada (URL)</label><input id="editor-cover" type="text" value="${esc(d.cover_image_url)}" placeholder="https://..." onchange="document.getElementById('editor-cover-thumb').src=this.value;document.getElementById('editor-cover-thumb').style.display=this.value?'block':'none';"></div>
-      ${d.cover_image_url ? `<img id="editor-cover-thumb" src="${esc(d.cover_image_url)}" alt="" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" onerror="this.style.display='none';">` : `<img id="editor-cover-thumb" style="display:none;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" onerror="this.style.display='none';">`}
-      ${isSensitive ? `<div class="padmin-field-inline padmin-field"><input id="editor-skip-image" type="checkbox" ${skipImageDefault ? 'checked' : ''} onchange="document.getElementById('editor-ia-image-block').style.display=this.checked?'none':'';"><label for="editor-skip-image" class="padmin-t-body">No generar imagen (nota sensible)</label></div>` : ''}
+      <div class="padmin-field"><label>Imagen de portada (URL)</label><input id="editor-cover" type="text" value="${esc(d.cover_image_url)}" placeholder="https://..."></div>
+      ${safeHttpUrl(d.cover_image_url) ? `<img id="editor-cover-thumb" src="${esc(safeHttpUrl(d.cover_image_url))}" alt="" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" data-image-error="hide">` : `<img id="editor-cover-thumb" style="display:none;width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin:-8px 0 14px;" data-image-error="hide">`}
+      ${isSensitive ? `<div class="padmin-field-inline padmin-field"><input id="editor-skip-image" type="checkbox" ${skipImageDefault ? 'checked' : ''}><label for="editor-skip-image" class="padmin-t-body">No generar imagen (nota sensible)</label></div>` : ''}
       <div class="padmin-ia-image" id="editor-ia-image-block" style="display:${isSensitive && skipImageDefault ? 'none' : ''};">
         <p class="padmin-ia-image-title">Generación de imagen de portada con IA</p>
         <button type="button" class="padmin-btn" data-action="generate-image" style="width:100%;margin-bottom:12px;" ${state.generatingImage ? 'disabled' : ''}>${state.generatingImage ? 'Generando imagen…' : 'Generar imagen con IA'}</button>
         <div class="padmin-field"><label>Prompt sugerido (editable)</label><textarea id="editor-image-prompt" style="min-height:110px;font-size:12px;">${esc(imagePrompt)}</textarea></div>
       </div>
-      <div class="padmin-field-inline padmin-field"><input id="editor-sponsored" type="checkbox" ${d.is_sponsored ? 'checked' : ''} onchange="document.getElementById('editor-sponsor-name-field').style.display=this.checked?'':'none';"><label for="editor-sponsored" class="padmin-t-body">Nota patrocinada (publicidad)</label></div>
+      <div class="padmin-field-inline padmin-field"><input id="editor-sponsored" type="checkbox" ${d.is_sponsored ? 'checked' : ''}><label for="editor-sponsored" class="padmin-t-body">Nota patrocinada (publicidad)</label></div>
       <div class="padmin-field" id="editor-sponsor-name-field" style="margin-bottom:0;display:${d.is_sponsored ? '' : 'none'};"><label>Patrocinado por</label><input id="editor-sponsor-name" type="text" value="${esc(d.sponsor_name)}" placeholder="Nombre del negocio"></div>
       ${renderEditChat()}
     </aside>
@@ -157,7 +158,7 @@ function renderNotaPreview(): string {
       <p style="font-size:11px;font-weight:600;color:var(--text-mute);letter-spacing:0.06em;margin:0;">VISTA PREVIA — así se vería publicada</p>
       <button type="button" class="padmin-drawer-close" data-action="close-nota-preview">Cerrar &times;</button>
     </div>
-    <iframe srcdoc="${esc(state.notaPreviewHtml)}" class="padmin-preview-frame"></iframe>
+    <iframe srcdoc="${esc(state.notaPreviewHtml)}" class="padmin-preview-frame" sandbox=""></iframe>
   </div>`;
 }
 
@@ -193,8 +194,9 @@ export function buildNotaPreviewDoc(d: NotaPreviewInput): string {
   const paras = body.split(/\n\s*\n/).filter(Boolean).map((p) =>
     `<p style="font-size:16px;line-height:1.75;margin:0 0 18px;">${esc(p)}</p>`
   ).join('');
-  const cover = d.cover_image_url
-    ? `<img src="${esc(d.cover_image_url)}" alt="" style="width:100%;max-height:420px;object-fit:cover;border-radius:8px;margin-bottom:24px;display:block;" onerror="this.style.display='none';">`
+  const coverUrl = safeHttpUrl(d.cover_image_url);
+  const cover = coverUrl
+    ? `<img src="${esc(coverUrl)}" alt="" style="width:100%;max-height:420px;object-fit:cover;border-radius:8px;margin-bottom:24px;display:block;">`
     : '<div style="width:100%;height:260px;background:#DCE6D6;border-radius:8px;margin-bottom:24px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#2F5233;">Sin imagen de portada</div>';
   const authorName = d.author_name || 'CREA Contenidos';
   const sponsorBlock = d.is_sponsored

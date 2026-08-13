@@ -15,55 +15,88 @@ window.addEventListener('hashchange', () => {
   if (target) goTo(target.screen, target.extra);
 });
 
-// Compartido por login() sin 2FA y por verify2fa(): token ya en `state.token`
-// (adminApi lo manda como Bearer), falta resolver la sesión y aterrizar.
-function completeLogin() {
-  try { localStorage.setItem('crea-admin-token', state.token!); } catch { /* modo privado */ }
-  adminApi<{ id: number; name: string; role: string; allowedModules: string[] }>('/api/auth/session')
+type Session = { id: number; name: string; role: string; allowedModules: string[]; requires_2fa_setup?: boolean };
+
+// La cookie HttpOnly ya quedó emitida por login/verify; falta resolver permisos.
+export function completeLogin() {
+  adminApi<Session>('/api/auth/session')
     .then((session) => {
-      const landing = landingFor(session.role);
+      const mustEnroll = Boolean(session.requires_2fa_setup);
+      const landing = mustEnroll ? 'configuracion' : landingFor(session.role);
       setState({
         user: { id: session.id, name: session.name, role: session.role },
         allowedModules: session.allowedModules,
-        screen: landing, loginError: null, loginTwoFaRequired: false,
+        screen: landing, loginError: null, loginBusy: false, loginTwoFaRequired: false,
+        requiresTwoFaSetup: mustEnroll,
+        ...(mustEnroll ? { configTab: 'perfil' } : {}),
       });
       location.hash = hashFor(landing);
       loadScreenData(landing);
-      loadNotifBadge();
+      if (!mustEnroll) loadNotifBadge();
     })
     .catch((err: ApiError) => {
-      state.token = null;
-      try { localStorage.removeItem('crea-admin-token'); } catch { /* noop */ }
-      setState({ loginError: err.status === 401 ? 'Correo o contraseña incorrectos.' : 'No pudimos conectar con el servidor.', loginTwoFaRequired: false });
+      setState({ loginError: err.status === 401 ? 'La sesión no es válida.' : 'No pudimos conectar con el servidor.', loginBusy: false, loginTwoFaRequired: false });
     });
 }
 
 export function login(email: string, password: string) {
-  setState({ loginError: null });
-  adminApi<{ token: string; requires_2fa?: boolean }>('/api/auth/login', { method: 'POST', body: { email, password } })
+  if (state.loginBusy) return;
+  setState({ loginError: null, loginBusy: true });
+  adminApi<{ requires_2fa?: boolean }>('/api/auth/login', { method: 'POST', body: { email, password } })
     .then((res) => {
-      state.token = res.token;
       if (res.requires_2fa) {
-        // Token pendiente (claim pending2fa, 5min): requireAuth lo rechaza en
-        // cualquier otra ruta salvo /2fa/verify — no se persiste hasta canjearlo.
-        setState({ loginTwoFaRequired: true, loginError: null });
+        setState({ loginTwoFaRequired: true, loginError: null, loginBusy: false });
         return;
       }
       completeLogin();
     })
     .catch((err: ApiError) => {
-      state.token = null;
-      try { localStorage.removeItem('crea-admin-token'); } catch { /* noop */ }
-      setState({ loginError: err.status === 401 ? 'Correo o contraseña incorrectos.' : 'No pudimos conectar con el servidor.' });
+      setState({
+        loginBusy: false,
+        loginError: err.status === 401 ? 'Correo o contraseña incorrectos.'
+          : (err.status === 429 ? 'Demasiados intentos. Espera unos minutos.' : 'No pudimos conectar con el servidor.'),
+      });
+    });
+}
+
+// Lee #reset/<token> del hash de arranque. Se llama antes de tryResumeSession en
+// main.ts: si alguien llega desde el link del correo, no tiene sentido intentar
+// resumir una sesión primero — puede que ni tenga una.
+export function readResetTokenFromHash(): string | null {
+  const match = /^#reset\/(.+)$/.exec(location.hash);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+export function forgotPassword(email: string) {
+  if (state.loginBusy) return;
+  setState({ loginError: null, loginBusy: true });
+  adminApi('/api/auth/forgot-password', { method: 'POST', body: { email } })
+    .then(() => { setState({ loginBusy: false, loginView: 'forgot-sent' }); })
+    .catch((err: ApiError) => {
+      setState({ loginBusy: false, loginError: err.status === 429 ? 'Demasiados intentos. Espera unos minutos.' : 'No pudimos conectar con el servidor.' });
+    });
+}
+
+export function resetPassword(password: string) {
+  if (state.loginBusy || !state.resetToken) return;
+  setState({ loginError: null, loginBusy: true });
+  adminApi('/api/auth/reset-password', { method: 'POST', body: { token: state.resetToken, password } })
+    .then(() => {
+      location.hash = '';
+      setState({ loginBusy: false, loginView: 'password', resetToken: null, successMsg: 'Contraseña actualizada. Ya puedes iniciar sesión.' });
+    })
+    .catch((err: ApiError) => {
+      setState({ loginBusy: false, loginError: err.status === 429 ? 'Demasiados intentos. Espera unos minutos.' : (err.message || 'El enlace no es válido o venció.') });
     });
 }
 
 export function verify2fa(code: string) {
-  setState({ loginError: null });
-  adminApi<{ token: string }>('/api/auth/2fa/verify', { method: 'POST', body: { code } })
-    .then((res) => { state.token = res.token; completeLogin(); })
+  if (state.loginBusy) return;
+  setState({ loginError: null, loginBusy: true });
+  adminApi('/api/auth/2fa/verify', { method: 'POST', body: { code } })
+    .then(() => { completeLogin(); })
     .catch((err: ApiError) => {
-      setState({ loginError: err.status === 401 ? 'Código incorrecto.' : (err.message || 'No pudimos verificar el código.') });
+      setState({ loginBusy: false, loginError: err.status === 401 ? 'Código incorrecto.' : (err.message || 'No pudimos verificar el código.') });
     });
 }
 
@@ -84,36 +117,33 @@ export function loadNotifBadge(force?: boolean) {
 // acordaba de agregar (filtros de RADAR, tab de Configuración, borradores del editor,
 // resultados de QA) — datos del usuario anterior visibles tras cambiar de sesión.
 export function logout() {
-  state.token = null;
-  try { localStorage.removeItem('crea-admin-token'); } catch { /* noop */ }
-  location.hash = '';
-  setState(initialState());
+  adminApi('/api/auth/logout', { method: 'POST' }).then(() => {
+    location.hash = '';
+    setState(initialState());
+  }).catch((err: ApiError) => { setState({ errorMsg: err.message }); });
 }
 
 export function tryResumeSession() {
-  let saved: string | null;
-  try { saved = localStorage.getItem('crea-admin-token'); } catch { saved = null; }
-  if (!saved) { render(); return; }
-  state.token = saved;
-  adminApi<{ id: number; name: string; role: string; allowedModules: string[] }>('/api/auth/session')
+  adminApi<Session>('/api/auth/session')
     .then((session) => {
-      const landing = landingFor(session.role);
+      const mustEnroll = Boolean(session.requires_2fa_setup);
+      const landing = mustEnroll ? 'configuracion' : landingFor(session.role);
       const fromHash = screenFromHash(location.hash);
-      const restore = fromHash && session.allowedModules.indexOf(fromHash.screen) !== -1 ? fromHash : null;
+      const restore = !mustEnroll && fromHash && session.allowedModules.indexOf(fromHash.screen) !== -1 ? fromHash : null;
       const screen = restore ? restore.screen : landing;
       setState({
         user: { id: session.id, name: session.name, role: session.role },
         allowedModules: session.allowedModules,
         screen,
+        requiresTwoFaSetup: mustEnroll,
+        ...(mustEnroll ? { configTab: 'perfil' } : {}),
         ...(screen === 'editor' ? { editorProposalId: restore!.extra } : {}),
       });
       if (!restore) location.hash = hashFor(landing);
       loadScreenData(screen, restore ? restore.extra : undefined);
-      loadNotifBadge();
+      if (!mustEnroll) loadNotifBadge();
     })
     .catch(() => {
-      state.token = null;
-      try { localStorage.removeItem('crea-admin-token'); } catch { /* noop */ }
       render();
     });
 }
@@ -141,6 +171,21 @@ export function goHome() {
   location.hash = hashFor(landing);
 }
 
+// Botón "ojito": toggle-password (ver actions.ts) alterna type text/password del
+// input hermano vía DOM directo, sin pasar por setState — un re-render mientras
+// se escribe borraría lo tecleado (el input es no controlado, ver router.ts).
+const eyeIconOpen = '<svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const eyeIconClosed = '<svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+function passwordField(id: string, label: string, autocomplete: string, minlength?: number): string {
+  return `<div class="padmin-field"><label for="${id}">${label}</label>
+    <div class="padmin-password-wrap">
+      <input id="${id}" type="password" autocomplete="${autocomplete}" required ${minlength ? `minlength="${minlength}"` : ''}>
+      <button type="button" class="padmin-password-toggle" data-action="toggle-password" data-target="${id}" aria-controls="${id}" aria-pressed="false" aria-label="Mostrar contraseña" title="Mostrar contraseña"><span data-eye-show>${eyeIconOpen}</span><span data-eye-hide hidden>${eyeIconClosed}</span></button>
+    </div>
+  </div>`;
+}
+
 export function renderLogin(): string {
   const errorHtml = state.loginError ? `<p class="padmin-lede" style="color:var(--danger);margin:0 0 12px;">${esc(state.loginError)}</p>` : '';
   if (state.loginTwoFaRequired) {
@@ -149,8 +194,39 @@ export function renderLogin(): string {
       <p class="padmin-login-sub">Ingresa el código de tu app de autenticación</p>
       ${errorHtml}
       <form data-action="submit-2fa-verify">
-        <div class="padmin-field"><label for="pl-2fa-code">Código de 6 dígitos (o un código de respaldo)</label><input id="pl-2fa-code" type="text" inputmode="numeric" autocomplete="one-time-code" required autofocus></div>
-        <button type="submit" class="padmin-btn" style="width:100%;text-align:center;">Verificar</button>
+        <div class="padmin-field"><label for="pl-2fa-code">Código de 6 dígitos (o un código de respaldo)</label><input id="pl-2fa-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="64" required autofocus></div>
+        <button type="submit" class="padmin-btn" style="width:100%;text-align:center;" ${state.loginBusy ? 'disabled' : ''}>${state.loginBusy ? 'Verificando…' : 'Verificar'}</button>
+      </form>
+    </div></div>`;
+  }
+  if (state.loginView === 'forgot') {
+    return `<div class="padmin-login-screen"><div class="padmin-login-card">
+      <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
+      <p class="padmin-login-sub">Te mandamos un enlace para elegir una nueva contraseña</p>
+      ${errorHtml}
+      <form data-action="submit-forgot-password">
+        <div class="padmin-field"><label for="pl-forgot-email">Correo</label><input id="pl-forgot-email" type="email" placeholder="tu@crearcontenidos.com" autocomplete="username" required autofocus></div>
+        <button type="submit" class="padmin-btn" style="width:100%;text-align:center;" ${state.loginBusy ? 'disabled' : ''}>${state.loginBusy ? 'Enviando…' : 'Enviar enlace'}</button>
+      </form>
+      <p style="margin:16px 0 0;text-align:center;"><button type="button" data-action="show-login" style="background:none;border:none;cursor:pointer;font-size:var(--fs-sm);color:var(--text-mute);text-decoration:underline;">&larr; Volver a iniciar sesión</button></p>
+    </div></div>`;
+  }
+  if (state.loginView === 'forgot-sent') {
+    return `<div class="padmin-login-screen"><div class="padmin-login-card">
+      <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
+      <p class="padmin-login-sub">Si ese correo existe en el panel, ya te llegó un enlace para recuperar tu contraseña. Revisa también spam.</p>
+      <button type="button" class="padmin-btn" data-action="show-login" style="width:100%;text-align:center;">Volver a iniciar sesión</button>
+    </div></div>`;
+  }
+  if (state.loginView === 'reset') {
+    return `<div class="padmin-login-screen"><div class="padmin-login-card">
+      <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
+      <p class="padmin-login-sub">Elige tu nueva contraseña</p>
+      ${errorHtml}
+      <form data-action="submit-reset-password">
+        ${passwordField('pl-reset-pass', 'Nueva contraseña', 'new-password', 8)}
+        ${passwordField('pl-reset-confirm', 'Confirmar nueva contraseña', 'new-password', 8)}
+        <button type="submit" class="padmin-btn" style="width:100%;text-align:center;" ${state.loginBusy ? 'disabled' : ''}>${state.loginBusy ? 'Guardando…' : 'Guardar contraseña'}</button>
       </form>
     </div></div>`;
   }
@@ -160,8 +236,9 @@ export function renderLogin(): string {
     ${errorHtml}
     <form data-action="submit-login">
       <div class="padmin-field"><label for="pl-email">Correo</label><input id="pl-email" type="email" placeholder="tu@crearcontenidos.com" autocomplete="username" required></div>
-      <div class="padmin-field"><label for="pl-pass">Contraseña</label><input id="pl-pass" type="password" autocomplete="current-password" required></div>
-      <button type="submit" class="padmin-btn" style="width:100%;text-align:center;">Iniciar sesión</button>
+      ${passwordField('pl-pass', 'Contraseña', 'current-password')}
+      <button type="submit" class="padmin-btn" style="width:100%;text-align:center;" ${state.loginBusy ? 'disabled' : ''}>${state.loginBusy ? 'Ingresando…' : 'Iniciar sesión'}</button>
     </form>
+    <p style="margin:16px 0 0;text-align:center;"><button type="button" data-action="show-forgot-password" style="background:none;border:none;cursor:pointer;font-size:var(--fs-sm);color:var(--text-mute);text-decoration:underline;">¿Olvidaste tu contraseña?</button></p>
   </div></div>`;
 }

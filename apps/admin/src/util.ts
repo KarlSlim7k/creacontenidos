@@ -10,6 +10,21 @@ export function esc(str: unknown): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Escapar HTML no neutraliza esquemas activos como javascript:. Los enlaces y
+// recursos externos del panel solo necesitan HTTP(S); las rutas relativas siguen
+// siendo válidas al resolverlas contra una base ficticia segura.
+export function safeHttpUrl(value: unknown): string {
+  const input = String(value == null ? '' : value).trim();
+  if (!input) return '';
+  if (input.startsWith('/') && !input.startsWith('//')) return input;
+  try {
+    const url = new URL(input);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? input : '';
+  } catch {
+    return '';
+  }
+}
+
 export function relativeTime(iso: string | null | undefined): string {
   if (!iso) return '';
   const diffMs = Date.now() - new Date(iso).getTime();

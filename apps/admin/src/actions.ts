@@ -7,10 +7,10 @@ import {
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
   type EditChatHunk, type MyProfile, type EditorialSettings, type TwoFaSetup,
 } from './store';
-import { TABLE_PAGE_SIZE } from './util';
+import { TABLE_PAGE_SIZE, safeHttpUrl } from './util';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
 import { readNewsletterForm } from './screens/hermes';
-import { goTo, login, logout, verify2fa, loadNotifBadge } from './auth';
+import { goTo, login, logout, verify2fa, loadNotifBadge, completeLogin, forgotPassword, resetPassword } from './auth';
 import { promptPwaInstall, enablePushNotifications, disablePushNotifications } from './pwa';
 
 // ---------- lectura de formularios inline ----------
@@ -71,6 +71,24 @@ function generateNewsletter() {
 // Las mutaciones con lógica propia viven en las funciones submit* de abajo.
 const clickHandlers: Record<string, (el: Element) => void> = {
   'logout': () => logout(),
+  'show-forgot-password': () => setState({ loginView: 'forgot', loginError: null }),
+  'show-login': () => setState({ loginView: 'password', loginError: null }),
+  // Manipulación de DOM directa, sin setState: ver el comentario sobre passwordField
+  // en auth.ts — un re-render acá borraría lo que la persona ya tecleó.
+  'toggle-password': (el) => {
+    const targetId = attr(el, 'data-target');
+    const input = document.getElementById(targetId) as HTMLInputElement | null;
+    if (!input) return;
+    const willShow = input.type === 'password';
+    input.type = willShow ? 'text' : 'password';
+    const showIcon = el.querySelector<HTMLElement>('[data-eye-show]');
+    const hideIcon = el.querySelector<HTMLElement>('[data-eye-hide]');
+    if (showIcon) showIcon.hidden = willShow;
+    if (hideIcon) hideIcon.hidden = !willShow;
+    el.setAttribute('aria-pressed', String(willShow));
+    el.setAttribute('aria-label', willShow ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    el.setAttribute('title', willShow ? 'Ocultar contraseña' : 'Mostrar contraseña');
+  },
   'install-pwa': () => promptPwaInstall(),
   'enable-push': () => {
     setState({ pushBusy: true, pushError: null });
@@ -562,7 +580,9 @@ export function submitDeleteFbAccount(id: number) {
 }
 
 export function submitToggleUser(id: number, active: boolean) {
-  adminApi<AdminUser>('/api/auth/users/' + id, { method: 'PATCH', body: { active } })
+  const code = prompt('Ingresa tu código 2FA para confirmar este cambio:');
+  if (!code) return;
+  adminApi<AdminUser>('/api/auth/users/' + id, { method: 'PATCH', body: { active, code: code.trim() } })
     .then((updated) => {
       const list = state.data.users!.map((u) => u.id === id ? updated : u);
       setData({ users: list });
@@ -610,7 +630,8 @@ export function submitDistribute(channel: string, proposalId: number) {
   setState({ distBusy: channel + ':' + proposalId });
   adminApi<{ share_url?: string }>('/api/distribution/' + channel, { method: 'POST', body: { proposal_id: proposalId } })
     .then((r) => {
-      if (r && r.share_url) window.open(r.share_url, '_blank');
+      const shareUrl = safeHttpUrl(r && r.share_url);
+      if (shareUrl) window.open(shareUrl, '_blank', 'noopener');
       setState({ distBusy: null, successMsg: 'Nota enviada a ' + channel + '.' });
     })
     .catch((err: ApiError) => { setState({ distBusy: null, errorMsg: err.message }); })
@@ -800,6 +821,20 @@ export function handleSubmit(e: SubmitEvent) {
   } else if (action === 'submit-2fa-verify') {
     e.preventDefault();
     verify2fa(q('#pl-2fa-code').value.trim());
+  } else if (action === 'submit-forgot-password') {
+    e.preventDefault();
+    forgotPassword(q('#pl-forgot-email').value.trim());
+  } else if (action === 'submit-reset-password') {
+    e.preventDefault();
+    const password = q('#pl-reset-pass').value;
+    const confirmation = q('#pl-reset-confirm');
+    confirmation.setCustomValidity('');
+    if (password !== confirmation.value) {
+      confirmation.setCustomValidity('Las contraseñas no coinciden.');
+      confirmation.reportValidity();
+      return;
+    }
+    resetPassword(password);
   } else if (action === 'submit-idea') {
     e.preventDefault();
     const title = q('#idea-title').value.trim();
@@ -815,10 +850,11 @@ export function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
     const nuPassword = q('#nu-password').value;
     const nuId = state.form?.kind === 'user' ? state.form.editingId : null;
-    const nuBody: { name: string; email: string; role: string; password?: string } = {
+    const nuBody: { name: string; email: string; role: string; password?: string; code: string } = {
       name: q('#nu-name').value.trim(),
       email: q('#nu-email').value.trim(),
       role: q<HTMLSelectElement>('#nu-role').value,
+      code: q('#nu-2fa-code').value.trim(),
     };
     if (!nuId || nuPassword) nuBody.password = nuPassword;
     const nuReq = nuId
@@ -907,10 +943,24 @@ export function handleSubmit(e: SubmitEvent) {
   } else if (action === 'submit-my-profile') {
     e.preventDefault();
     const pw = q('#me-password').value;
+    const confirmation = q('#me-password-confirm');
+    confirmation.setCustomValidity('');
+    if (pw && pw !== confirmation.value) {
+      confirmation.setCustomValidity('Las contraseñas nuevas no coinciden.');
+      confirmation.reportValidity();
+      return;
+    }
+    const me = state.data.myProfile!;
+    const email = q('#me-email').value.trim();
+    const credentialsChange = Boolean(pw) || email.toLowerCase() !== me.email.toLowerCase();
     adminApi<MyProfile>('/api/auth/me', { method: 'PATCH', body: {
       name: q('#me-name').value.trim(),
-      email: q('#me-email').value.trim(),
+      ...(email.toLowerCase() !== me.email.toLowerCase() ? { email } : {}),
       ...(pw ? { password: pw } : {}),
+      ...(credentialsChange ? {
+        current_password: q('#me-current-password').value,
+        code: (form.querySelector('#me-2fa-code') as HTMLInputElement | null)?.value.trim() || undefined,
+      } : {}),
     } }).then((updated) => {
       setState({ errorMsg: null, successMsg: 'Perfil actualizado.' });
       setData({ myProfile: updated });
@@ -924,6 +974,7 @@ export function handleSubmit(e: SubmitEvent) {
       .then((res) => {
         setState({ twoFaBusy: false, twoFaSetup: null, twoFaBackupCodes: res.backup_codes, errorMsg: null });
         setData({ myProfile: state.data.myProfile ? Object.assign({}, state.data.myProfile, { two_factor_enabled: true }) : null });
+        if (state.requiresTwoFaSetup) completeLogin();
       })
       .catch((err: ApiError) => { setState({ twoFaBusy: false, errorMsg: err.message }); });
   } else if (action === 'submit-2fa-disable') {
@@ -1002,7 +1053,17 @@ export function handleInput(e: Event) {
 
 export function handleChange(e: Event) {
   const target = e.target as HTMLElement;
-  if (target.getAttribute && target.getAttribute('data-action') === 'move-idea') {
+  if (target.id === 'editor-cover') {
+    const img = document.getElementById('editor-cover-thumb') as HTMLImageElement | null;
+    const url = safeHttpUrl((target as HTMLInputElement).value);
+    if (img) { img.src = url; img.style.display = url ? 'block' : 'none'; }
+  } else if (target.id === 'editor-skip-image') {
+    const block = document.getElementById('editor-ia-image-block');
+    if (block) block.style.display = (target as HTMLInputElement).checked ? 'none' : '';
+  } else if (target.id === 'editor-sponsored') {
+    const field = document.getElementById('editor-sponsor-name-field');
+    if (field) field.style.display = (target as HTMLInputElement).checked ? '' : 'none';
+  } else if (target.getAttribute && target.getAttribute('data-action') === 'move-idea') {
     const id = Number(target.getAttribute('data-id'));
     adminApi<Idea>('/api/editorial/ideas/' + id, { method: 'PATCH', body: { column_status: (target as HTMLSelectElement).value } })
       .then((updated) => {
@@ -1011,4 +1072,10 @@ export function handleChange(e: Event) {
       })
       .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
   }
+}
+
+export function handleMediaError(e: Event) {
+  const target = e.target as HTMLElement;
+  if (target.getAttribute('data-image-error') === 'invisible') target.style.visibility = 'hidden';
+  else if (target.getAttribute('data-image-error') === 'hide') target.style.display = 'none';
 }

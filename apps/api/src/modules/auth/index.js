@@ -10,17 +10,54 @@ const config = require('../../config');
 const totpCrypto = require('../../lib/totp-crypto');
 const { requireAuth, requireRole, requirePending2fa } = require('../../middleware/auth');
 const { ROLE_MODULES } = require('./role-modules');
+const { rateLimitKey } = require('../../lib/client-ip');
+const { setSession, clearSession } = require('../../lib/auth-session');
+const { makeToken, readToken, resetEmailHtml } = require('../../lib/password-reset');
+const { sendEmail } = require('../../lib/resend-client');
 
 const router = express.Router();
+router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
 // Intentos de login: límite estricto por IP, mismo espíritu que leadsLimiter en public.
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, keyGenerator: rateLimitKey });
+// Segundo eje: frena ataques distribuidos contra una sola cuenta. Hash para no
+// guardar correos en claro dentro del almacén en memoria del limiter.
+const accountLoginLimiter = rateLimit({
+  windowMs: 30 * 60 * 1000,
+  limit: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => crypto.createHash('sha256').update(String(req.body?.email || '').trim().toLowerCase()).digest('hex'),
+  validate: { keyGeneratorIpFallback: false },
+});
 // Intentos de código 2FA: mismo espíritu, ventana propia (no consume el cupo de /login).
-const twoFaVerifyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
+const twoFaVerifyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, keyGenerator: rateLimitKey });
+// Recuperar contraseña: por IP (pedir el link) y por cuenta (probar tokens), ventanas
+// propias — no comparten cupo con /login para no bloquear un login legítimo por esto.
+const forgotPasswordLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, keyGenerator: rateLimitKey });
+const forgotPasswordAccountLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => crypto.createHash('sha256').update(String(req.body?.email || '').trim().toLowerCase()).digest('hex'),
+  validate: { keyGeneratorIpFallback: false },
+});
+const resetPasswordLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, keyGenerator: rateLimitKey });
 
 function signSession(user) {
-  return jwt.sign({ id: user.id, name: user.name, role: user.role }, config.jwtSecret, { expiresIn: '8h' });
+  return jwt.sign({ id: user.id, name: user.name, role: user.role, sv: user.session_version }, config.jwtSecret, { expiresIn: '8h', algorithm: 'HS256' });
 }
+
+function sessionResponse(token, body) {
+  // Bearer queda sólo para checks/automatizaciones locales. En producción el JWT
+  // nunca entra al JavaScript del navegador: viaja exclusivamente en HttpOnly.
+  return config.nodeEnv === 'production' ? body : { ...body, token };
+}
+
+const passwordIsValid = (value) => typeof value === 'string' && value.length >= 8 && Buffer.byteLength(value, 'utf8') <= 72;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Códigos de respaldo: comparación secuencial contra los hashes bcrypt guardados
 // (mismo mecanismo que password_hash) — O(n) sobre ~8 códigos, sin indexar.
@@ -31,19 +68,36 @@ async function findBackupCodeMatch(hashedCodes, candidate) {
   return -1;
 }
 
+async function verifySecondFactor(userId, candidate) {
+  const { rows } = await pool.query(
+    'SELECT two_factor_enabled, two_factor_secret, two_factor_backup_codes FROM users WHERE id = $1',
+    [userId]
+  );
+  const user = rows[0];
+  if (!user || !user.two_factor_enabled) return true;
+  if (typeof candidate !== 'string' || !candidate.trim() || candidate.length > 64) return false;
+  const code = candidate.trim();
+  if (authenticator.check(code, totpCrypto.decrypt(user.two_factor_secret))) return true;
+  const hashes = Array.isArray(user.two_factor_backup_codes) ? user.two_factor_backup_codes : [];
+  const idx = await findBackupCodeMatch(hashes, code);
+  if (idx < 0) return false;
+  await pool.query('UPDATE users SET two_factor_backup_codes = $1 WHERE id = $2', [JSON.stringify(hashes.filter((_, i) => i !== idx)), userId]);
+  return true;
+}
+
 // POST /api/auth/login — email+password contra users. Sin distinguir "no existe" de
 // "password incorrecto" en la respuesta (no dar pistas). Si el usuario tiene 2FA
 // activo, no emite la sesión completa: emite un token "pendiente" (claim
 // pending2fa) de 5 min, que requireAuth rechaza en cualquier otra ruta — el
 // cliente debe pasar por POST /2fa/verify para canjearlo por la sesión real.
-router.post('/login', loginLimiter, async (req, res, next) => {
+router.post('/login', loginLimiter, accountLoginLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
-    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password || Buffer.byteLength(password, 'utf8') > 72) {
       return res.status(400).json({ error: 'Correo y contraseña son requeridos' });
     }
     const { rows } = await pool.query(
-      'SELECT id, name, password_hash, role, active, two_factor_enabled FROM users WHERE email = $1',
+      'SELECT id, name, password_hash, role, active, two_factor_enabled, session_version FROM users WHERE email = $1',
       [email.trim().toLowerCase()]
     );
     const user = rows[0];
@@ -51,10 +105,68 @@ router.post('/login', loginLimiter, async (req, res, next) => {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
     if (user.two_factor_enabled) {
-      const pendingToken = jwt.sign({ id: user.id, pending2fa: true }, config.jwtSecret, { expiresIn: '5m' });
-      return res.json({ token: pendingToken, requires_2fa: true });
+      const pendingToken = jwt.sign({ id: user.id, sv: user.session_version, pending2fa: true }, config.jwtSecret, { expiresIn: '5m', algorithm: 'HS256' });
+      setSession(res, pendingToken, { pending: true });
+      return res.json(sessionResponse(pendingToken, { requires_2fa: true }));
     }
-    res.json({ token: signSession(user), user: { id: user.id, name: user.name, role: user.role } });
+    const token = signSession(user);
+    setSession(res, token);
+    res.json(sessionResponse(token, { user: { id: user.id, name: user.name, role: user.role } }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/forgot-password — siempre 200, exista o no la cuenta (no dar
+// pistas de qué correos están registrados). Si existe y está activa, manda el
+// link por Resend; un fallo del proveedor de correo se registra pero no cambia
+// la respuesta.
+router.post('/forgot-password', forgotPasswordLimiter, forgotPasswordAccountLimiter, async (req, res, next) => {
+  try {
+    const { email } = req.body || {};
+    if (typeof email !== 'string' || email.length > 254 || !EMAIL_RE.test(email.trim())) return res.status(400).json({ error: 'Correo inválido' });
+    const { rows } = await pool.query('SELECT id, session_version, active FROM users WHERE email = $1', [email.trim().toLowerCase()]);
+    const user = rows[0];
+    if (user && user.active) {
+      const token = makeToken(user.id, user.session_version);
+      const resetUrl = `${config.publicSiteUrl.replace(/\/$/, '')}/admin/#reset/${token}`;
+      if (config.nodeEnv !== 'production') console.log(`[forgot-password] link de reset: ${resetUrl}`);
+      sendEmail({ to: email.trim().toLowerCase(), subject: 'Recuperar contraseña — Panel CREA', html: resetEmailHtml(resetUrl) })
+        .catch((err) => console.error('forgot-password: fallo enviando correo', err.message));
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/reset-password — el token trae el session_version vigente al
+// pedir el link; si no coincide con el actual (contraseña ya cambiada, sesión
+// cerrada, o un segundo uso del mismo token) se rechaza. Guardar la nueva
+// contraseña vuelve a incrementar session_version, así que el token usado deja
+// de servir y cualquier sesión abierta con la contraseña vieja se cae.
+router.post('/reset-password', resetPasswordLimiter, async (req, res, next) => {
+  try {
+    const { token, password } = req.body || {};
+    if (!passwordIsValid(password)) return res.status(400).json({ error: 'Entre 8 caracteres y 72 bytes' });
+    const decoded = readToken(token);
+    if (!decoded) return res.status(400).json({ error: 'El enlace no es válido o venció' });
+    const { rows } = await pool.query('SELECT id, session_version, active FROM users WHERE id = $1', [decoded.userId]);
+    const user = rows[0];
+    if (!user || !user.active || user.session_version !== decoded.sessionVersion) {
+      return res.status(400).json({ error: 'El enlace no es válido o venció' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    // El WHERE sobre session_version vuelve el token realmente de un solo uso:
+    // dos requests concurrentes pueden pasar el SELECT, pero sólo uno gana el UPDATE.
+    const changed = await pool.query(
+      `UPDATE users SET password_hash = $1, session_version = session_version + 1
+       WHERE id = $2 AND session_version = $3`,
+      [passwordHash, user.id, decoded.sessionVersion]
+    );
+    if (changed.rowCount !== 1) return res.status(400).json({ error: 'El enlace no es válido o venció' });
+    clearSession(res);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
@@ -66,9 +178,9 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 router.post('/2fa/verify', twoFaVerifyLimiter, requirePending2fa, async (req, res, next) => {
   try {
     const { code } = req.body || {};
-    if (typeof code !== 'string' || !code.trim()) return res.status(400).json({ error: 'Código requerido' });
+    if (typeof code !== 'string' || !code.trim() || code.length > 64) return res.status(400).json({ error: 'Código inválido' });
     const { rows } = await pool.query(
-      'SELECT id, name, role, active, two_factor_secret, two_factor_backup_codes FROM users WHERE id = $1',
+      'SELECT id, name, role, active, two_factor_secret, two_factor_backup_codes, session_version FROM users WHERE id = $1',
       [req.user.id]
     );
     const user = rows[0];
@@ -86,7 +198,10 @@ router.post('/2fa/verify', twoFaVerifyLimiter, requirePending2fa, async (req, re
       }
     }
     if (!ok) return res.status(401).json({ error: 'Código incorrecto' });
-    res.json({ token: signSession(user), user: { id: user.id, name: user.name, role: user.role } });
+    if (req.user.sv !== user.session_version) return res.status(401).json({ error: 'Sesión inválida' });
+    const token = signSession(user);
+    setSession(res, token);
+    res.json(sessionResponse(token, { user: { id: user.id, name: user.name, role: user.role } }));
   } catch (err) {
     next(err);
   }
@@ -99,10 +214,22 @@ router.get('/session', requireAuth, async (req, res, next) => {
     const { rows } = await pool.query('SELECT id, name, role, active FROM users WHERE id = $1', [req.user.id]);
     const user = rows[0];
     if (!user || !user.active) return res.status(401).json({ error: 'Sesión inválida' });
-    res.json({ id: user.id, name: user.name, role: user.role, allowedModules: ROLE_MODULES[user.role] || [] });
+    res.json({
+      id: user.id, name: user.name, role: user.role,
+      allowedModules: req.user.requires2faSetup ? ['configuracion'] : (ROLE_MODULES[user.role] || []),
+      requires_2fa_setup: req.user.requires2faSetup,
+    });
   } catch (err) {
     next(err);
   }
+});
+
+router.post('/logout', requireAuth, async (req, res, next) => {
+  try {
+    await pool.query('UPDATE users SET session_version = session_version + 1 WHERE id = $1', [req.user.id]);
+    clearSession(res);
+    res.status(204).end();
+  } catch (err) { next(err); }
 });
 
 // GET /api/auth/roles — mapa rol → módulos para la tabla de Configuración → Permisos.
@@ -127,27 +254,38 @@ router.get('/me', requireAuth, async (req, res, next) => {
 // nunca acepta `role` ni `active`: un usuario no se autoasciende ni se reactiva.
 router.patch('/me', requireAuth, async (req, res, next) => {
   try {
-    const { name, email, password } = req.body || {};
+    const { name, email, password, current_password, code } = req.body || {};
     if ([name, email, password].every((v) => v === undefined)) {
       return res.status(400).json({ error: 'Nada que actualizar' });
     }
     const errors = {};
     if (name !== undefined && (typeof name !== 'string' || !name.trim())) errors.name = 'Campo requerido';
     if (email !== undefined && (typeof email !== 'string' || !EMAIL_RE.test(email.trim()))) errors.email = 'Formato de email inválido';
-    if (password !== undefined && (typeof password !== 'string' || password.length < 8)) errors.password = 'Mínimo 8 caracteres';
+    if (password !== undefined && !passwordIsValid(password)) errors.password = 'Entre 8 caracteres y 72 bytes';
     if (Object.keys(errors).length) return res.status(400).json({ error: 'Datos inválidos', fields: errors });
+
+    const credentialsChange = email !== undefined || password !== undefined;
+    if (credentialsChange) {
+      const { rows: currentRows } = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+      if (!currentRows[0] || typeof current_password !== 'string' || !(await bcrypt.compare(current_password, currentRows[0].password_hash))) {
+        return res.status(401).json({ error: 'La contraseña actual es incorrecta' });
+      }
+      if (!(await verifySecondFactor(req.user.id, code))) return res.status(401).json({ error: 'Código de verificación incorrecto' });
+    }
 
     const passwordHash = password === undefined ? null : await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
       `UPDATE users SET
          name = COALESCE($1, name),
          email = COALESCE($2, email),
-         password_hash = COALESCE($3, password_hash)
-       WHERE id = $4
-       RETURNING id, name, email, role, created_at`,
+         password_hash = COALESCE($3, password_hash),
+         session_version = session_version + $4
+       WHERE id = $5
+       RETURNING id, name, email, role, created_at, session_version`,
       [name === undefined ? null : name.trim(), email === undefined ? null : email.trim().toLowerCase(),
-        passwordHash, req.user.id]
+        passwordHash, credentialsChange ? 1 : 0, req.user.id]
     );
+    if (credentialsChange) setSession(res, signSession(rows[0]));
     res.json(rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Datos inválidos', fields: { email: 'Ya existe un usuario con ese correo' } });
@@ -163,8 +301,9 @@ router.patch('/me', requireAuth, async (req, res, next) => {
 // sigue en false hasta /enable — el secret solo no autoriza nada.
 router.post('/2fa/setup', requireAuth, async (req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT email FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await pool.query('SELECT email, two_factor_enabled FROM users WHERE id = $1', [req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (rows[0].two_factor_enabled) return res.status(409).json({ error: 'Desactiva primero la verificación actual' });
     const secret = authenticator.generateSecret();
     await pool.query('UPDATE users SET two_factor_secret = $1 WHERE id = $2', [totpCrypto.encrypt(secret), req.user.id]);
     const otpauth = authenticator.keyuri(rows[0].email, 'CREA Panel', secret);
@@ -181,7 +320,7 @@ router.post('/2fa/setup', requireAuth, async (req, res, next) => {
 router.post('/2fa/enable', requireAuth, async (req, res, next) => {
   try {
     const { code } = req.body || {};
-    if (typeof code !== 'string' || !code.trim()) return res.status(400).json({ error: 'Código requerido' });
+    if (typeof code !== 'string' || !code.trim() || code.length > 64) return res.status(400).json({ error: 'Código inválido' });
     const { rows } = await pool.query('SELECT two_factor_secret FROM users WHERE id = $1', [req.user.id]);
     if (!rows[0] || !rows[0].two_factor_secret) return res.status(400).json({ error: 'Primero genera el código QR' });
     const secret = totpCrypto.decrypt(rows[0].two_factor_secret);
@@ -189,8 +328,15 @@ router.post('/2fa/enable', requireAuth, async (req, res, next) => {
 
     const backupCodes = Array.from({ length: 8 }, () => crypto.randomBytes(5).toString('hex'));
     const hashed = await Promise.all(backupCodes.map((c) => bcrypt.hash(c, 10)));
-    await pool.query('UPDATE users SET two_factor_enabled = true, two_factor_backup_codes = $1 WHERE id = $2', [JSON.stringify(hashed), req.user.id]);
-    res.json({ backup_codes: backupCodes });
+    const { rows: enabledRows } = await pool.query(
+      `UPDATE users SET two_factor_enabled = true, two_factor_backup_codes = $1,
+         session_version = session_version + 1
+       WHERE id = $2 RETURNING id, name, role, session_version`,
+      [JSON.stringify(hashed), req.user.id]
+    );
+    const token = signSession(enabledRows[0]);
+    setSession(res, token);
+    res.json(sessionResponse(token, { backup_codes: backupCodes }));
   } catch (err) {
     next(err);
   }
@@ -201,21 +347,21 @@ router.post('/2fa/enable', requireAuth, async (req, res, next) => {
 router.post('/2fa/disable', requireAuth, async (req, res, next) => {
   try {
     const { code } = req.body || {};
-    if (typeof code !== 'string' || !code.trim()) return res.status(400).json({ error: 'Código requerido' });
-    const { rows } = await pool.query('SELECT two_factor_secret, two_factor_backup_codes FROM users WHERE id = $1', [req.user.id]);
-    const user = rows[0];
-    if (!user || !user.two_factor_secret) return res.status(400).json({ error: '2FA no está activo' });
+    if (req.user.role === 'director') return res.status(403).json({ error: 'La verificación en dos pasos es obligatoria para directores' });
+    if (typeof code !== 'string' || !code.trim() || code.length > 64) return res.status(400).json({ error: 'Código inválido' });
+    const { rows } = await pool.query('SELECT two_factor_enabled FROM users WHERE id = $1', [req.user.id]);
+    if (!rows[0]?.two_factor_enabled) return res.status(400).json({ error: '2FA no está activo' });
+    if (!(await verifySecondFactor(req.user.id, code))) return res.status(401).json({ error: 'Código incorrecto' });
 
-    const trimmed = code.trim();
-    const secret = totpCrypto.decrypt(user.two_factor_secret);
-    let ok = authenticator.check(trimmed, secret);
-    if (!ok && Array.isArray(user.two_factor_backup_codes)) {
-      ok = (await findBackupCodeMatch(user.two_factor_backup_codes, trimmed)) !== -1;
-    }
-    if (!ok) return res.status(401).json({ error: 'Código incorrecto' });
-
-    await pool.query('UPDATE users SET two_factor_enabled = false, two_factor_secret = NULL, two_factor_backup_codes = NULL WHERE id = $1', [req.user.id]);
-    res.json({ ok: true });
+    const { rows: disabledRows } = await pool.query(
+      `UPDATE users SET two_factor_enabled = false, two_factor_secret = NULL,
+         two_factor_backup_codes = NULL, session_version = session_version + 1
+       WHERE id = $1 RETURNING id, name, role, session_version`,
+      [req.user.id]
+    );
+    const token = signSession(disabledRows[0]);
+    setSession(res, token);
+    res.json(sessionResponse(token, { ok: true }));
   } catch (err) {
     next(err);
   }
@@ -223,7 +369,6 @@ router.post('/2fa/disable', requireAuth, async (req, res, next) => {
 
 // --- Usuarios (Configuración → Usuarios, solo director) ---
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_ROLES = Object.keys(ROLE_MODULES);
 
 router.get('/users', requireAuth, requireRole('director'), async (req, res, next) => {
@@ -237,13 +382,14 @@ router.get('/users', requireAuth, requireRole('director'), async (req, res, next
 
 router.post('/users', requireAuth, requireRole('director'), async (req, res, next) => {
   try {
-    const { name, email, password, role } = req.body || {};
+    const { name, email, password, role, code } = req.body || {};
     const errors = {};
     if (typeof name !== 'string' || !name.trim()) errors.name = 'Campo requerido';
     if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) errors.email = 'Formato de email inválido';
-    if (typeof password !== 'string' || password.length < 8) errors.password = 'Mínimo 8 caracteres';
+    if (!passwordIsValid(password)) errors.password = 'Entre 8 caracteres y 72 bytes';
     if (!VALID_ROLES.includes(role)) errors.role = 'Rol inválido';
     if (Object.keys(errors).length) return res.status(400).json({ error: 'Datos inválidos', fields: errors });
+    if (!(await verifySecondFactor(req.user.id, code))) return res.status(401).json({ error: 'Código de verificación incorrecto' });
 
     const passwordHash = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
@@ -258,37 +404,60 @@ router.post('/users', requireAuth, requireRole('director'), async (req, res, nex
 });
 
 router.patch('/users/:id', requireAuth, requireRole('director'), async (req, res, next) => {
+  let client;
   try {
-    const { active, role, name, email, password } = req.body || {};
+    const { active, role, name, email, password, code } = req.body || {};
     if ([active, role, name, email, password].every((v) => v === undefined)) {
       return res.status(400).json({ error: 'Nada que actualizar' });
     }
     const errors = {};
+    if (active !== undefined && typeof active !== 'boolean') errors.active = 'Debe ser booleano';
     if (role !== undefined && !VALID_ROLES.includes(role)) errors.role = 'Rol inválido';
     if (name !== undefined && (typeof name !== 'string' || !name.trim())) errors.name = 'Campo requerido';
     if (email !== undefined && (typeof email !== 'string' || !EMAIL_RE.test(email.trim()))) errors.email = 'Formato de email inválido';
-    if (password !== undefined && (typeof password !== 'string' || password.length < 8)) errors.password = 'Mínimo 8 caracteres';
+    if (password !== undefined && !passwordIsValid(password)) errors.password = 'Entre 8 caracteres y 72 bytes';
     if (Object.keys(errors).length) return res.status(400).json({ error: 'Datos inválidos', fields: errors });
+    const sensitiveChange = [active, role, email, password].some((v) => v !== undefined);
+    if (sensitiveChange && !(await verifySecondFactor(req.user.id, code))) return res.status(401).json({ error: 'Código de verificación incorrecto' });
 
     const passwordHash = password === undefined ? null : await bcrypt.hash(password, 10);
-    const { rows } = await pool.query(
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const { rows: directorRows } = await client.query("SELECT id FROM users WHERE role = 'director' AND active = true ORDER BY id FOR UPDATE");
+    const { rows: targetRows } = await client.query('SELECT id, role, active FROM users WHERE id = $1 FOR UPDATE', [req.params.id]);
+    const target = targetRows[0];
+    if (!target) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    if (target.active && target.role === 'director' && (active === false || (role !== undefined && role !== 'director'))) {
+      if (directorRows.length <= 1) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Debe permanecer al menos un director activo' });
+      }
+    }
+    const { rows } = await client.query(
       `UPDATE users SET
          active = COALESCE($1, active),
          role = COALESCE($2, role),
          name = COALESCE($3, name),
          email = COALESCE($4, email),
-         password_hash = COALESCE($5, password_hash)
-       WHERE id = $6
+         password_hash = COALESCE($5, password_hash),
+         session_version = session_version + $6
+       WHERE id = $7
        RETURNING id, name, email, role, active, created_at`,
-      [active === undefined ? null : Boolean(active), role === undefined ? null : role,
+      [active === undefined ? null : active, role === undefined ? null : role,
         name === undefined ? null : name.trim(), email === undefined ? null : email.trim().toLowerCase(),
-        passwordHash, req.params.id]
+        passwordHash, sensitiveChange ? 1 : 0, req.params.id]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
+    await client.query('COMMIT');
     res.json(rows[0]);
   } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     if (err.code === '23505') return res.status(400).json({ error: 'Datos inválidos', fields: { email: 'Ya existe un usuario con ese correo' } });
     next(err);
+  } finally {
+    if (client) client.release();
   }
 });
 
@@ -354,7 +523,7 @@ adminRouter.delete('/push/subscribe', requireAuth, async (req, res, next) => {
   try {
     const { endpoint } = req.body || {};
     if (typeof endpoint !== 'string') return res.status(400).json({ error: 'Datos inválidos', fields: { endpoint: 'Requerido' } });
-    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1 AND user_id = $2', [endpoint, req.user.id]);
     res.status(204).end();
   } catch (err) {
     next(err);

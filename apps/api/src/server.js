@@ -77,7 +77,7 @@ app.use(helmet({
 // Abierto en dev (portal en :4000, API en :3000). En producción, restringir
 // con CORS_ORIGIN (lista separada por comas) en .env.
 app.use(cors(config.corsOrigin ? { origin: config.corsOrigin.split(',') } : undefined));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 // sitemap.xml generado desde la BD: portada, secciones y cada nota publicada.
 // robots.txt (estático en apps/web) apunta aquí.

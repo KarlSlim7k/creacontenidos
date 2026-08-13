@@ -1,8 +1,8 @@
 // CREA Panel Admin — entry point (Vite + TS).
-import { tryResumeSession } from './auth';
-import { handleClick, handleSubmit, handleChange, handleInput } from './actions';
+import { tryResumeSession, readResetTokenFromHash } from './auth';
+import { handleClick, handleSubmit, handleChange, handleInput, handleMediaError } from './actions';
 import { initPwa } from './pwa';
-import { FOCUSABLE } from './router';
+import { FOCUSABLE, render } from './router';
 import { state, setState } from './store';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   app.addEventListener('submit', handleSubmit as EventListener);
   app.addEventListener('change', handleChange);
   app.addEventListener('input', handleInput);
+  app.addEventListener('error', handleMediaError, true);
   // Los toasts viven fuera de #app (ver router.ts): su botón de cerrar necesita
   // la misma delegación, si no queda muerto.
   document.getElementById('toasts')!.addEventListener('click', handleClick);
@@ -53,6 +54,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (backdrops.length) { backdrops[backdrops.length - 1].click(); return; }
     if (state.showNotifications) setState({ showNotifications: false });
   });
-  tryResumeSession();
+  // Link del correo de recuperación: se atiende antes de intentar resumir sesión
+  // (quien lo abre puede no tener ninguna, o tener una distinta a la que reseteó).
+  const resetToken = readResetTokenFromHash();
+  if (resetToken) {
+    setState({ loginView: 'reset', resetToken });
+    render();
+  } else {
+    tryResumeSession();
+  }
   initPwa();
 });
