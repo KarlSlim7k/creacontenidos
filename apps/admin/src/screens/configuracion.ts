@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantalla Configuración (tabs: usuarios, permisos, integraciones,
 // newsletter, servicios, cuentas FB, métricas del sitio).
-import { state, type AdminUser, type Integration, type NewsletterEvent, type Service, type FbAccount } from '../store';
+import { state, type AdminUser, type Integration, type NewsletterEvent, type Service, type FbAccount, type TrustedDevice } from '../store';
 import { esc, loadingCard, errorCard, relativeTime, roleLabels, navItemsAll, badge } from '../util';
 import { isPwaInstalled, isIosDevice, pushSupported } from '../pwa';
 
@@ -287,6 +287,26 @@ function renderTwoFactorCard(enabled: boolean): string {
   </div>`;
 }
 
+function daysUntil(iso: string): number {
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
+}
+
+function renderTrustedDevicesCard(): string {
+  const devices = state.data.trustedDevices;
+  if (devices == null) return '';
+  const empty = `<p class="padmin-t-hint">Ningún dispositivo recordado todavía. Al verificar el código 2FA puedes marcar "Confiar en este dispositivo" para no repetirlo por 30 días.</p>`;
+  return `<div class="padmin-card" style="max-width:480px;padding:20px;margin-bottom:16px;">
+    <p class="padmin-section-title" style="margin-bottom:6px;">Dispositivos confiables</p>
+    <p class="padmin-t-hint" style="margin-bottom:10px;">No piden el código 2FA por 30 días desde el último uso. Revoca cualquiera que no reconozcas.</p>
+    ${devices.length ? devices.map((d: TrustedDevice) => `<div class="padmin-row" style="padding:8px 0;">
+      <div><p class="padmin-row-title" style="font-size:13px;">${esc(d.label)}${d.current ? ' <span style="color:var(--brand);font-weight:600;">(este dispositivo)</span>' : ''}</p>
+      <p class="padmin-row-meta">Último uso ${esc(relativeTime(d.last_used_at))} &middot; vence en ${daysUntil(d.expires_at)}d</p></div>
+      <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="revoke-trusted-device" data-id="${d.id}">Revocar</button>
+    </div>`).join('') : empty}
+    ${devices.length > 1 ? '<button type="button" class="padmin-btn-outline padmin-btn-sm" style="margin-top:10px;" data-action="revoke-all-trusted-devices">Revocar todos</button>' : ''}
+  </div>`;
+}
+
 export function renderConfigPerfil(): string {
   const me = state.data.myProfile;
   const isDirector = state.user!.role === 'director';
@@ -319,6 +339,7 @@ export function renderConfigPerfil(): string {
     </form>
   </div>
   ${renderTwoFactorCard(me.two_factor_enabled)}
+  ${me.two_factor_enabled ? renderTrustedDevicesCard() : ''}
   ${directivaCard}`;
 }
 

@@ -4,6 +4,8 @@ const config = require('../config');
 const SESSION_COOKIE = 'crea_admin_session';
 const PENDING_COOKIE = 'crea_admin_pending';
 const CSRF_COOKIE = 'crea_admin_csrf';
+const DEVICE_COOKIE = 'crea_admin_device';
+const DEVICE_MAX_AGE = 30 * 24 * 60 * 60; // 30 días — ver lib/trusted-devices.js
 const production = config.nodeEnv === 'production';
 
 function cookies(req) {
@@ -15,8 +17,8 @@ function cookies(req) {
   }, {});
 }
 
-function cookie(name, value, { maxAge, httpOnly = true } = {}) {
-  const parts = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'SameSite=Strict'];
+function cookie(name, value, { maxAge, httpOnly = true, path = '/' } = {}) {
+  const parts = [`${name}=${encodeURIComponent(value)}`, `Path=${path}`, 'SameSite=Strict'];
   if (httpOnly) parts.push('HttpOnly');
   if (production) parts.push('Secure');
   if (maxAge != null) parts.push(`Max-Age=${maxAge}`);
@@ -48,6 +50,20 @@ function tokenFrom(req, pending = false) {
   return token ? { token, cookie: true } : null;
 }
 
+// Cookie propia (no la de sesión): Path acotado a /api/auth — solo login,
+// 2fa/verify y el panel de dispositivos la necesitan, no el resto del panel.
+function deviceTokenFrom(req) {
+  return cookies(req)[DEVICE_COOKIE] || null;
+}
+
+function setDeviceCookie(res, rawToken) {
+  res.append('Set-Cookie', cookie(DEVICE_COOKIE, rawToken, { maxAge: DEVICE_MAX_AGE, path: '/api/auth' }));
+}
+
+function clearDeviceCookie(res) {
+  res.append('Set-Cookie', cookie(DEVICE_COOKIE, '', { maxAge: 0, path: '/api/auth' }));
+}
+
 function csrfIsValid(req) {
   const stored = cookies(req)[CSRF_COOKIE];
   const supplied = req.get('X-CSRF-Token');
@@ -57,4 +73,7 @@ function csrfIsValid(req) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-module.exports = { setSession, clearSession, tokenFrom, csrfIsValid, SESSION_COOKIE, PENDING_COOKIE, CSRF_COOKIE };
+module.exports = {
+  setSession, clearSession, tokenFrom, csrfIsValid, SESSION_COOKIE, PENDING_COOKIE, CSRF_COOKIE,
+  deviceTokenFrom, setDeviceCookie, clearDeviceCookie, DEVICE_COOKIE,
+};

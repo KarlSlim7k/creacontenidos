@@ -4,6 +4,7 @@
 const pool = require('../db/pool');
 const { generateNewsletterEditorial } = require('./ai-client');
 const { getPeroteClima } = require('./weather-client');
+const { renderPodcastScript } = require('./newsletter-template');
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
@@ -62,12 +63,16 @@ async function generateContent() {
     pickNextSponsor(),
   ]);
   const agenda = events.rows.length ? events.rows.map((e) => e.title).join('. ') : null;
-  return {
+  const content = {
     weekday, date, clima: clima.texto,
     notaDelDia: editorial.notaDelDia, enBreve: editorial.enBreve || [], datoDelDia: editorial.datoDelDia,
     agenda, patrocinador,
     topicsUsed: topics.length,
   };
+  // Guion de podcast: arranca como el texto derivado del newsletter, pero es
+  // un campo propio editable — producción puede reescribirlo sin tocar el correo.
+  content.guionPodcast = renderPodcastScript(content);
+  return content;
 }
 
 module.exports = { generateContent, todayInSpanish };

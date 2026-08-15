@@ -11,9 +11,10 @@ const totpCrypto = require('../../lib/totp-crypto');
 const { requireAuth, requireRole, requirePending2fa } = require('../../middleware/auth');
 const { ROLE_MODULES } = require('./role-modules');
 const { rateLimitKey } = require('../../lib/client-ip');
-const { setSession, clearSession } = require('../../lib/auth-session');
+const { setSession, clearSession, deviceTokenFrom, setDeviceCookie } = require('../../lib/auth-session');
 const { makeToken, readToken, resetEmailHtml } = require('../../lib/password-reset');
 const { sendEmail } = require('../../lib/resend-client');
+const { hashDeviceToken, createTrustedDevice, matchTrustedDevice, revokeAllTrustedDevices } = require('../../lib/trusted-devices');
 
 const router = express.Router();
 router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
@@ -105,9 +106,16 @@ router.post('/login', loginLimiter, accountLoginLimiter, async (req, res, next) 
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
     if (user.two_factor_enabled) {
-      const pendingToken = jwt.sign({ id: user.id, sv: user.session_version, pending2fa: true }, config.jwtSecret, { expiresIn: '5m', algorithm: 'HS256' });
-      setSession(res, pendingToken, { pending: true });
-      return res.json(sessionResponse(pendingToken, { requires_2fa: true }));
+      // "Confiar en este dispositivo" (2fa/verify): salta el paso si la cookie de
+      // dispositivo coincide con una fila viva en trusted_devices. La contraseña ya
+      // se validó arriba — esto nunca sustituye password, solo el código 2FA.
+      const rawDevice = deviceTokenFrom(req);
+      const trusted = rawDevice ? await matchTrustedDevice(pool, user.id, rawDevice) : null;
+      if (!trusted) {
+        const pendingToken = jwt.sign({ id: user.id, sv: user.session_version, pending2fa: true }, config.jwtSecret, { expiresIn: '5m', algorithm: 'HS256' });
+        setSession(res, pendingToken, { pending: true });
+        return res.json(sessionResponse(pendingToken, { requires_2fa: true }));
+      }
     }
     const token = signSession(user);
     setSession(res, token);
@@ -165,6 +173,9 @@ router.post('/reset-password', resetPasswordLimiter, async (req, res, next) => {
       [passwordHash, user.id, decoded.sessionVersion]
     );
     if (changed.rowCount !== 1) return res.status(400).json({ error: 'El enlace no es válido o venció' });
+    // Recuperación de cuenta: un dispositivo confiable de antes de perder el acceso
+    // no debe seguir saltando el 2FA después de un reset.
+    await revokeAllTrustedDevices(pool, user.id);
     clearSession(res);
     res.json({ ok: true });
   } catch (err) {
@@ -177,7 +188,7 @@ router.post('/reset-password', resetPasswordLimiter, async (req, res, next) => {
 // (se consume: se quita del array al usarlo).
 router.post('/2fa/verify', twoFaVerifyLimiter, requirePending2fa, async (req, res, next) => {
   try {
-    const { code } = req.body || {};
+    const { code, remember_device } = req.body || {};
     if (typeof code !== 'string' || !code.trim() || code.length > 64) return res.status(400).json({ error: 'Código inválido' });
     const { rows } = await pool.query(
       'SELECT id, name, role, active, two_factor_secret, two_factor_backup_codes, session_version FROM users WHERE id = $1',
@@ -201,6 +212,10 @@ router.post('/2fa/verify', twoFaVerifyLimiter, requirePending2fa, async (req, re
     if (req.user.sv !== user.session_version) return res.status(401).json({ error: 'Sesión inválida' });
     const token = signSession(user);
     setSession(res, token);
+    if (remember_device === true) {
+      const rawDevice = await createTrustedDevice(pool, user.id, req);
+      setDeviceCookie(res, rawDevice);
+    }
     res.json(sessionResponse(token, { user: { id: user.id, name: user.name, role: user.role } }));
   } catch (err) {
     next(err);
@@ -286,6 +301,9 @@ router.patch('/me', requireAuth, async (req, res, next) => {
         passwordHash, credentialsChange ? 1 : 0, req.user.id]
     );
     if (credentialsChange) setSession(res, signSession(rows[0]));
+    // Cambiar la contraseña es un evento de seguridad — no dejar un dispositivo
+    // confiable de antes saltándose el 2FA con la contraseña nueva.
+    if (password !== undefined) await revokeAllTrustedDevices(pool, req.user.id);
     res.json(rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Datos inválidos', fields: { email: 'Ya existe un usuario con ese correo' } });
@@ -359,9 +377,55 @@ router.post('/2fa/disable', requireAuth, async (req, res, next) => {
        WHERE id = $1 RETURNING id, name, role, session_version`,
       [req.user.id]
     );
+    // Sin esto, un 2FA reactivado después heredaría dispositivos confiables viejos
+    // y saltaría el código sin haber pasado nunca por un /2fa/verify con el 2FA nuevo.
+    await revokeAllTrustedDevices(pool, req.user.id);
     const token = signSession(disabledRows[0]);
     setSession(res, token);
     res.json(sessionResponse(token, { ok: true }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Dispositivos confiables (Configuración → Perfil, panel de revocación) ---
+
+// GET /api/auth/devices — marca `current` comparando el hash de la cookie de este
+// navegador contra los guardados, sin exponer el hash en la respuesta.
+router.get('/devices', requireAuth, async (req, res, next) => {
+  try {
+    const rawDevice = deviceTokenFrom(req);
+    const currentHash = rawDevice ? hashDeviceToken(rawDevice) : null;
+    const { rows } = await pool.query(
+      'SELECT id, label, created_at, last_used_at, expires_at, token_hash FROM trusted_devices WHERE user_id = $1 ORDER BY last_used_at DESC',
+      [req.user.id]
+    );
+    res.json(rows.map(({ token_hash, ...d }) => ({ ...d, current: token_hash === currentHash })));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/auth/devices/:id — revoca uno. Scoped a user_id: no se puede revocar
+// el dispositivo de otro usuario adivinando el id.
+router.delete('/devices/:id', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'DELETE FROM trusted_devices WHERE id = $1 AND user_id = $2 RETURNING id',
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Dispositivo no encontrado' });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/auth/devices — revoca todos (ej. "no reconozco ninguno de estos").
+router.delete('/devices', requireAuth, async (req, res, next) => {
+  try {
+    await revokeAllTrustedDevices(pool, req.user.id);
+    res.status(204).end();
   } catch (err) {
     next(err);
   }

@@ -27,13 +27,13 @@ const audioLimiter = rateLimit({
 });
 
 function buildContent(body) {
-  const { weekday, date, clima, notaDelDia, enBreve, datoDelDia, agenda, patrocinador } = body || {};
+  const { weekday, date, clima, notaDelDia, enBreve, datoDelDia, agenda, patrocinador, guionPodcast } = body || {};
   if (!weekday || !date || !clima || !notaDelDia || !notaDelDia.titulo || !notaDelDia.cuerpo) {
     const err = new Error('Datos inválidos: weekday, date, clima y notaDelDia (titulo, cuerpo) son requeridos');
     err.status = 400;
     throw err;
   }
-  return { weekday, date, clima, notaDelDia, enBreve: enBreve || [], datoDelDia, agenda, patrocinador: patrocinador || null };
+  return { weekday, date, clima, notaDelDia, enBreve: enBreve || [], datoDelDia, agenda, patrocinador: patrocinador || null, guionPodcast: guionPodcast || null };
 }
 
 // POST /api/newsletter/generate — arma el contenido del día y lo deja guardado
@@ -79,9 +79,26 @@ router.post('/preview', requireAuth, requireRole('director', 'produccion'), (req
   }
 });
 
+// PATCH /api/newsletter/pending — guarda ediciones (newsletter y/o guion de
+// podcast) sobre la edición de hoy sin enviarla ni tocar su estado. Evita que
+// el trabajo de edición se pierda si se cierra el panel antes de enviar.
+router.patch('/pending', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const content = buildContent(req.body);
+    const { rowCount } = await pool.query(
+      `UPDATE newsletter_editions SET content = $1 WHERE edition_date = CURRENT_DATE AND status = 'pendiente'`,
+      [JSON.stringify(content)]
+    );
+    if (!rowCount) return res.status(409).json({ error: 'No hay una edición pendiente de hoy. Genera el contenido primero.' });
+    res.json(content);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/newsletter/send — arma el HTML y lo envía como broadcast de Resend
-// a la Audiencia General. Solo director (envío real, sin vuelta atrás).
-router.post('/send', requireAuth, requireRole('director'), async (req, res, next) => {
+// a la Audiencia General. Director o producción (envío real, sin vuelta atrás).
+router.post('/send', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const content = buildContent(req.body);
     const subject = `Buenos días, Perote — ${content.weekday} ${content.date}`;
@@ -127,7 +144,7 @@ router.post('/send', requireAuth, requireRole('director'), async (req, res, next
 router.post('/audio', requireAuth, audioLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const content = buildContent(req.body);
-    const script = renderPodcastScript(content);
+    const script = content.guionPodcast || renderPodcastScript(content);
     const audio = await synthesizeSpeech(script);
     await logActivity(pool, 'newsletter_audio', `Audio generado para ${content.weekday} ${content.date}`, req.user.id, 'exito', null);
     res.set('Content-Type', 'audio/mpeg');

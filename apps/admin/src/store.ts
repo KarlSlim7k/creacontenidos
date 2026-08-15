@@ -134,6 +134,15 @@ export interface EditorialSettings {
   updated_at: string;
 }
 
+export interface TrustedDevice {
+  id: number;
+  label: string;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  current: boolean;
+}
+
 export type RoleModules = Record<string, string[]>;
 
 export interface SocialPost {
@@ -318,6 +327,7 @@ export interface NewsletterContent {
   datoDelDia: string;
   agenda: string | null;
   patrocinador: { nombre: string; copy: string; link: string } | null;
+  guionPodcast: string | null;
   topicsUsed: number;
 }
 
@@ -348,6 +358,7 @@ export interface AdminData {
   fbAccounts: FbAccount[] | null;
   myProfile: MyProfile | null;
   editorialSettings: EditorialSettings | null;
+  trustedDevices: TrustedDevice[] | null;
 }
 
 export type Screen =
@@ -468,6 +479,7 @@ export interface State {
   newsletterContent: NewsletterContent | null;
   newsletterBusy: boolean;
   newsletterSending: boolean;
+  newsletterSaving: boolean;
   newsletterPreview: string | null;
   newsletterSubscriberCount: number | null;
   newsletterAudioBusy: boolean;
@@ -511,7 +523,7 @@ export function initialData(): AdminData {
     newsletterSettings: null, newsletterEvents: null, services: null, roleModules: null, leads: null,
     distLog: null, distChannels: null, competitors: null, radarSources: null, radarStats: null,
     topicSummary: null, siteMetrics: null, fbAccounts: null,
-    myProfile: null, editorialSettings: null,
+    myProfile: null, editorialSettings: null, trustedDevices: null,
   };
 }
 
@@ -544,7 +556,7 @@ export function initialState(): State {
   selectedRadarId: null,
   configTab: 'usuarios', showNotifications: false,
   form: null, formError: null, socialBusy: false,
-  newsletterContent: null, newsletterBusy: false, newsletterSending: false,
+  newsletterContent: null, newsletterBusy: false, newsletterSending: false, newsletterSaving: false,
   newsletterPreview: null, newsletterSubscriberCount: null,
   newsletterAudioBusy: false, newsletterAudioUrl: null,
   demoNote: null, dangerConfirm: null, dangerConfirmError: null,
@@ -889,6 +901,7 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     if (tab === 'perfil') {
       fetchInto('/api/auth/me', 'myProfile');
       if (isDirector && !state.requiresTwoFaSetup) fetchInto('/api/admin/editorial-settings', 'editorialSettings');
+      if (!state.requiresTwoFaSetup) fetchInto('/api/auth/devices', 'trustedDevices');
     }
   } else if (screen === 'hermes') {
     fetchInto('/api/admin/activity?limit=20', 'activity');

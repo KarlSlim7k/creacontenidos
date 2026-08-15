@@ -90,10 +90,10 @@ export function resetPassword(password: string) {
     });
 }
 
-export function verify2fa(code: string) {
+export function verify2fa(code: string, rememberDevice: boolean) {
   if (state.loginBusy) return;
   setState({ loginError: null, loginBusy: true });
-  adminApi('/api/auth/2fa/verify', { method: 'POST', body: { code } })
+  adminApi('/api/auth/2fa/verify', { method: 'POST', body: { code, remember_device: rememberDevice } })
     .then(() => { completeLogin(); })
     .catch((err: ApiError) => {
       setState({ loginBusy: false, loginError: err.status === 401 ? 'Código incorrecto.' : (err.message || 'No pudimos verificar el código.') });
@@ -195,6 +195,7 @@ export function renderLogin(): string {
       ${errorHtml}
       <form data-action="submit-2fa-verify">
         <div class="padmin-field"><label for="pl-2fa-code">Código de 6 dígitos (o un código de respaldo)</label><input id="pl-2fa-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="64" required autofocus></div>
+        <div class="padmin-field padmin-field-inline"><input id="pl-2fa-remember" type="checkbox"><label for="pl-2fa-remember">Confiar en este dispositivo por 30 días</label></div>
         <button type="submit" class="padmin-btn" style="width:100%;text-align:center;" ${state.loginBusy ? 'disabled' : ''}>${state.loginBusy ? 'Verificando…' : 'Verificar'}</button>
       </form>
     </div></div>`;

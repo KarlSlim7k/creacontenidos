@@ -4,7 +4,7 @@ import {
   loadRadarTopics, loadRadarSummary, loadRadarStats, refreshCurrentScreen,
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
-  type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult,
+  type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult, type TrustedDevice,
   type EditChatHunk, type MyProfile, type EditorialSettings, type TwoFaSetup,
 } from './store';
 import { TABLE_PAGE_SIZE, safeHttpUrl } from './util';
@@ -396,9 +396,21 @@ const clickHandlers: Record<string, (el: Element) => void> = {
       .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
   },
   'close-newsletter-preview': () => setState({ newsletterPreview: null }),
+  // Leer el form ANTES de cualquier setState: setState repinta #app entero desde
+  // state.newsletterContent, y ese repintado reemplaza los inputs (con sus valores
+  // tecleados aún sin guardar) por otros nuevos con el valor viejo del state.
+  // Leer después del setState captura ese valor viejo, no lo que el usuario escribió.
+  'save-newsletter': () => {
+    const body = readNewsletterForm();
+    setState({ newsletterSaving: true, errorMsg: null });
+    adminApi<NewsletterContent>('/api/newsletter/pending', { method: 'PATCH', body })
+      .then((content) => { setState({ newsletterSaving: false, newsletterContent: content, successMsg: 'Cambios guardados.' }); })
+      .catch((err: ApiError) => { setState({ newsletterSaving: false, errorMsg: err.message }); });
+  },
   'generate-newsletter-audio': () => {
+    const body = readNewsletterForm();
     setState({ newsletterAudioBusy: true, errorMsg: null });
-    adminApiBlob('/api/newsletter/audio', { method: 'POST', body: readNewsletterForm() })
+    adminApiBlob('/api/newsletter/audio', { method: 'POST', body })
       .then((blob) => {
         setState({ newsletterAudioBusy: false, newsletterAudioUrl: URL.createObjectURL(blob) });
       })
@@ -406,8 +418,9 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   },
   'send-newsletter': () => {
     if (!confirm('¿Enviar el newsletter a todos los suscriptores activos? Esta acción no se puede deshacer.')) return;
+    const body = readNewsletterForm();
     setState({ newsletterSending: true, errorMsg: null });
-    adminApi('/api/newsletter/send', { method: 'POST', body: readNewsletterForm() })
+    adminApi('/api/newsletter/send', { method: 'POST', body })
       .then(() => {
         setState({ newsletterSending: false, newsletterContent: null, newsletterPreview: null, newsletterAudioUrl: null, successMsg: 'Newsletter enviado a los suscriptores.' });
       })
@@ -465,6 +478,24 @@ const clickHandlers: Record<string, (el: Element) => void> = {
     const evId = Number(attr(el, 'data-id'));
     adminApi('/api/newsletter/events/' + evId, { method: 'DELETE' })
       .then(() => { setData({ newsletterEvents: (state.data.newsletterEvents || []).filter((ev: NewsletterEvent) => ev.id !== evId) }); })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
+  'revoke-trusted-device': (el) => {
+    const devId = Number(attr(el, 'data-id'));
+    adminApi('/api/auth/devices/' + devId, { method: 'DELETE' })
+      .then(() => {
+        setData({ trustedDevices: (state.data.trustedDevices || []).filter((d: TrustedDevice) => d.id !== devId) });
+        setState({ successMsg: 'Dispositivo revocado.' });
+      })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
+  'revoke-all-trusted-devices': () => {
+    if (!confirm('¿Revocar todos los dispositivos confiables? Todos pedirán el código 2FA de nuevo en su próximo inicio de sesión.')) return;
+    adminApi('/api/auth/devices', { method: 'DELETE' })
+      .then(() => {
+        setData({ trustedDevices: [] });
+        setState({ successMsg: 'Todos los dispositivos fueron revocados.' });
+      })
       .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
   },
   'save-sponsor-info': (el) => {
@@ -820,7 +851,7 @@ export function handleSubmit(e: SubmitEvent) {
     login(q('#pl-email').value.trim(), q('#pl-pass').value);
   } else if (action === 'submit-2fa-verify') {
     e.preventDefault();
-    verify2fa(q('#pl-2fa-code').value.trim());
+    verify2fa(q('#pl-2fa-code').value.trim(), q('#pl-2fa-remember').checked);
   } else if (action === 'submit-forgot-password') {
     e.preventDefault();
     forgotPassword(q('#pl-forgot-email').value.trim());
@@ -963,7 +994,9 @@ export function handleSubmit(e: SubmitEvent) {
       } : {}),
     } }).then((updated) => {
       setState({ errorMsg: null, successMsg: 'Perfil actualizado.' });
-      setData({ myProfile: updated });
+      // Cambiar la contraseña revoca los dispositivos confiables en el servidor
+      // (ver PATCH /api/auth/me) — reflejarlo acá sin esperar a otro fetch.
+      setData({ myProfile: updated, ...(pw ? { trustedDevices: [] } : {}) });
     }).catch((err: ApiError) => {
       setState({ errorMsg: err.message });
     });
@@ -983,7 +1016,9 @@ export function handleSubmit(e: SubmitEvent) {
     adminApi<{ ok: boolean }>('/api/auth/2fa/disable', { method: 'POST', body: { code: q('#tfa-disable-code').value.trim() } })
       .then(() => {
         setState({ twoFaBusy: false, errorMsg: null, successMsg: 'Verificación en dos pasos desactivada.' });
-        setData({ myProfile: state.data.myProfile ? Object.assign({}, state.data.myProfile, { two_factor_enabled: false }) : null });
+        // El servidor ya revocó todos los dispositivos confiables al desactivar (ver
+        // POST /api/auth/2fa/disable) — reflejarlo acá sin esperar a otro fetch.
+        setData({ myProfile: state.data.myProfile ? Object.assign({}, state.data.myProfile, { two_factor_enabled: false }) : null, trustedDevices: [] });
       })
       .catch((err: ApiError) => { setState({ twoFaBusy: false, errorMsg: err.message }); });
   } else if (action === 'submit-editorial-settings') {

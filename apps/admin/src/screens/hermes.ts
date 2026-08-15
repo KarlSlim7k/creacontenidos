@@ -65,6 +65,7 @@ export function readNewsletterForm() {
     enBreve: enBreveRaw.split('\n').map((s) => s.trim()).filter(Boolean),
     datoDelDia: inputVal('nl-dato'),
     agenda: inputVal('nl-agenda') || null,
+    guionPodcast: inputVal('nl-guion') || null,
     patrocinador: inputVal('nl-patro-nombre') ? {
       nombre: inputVal('nl-patro-nombre'),
       copy: inputVal('nl-patro-copy'),
@@ -102,12 +103,14 @@ function renderNewsletterCard(): string {
       <div class="padmin-field" style="margin:0;"><label>Link</label><input id="nl-patro-link" type="text" value="${esc(c.patrocinador ? c.patrocinador.link : '')}" placeholder="https://…"></div>
     </div>
     <div class="padmin-field"><label>Copy del patrocinador</label><input id="nl-patro-copy" type="text" value="${esc(c.patrocinador ? c.patrocinador.copy : '')}"></div>
+    <div class="padmin-field"><label>Guion del podcast (editable, independiente del newsletter)</label><textarea id="nl-guion" style="width:100%;min-height:140px;box-sizing:border-box;font-family:monospace;font-size:12px;">${esc(c.guionPodcast || '')}</textarea></div>
     ${state.errorMsg ? `<p style="font-size:12px;color:var(--danger);margin:10px 0;">${esc(state.errorMsg)}</p>` : ''}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
       <button type="button" class="padmin-btn-outline" data-action="regenerate-newsletter" ${state.newsletterBusy ? 'disabled' : ''}>${state.newsletterBusy ? 'Generando…' : 'Regenerar con IA'}</button>
+      <button type="button" class="padmin-btn-outline" data-action="save-newsletter" ${state.newsletterSaving ? 'disabled' : ''}>${state.newsletterSaving ? 'Guardando…' : 'Guardar cambios'}</button>
       <button type="button" class="padmin-btn-outline" data-action="preview-newsletter">Vista previa</button>
       <button type="button" class="padmin-btn-outline" data-action="generate-newsletter-audio" ${state.newsletterAudioBusy ? 'disabled' : ''}>${state.newsletterAudioBusy ? 'Generando audio…' : 'Generar audio (prueba)'}</button>
-      ${state.user!.role === 'director' ? `<button type="button" class="padmin-btn padmin-btn-brand" data-action="send-newsletter" ${state.newsletterSending ? 'disabled' : ''}>${state.newsletterSending ? 'Enviando…' : 'Enviar newsletter'}</button>` : ''}
+      <button type="button" class="padmin-btn padmin-btn-brand" data-action="send-newsletter" ${state.newsletterSending ? 'disabled' : ''}>${state.newsletterSending ? 'Enviando…' : 'Enviar newsletter'}</button>
     </div>
     ${state.newsletterAudioUrl ? `<audio controls src="${esc(state.newsletterAudioUrl)}" style="width:100%;margin-top:14px;"></audio>` : ''}
     ${renderNewsletterPreview()}

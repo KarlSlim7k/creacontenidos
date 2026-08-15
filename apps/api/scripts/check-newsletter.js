@@ -11,7 +11,7 @@
 // envío real de /send (Resend) y la lógica de solapamiento del cron (necesita
 // inyección de dependencias en newsletter-cron.js).
 const assert = require('node:assert');
-const { runMigrate, runSeed, startApi, stopApi, waitForHealth, login: loginAt, postJson } = require('./lib/check-helpers');
+const { runMigrate, runSeed, startApi, stopApi, waitForHealth, login: loginAt, postJson, patchJson } = require('./lib/check-helpers');
 
 const PORT = Number(process.env.CHECK_PORT) || 3996;
 const BASE = `http://localhost:${PORT}`;
@@ -32,6 +32,10 @@ function login(email) {
 
 function post(pathname, token, body) {
   return postJson(BASE, pathname, token, body);
+}
+
+function patch(pathname, token, body) {
+  return patchJson(BASE, pathname, token, body);
 }
 
 async function main() {
@@ -66,11 +70,17 @@ async function main() {
     const previewBody = await goodPreview.json();
     ok(typeof previewBody.html === 'string' && previewBody.html.includes('Nota de prueba'), 'preview devuelve HTML con la nota');
 
-    // --- /send: SOLO director; envío irreversible. Probamos guards sin enviar:
-    //     rol incorrecto → 403; director con body inválido → 400 (buildContent corta antes de Resend). ---
-    ok((await post('/api/newsletter/send', colaborador, VALID_CONTENT)).status === 403, 'send colaborador → 403');
-    ok((await post('/api/newsletter/send', produccion, VALID_CONTENT)).status === 403, 'send produccion → 403 (solo director)');
+    // --- /send: director o producción; envío irreversible. Probamos guards sin enviar:
+    //     rol incorrecto → 403; body válido sin edición pendiente hoy → 409 (claim atómico
+    //     corta antes de Resend); director con body inválido → 400. ---
+    ok((await post('/api/newsletter/send', colaborador, VALID_CONTENT)).status === 403, 'send colaborador → 403 (rol sin acceso)');
+    ok((await post('/api/newsletter/send', produccion, VALID_CONTENT)).status === 409, 'send produccion → 409 (sin edición pendiente hoy, no llega a Resend)');
     ok((await post('/api/newsletter/send', director, { weekday: 'lunes' })).status === 400, 'send director con body inválido → 400 (no llega a Resend)');
+
+    // --- /pending (PATCH): guarda ediciones sin enviar. Rol incorrecto → 403;
+    //     body válido sin edición pendiente hoy → 409 (mismo guard que /send). ---
+    ok((await patch('/api/newsletter/pending', colaborador, VALID_CONTENT)).status === 403, 'save pending colaborador → 403');
+    ok((await patch('/api/newsletter/pending', produccion, VALID_CONTENT)).status === 409, 'save pending produccion → 409 (sin edición pendiente hoy)');
 
     // --- /settings: lectura role-gated. ---
     const settings = await fetch(`${BASE}/api/newsletter/settings`, { headers: { Authorization: 'Bearer ' + director } });
