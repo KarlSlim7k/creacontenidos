@@ -26,6 +26,11 @@ FROM node:22-slim
 
 WORKDIR /app/apps/api
 
+# ffmpeg: concatena las cortinillas fijas del podcast con la voz narrada
+# (lib/podcast-audio.js). Solo lectura de assets/ + /tmp para el mezclado.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Instalar deps primero para cachear la capa mientras el código cambia.
 COPY apps/api/package*.json ./
 RUN npm ci --omit=dev

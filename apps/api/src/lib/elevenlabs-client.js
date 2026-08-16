@@ -1,6 +1,4 @@
-// Cliente de ElevenLabs TTS. NO VERIFICADO en vivo: la cuenta free bloquea
-// text-to-speech vía API con cualquier voz (402 payment_required, política de
-// ElevenLabs, no de este código). Queda listo para cuando se suba de plan.
+// Cliente de ElevenLabs: voz (TTS) y música instrumental.
 const config = require('../config');
 
 const ELEVEN_BASE = 'https://api.elevenlabs.io/v1';
@@ -26,4 +24,24 @@ async function synthesizeSpeech(text) {
   return Buffer.from(arrayBuffer);
 }
 
-module.exports = { synthesizeSpeech };
+// Devuelve un Buffer con música instrumental (MP3). Usado para generar las
+// cortinillas fijas de entrada/salida del podcast (una vez, no por episodio —
+// ver scripts/generate-jingles.js).
+async function generateMusic(prompt, durationMs) {
+  const res = await fetch(`${ELEVEN_BASE}/music`, {
+    method: 'POST',
+    headers: {
+      'xi-api-key': config.apiKeys.elevenlabs,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prompt, music_length_ms: durationMs }),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(`ElevenLabs música respondió ${res.status}: ${(detail && detail.detail && detail.detail.message) || 'error desconocido'}`);
+  }
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+module.exports = { synthesizeSpeech, generateMusic };

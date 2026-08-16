@@ -5,6 +5,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const { renderNewsletterHtml, renderNewsletterText, renderPodcastScript } = require('../../lib/newsletter-template');
 const { sendBroadcast, countActiveSubscribers } = require('../../lib/resend-client');
 const { synthesizeSpeech } = require('../../lib/elevenlabs-client');
+const { mixPodcast } = require('../../lib/podcast-audio');
 const { logActivity } = require('../../lib/ai-client');
 const { generateContent } = require('../../lib/newsletter-content');
 
@@ -139,13 +140,14 @@ router.post('/send', requireAuth, requireRole('director', 'produccion'), async (
   }
 });
 
-// POST /api/newsletter/audio — TTS de prueba (ElevenLabs). NO VERIFICADO en vivo:
-// la cuenta free bloquea voces vía API (402). Devuelve el MP3 directo.
+// POST /api/newsletter/audio — TTS (ElevenLabs) + cortinillas fijas de
+// entrada/salida (assets/podcast/, ver lib/podcast-audio.js). Devuelve el MP3 final.
 router.post('/audio', requireAuth, audioLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const content = buildContent(req.body);
     const script = content.guionPodcast || renderPodcastScript(content);
-    const audio = await synthesizeSpeech(script);
+    const voice = await synthesizeSpeech(script);
+    const audio = await mixPodcast(voice);
     await logActivity(pool, 'newsletter_audio', `Audio generado para ${content.weekday} ${content.date}`, req.user.id, 'exito', null);
     res.set('Content-Type', 'audio/mpeg');
     res.send(audio);
