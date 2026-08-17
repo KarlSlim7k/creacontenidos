@@ -125,6 +125,11 @@ const clickHandlers: Record<string, (el: Element) => void> = {
       try { localStorage.setItem('crea-admin-last-notif-seen', new Date().toISOString()); } catch { /* modo privado */ }
     }
   },
+  'clear-notifications': () => {
+    try { localStorage.setItem('crea-admin-last-notif-seen', new Date().toISOString()); } catch { /* modo privado */ }
+    setData({ notifications: [] });
+    setState({ successMsg: 'Notificaciones limpiadas.' });
+  },
   'refresh-screen': () => {
     refreshCurrentScreen();
     loadNotifBadge(true);

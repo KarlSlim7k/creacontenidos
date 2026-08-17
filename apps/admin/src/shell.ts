@@ -39,7 +39,21 @@ export function renderBellAndNotifs(): string {
       const isNew = !lastSeen || n.created_at > lastSeen;
       return `<div class="padmin-notif-item${isNew ? ' unread' : ''}"><p>${isNew ? '<span class="padmin-notif-dot"></span>' : ''}${esc(n.detail || n.action)}</p><p class="padmin-notif-time">${esc(relativeTime(n.created_at))}</p></div>`;
     }).join('');
-    panel = `<div class="padmin-notif-panel"><div class="padmin-notif-title-row"><p class="padmin-notif-title">Notificaciones</p>${count > 0 ? `<span class="padmin-notif-count">${count} nueva${count === 1 ? '' : 's'}</span>` : ''}</div><div class="padmin-notif-list">${itemsHtml}</div></div>`;
+
+    const clearBtn = (notifs && notifs.length > 0)
+      ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="clear-notifications" style="font-size:10px;padding:2px 6px;" title="Limpiar y marcar todas como leídas">${icon('trash', { size: 10, style: 'vertical-align:-1px;margin-right:2px;' })} Limpiar</button>`
+      : '';
+
+    panel = `<div class="padmin-notif-panel">
+      <div class="padmin-notif-title-row">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <p class="padmin-notif-title">Notificaciones</p>
+          ${count > 0 ? `<span class="padmin-notif-count">${count} nueva${count === 1 ? '' : 's'}</span>` : ''}
+        </div>
+        ${clearBtn}
+      </div>
+      <div class="padmin-notif-list">${itemsHtml}</div>
+    </div>`;
   }
   // <button> real (no span con role): nombre accesible por aria-label porque el
   // contenido es solo SVG, y aria-expanded para el panel que despliega.
