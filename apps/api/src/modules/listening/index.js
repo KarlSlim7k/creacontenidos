@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const pool = require('../../db/pool');
 const config = require('../../config');
 const { requireAuth, requireRole } = require('../../middleware/auth');
@@ -7,6 +8,16 @@ const { scrapeCompetitorPosts } = require('../../lib/competitor-scraper-client')
 const { detectAndSaveTopics, insertTopicIfNew } = require('../../lib/topic-detection');
 
 const router = express.Router();
+
+// Rate limit para radar manual / detección IA: máximo 10 búsquedas cada 10 min por usuario
+const radarAiLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user.id,
+  message: { error: 'Límite de consultas de radar alcanzado (máx 10 por cada 10 minutos). Por favor espera un momento.' },
+});
 
 // RADAR completo es módulo editorial: aplicar el rol una vez cubre también las
 // lecturas que antes solo tenían requireAuth y evita que una ruta nueva lo olvide.
@@ -91,7 +102,7 @@ async function generateTopicsFromFacebookPosts(posts, userId) {
 // Lógica compartida con el cron automático (listening-cron.js, cada 6h) en
 // lib/topic-detection.js — mismo dedupe, activity_log separa 'radar_detect'
 // (manual) de 'radar_detect_auto' (cron).
-router.post('/topics/detect', requireAuth, requireRole('director', 'produccion'), async (req, res) => {
+router.post('/topics/detect', requireAuth, radarAiLimiter, requireRole('director', 'produccion'), async (req, res) => {
   const query = (req.body && req.body.query) || 'tendencias y noticias relevantes en Perote, Veracruz, México';
   try {
     const inserted = await detectAndSaveTopics(query, req.user.id, 'manual');
@@ -187,6 +198,38 @@ router.delete('/topics', requireAuth, requireRole('director', 'produccion'), asy
     const result = await pool.query('DELETE FROM topics');
     await logActivity(pool, 'radar_clear', `${result.rowCount} topics eliminados (limpiar todo)`, req.user.id, 'exito', { deleted: result.rowCount });
     res.json({ deleted: result.rowCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/listening/topics/batch-approve — aprobar múltiples temas en lote.
+router.post('/topics/batch-approve', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids array requerido' });
+    const { rowCount } = await pool.query(
+      `UPDATE topics SET status = 'Revisado' WHERE id = ANY($1::int[])`,
+      [ids]
+    );
+    await logActivity(pool, 'radar_batch_approve', `${rowCount} topics aprobados en lote`, req.user.id, 'exito', { ids, count: rowCount });
+    res.json({ approved: rowCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/listening/topics/batch-delete — eliminar múltiples temas en lote.
+router.post('/topics/batch-delete', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids array requerido' });
+    const { rowCount } = await pool.query(
+      `DELETE FROM topics WHERE id = ANY($1::int[])`,
+      [ids]
+    );
+    await logActivity(pool, 'radar_batch_delete', `${rowCount} topics eliminados en lote`, req.user.id, 'exito', { ids, count: rowCount });
+    res.json({ deleted: rowCount });
   } catch (err) {
     next(err);
   }

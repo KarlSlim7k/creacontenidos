@@ -138,9 +138,48 @@ const clickHandlers: Record<string, (el: Element) => void> = {
     if (el.getAttribute('data-kind') === 'error') setState({ errorMsg: null });
     else setState({ successMsg: null });
   },
-  'set-radar-source': (el) => { setState({ radarSource: attr(el, 'data-value') }); loadRadarTopics(true); },
-  'set-radar-status': (el) => { setState({ radarStatus: attr(el, 'data-value') }); loadRadarTopics(true); },
-  'set-radar-verification': (el) => { setState({ radarVerification: attr(el, 'data-value') }); loadRadarTopics(true); },
+  'set-radar-source': (el) => { setState({ radarSource: attr(el, 'data-value'), radarPage: 0 }); loadRadarTopics(true); },
+  'set-radar-status': (el) => { setState({ radarStatus: attr(el, 'data-value'), radarPage: 0 }); loadRadarTopics(true); },
+  'set-radar-verification': (el) => { setState({ radarVerification: attr(el, 'data-value'), radarPage: 0 }); loadRadarTopics(true); },
+  'set-radar-confidence': (el) => { setState({ radarConfidenceFilter: attr(el, 'data-value'), radarPage: 0 }); },
+  'clear-radar-search': () => { setState({ radarSearch: '', radarPage: 0 }); },
+  'set-radar-competitor-sort': (el) => { setState({ radarCompetitorSort: attr(el, 'data-value') as 'fecha' | 'engagement', radarPage: 0 }); },
+  'toggle-radar-select-all': (el) => {
+    const checked = (el as HTMLInputElement).checked;
+    const topics = state.data.topics || [];
+    setState({ radarSelectedTopicIds: checked ? topics.map((t: Topic) => t.id) : [] });
+  },
+  'toggle-radar-topic-select': (el) => {
+    const id = Number(attr(el, 'data-id'));
+    if (!id) return;
+    const current = state.radarSelectedTopicIds || [];
+    const exists = current.includes(id);
+    setState({ radarSelectedTopicIds: exists ? current.filter((x) => x !== id) : [...current, id] });
+  },
+  'batch-approve-topics': () => {
+    const ids = state.radarSelectedTopicIds || [];
+    if (!ids.length) return;
+    adminApi<{ approved: number }>('/api/listening/topics/batch-approve', { method: 'POST', body: { ids } })
+      .then((res) => {
+        const topics = (state.data.topics || []).map((t: Topic) => ids.includes(t.id) ? Object.assign({}, t, { status: 'Revisado' }) : t);
+        setData({ topics });
+        setState({ radarSelectedTopicIds: [], successMsg: `${res.approved} tema(s) aprobados.` });
+      })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
+  'batch-delete-topics': () => {
+    const ids = state.radarSelectedTopicIds || [];
+    if (!ids.length) return;
+    if (!confirm(`¿Eliminar los ${ids.length} temas seleccionados? Esta acción no se puede deshacer.`)) return;
+    adminApi<{ deleted: number }>('/api/listening/topics/batch-delete', { method: 'POST', body: { ids } })
+      .then((res) => {
+        const topics = (state.data.topics || []).filter((t: Topic) => !ids.includes(t.id));
+        setData({ topics });
+        setState({ radarSelectedTopicIds: [], successMsg: `${res.deleted} tema(s) eliminados.` });
+        loadRadarSummary();
+      })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
   // Paginación cliente (10 filas/página) sobre lo ya cargado. Si el tab activo
   // es temas y la página pedida cae fuera de lo cargado pero el servidor
   // puede tener más (radarTopicsHasMore), pide el siguiente lote de 50 antes
@@ -164,7 +203,69 @@ const clickHandlers: Record<string, (el: Element) => void> = {
     setState({ radarStatsDays: days, radarStatsError: null });
     loadRadarStats();
   },
-  'set-radar-tab': (el) => { setState({ radarTab: attr(el, 'data-tab') as 'temas' | 'competencia' | 'fuentes' }); loadScreenData('radar'); },
+  'set-radar-tab': (el) => { setState({ radarTab: attr(el, 'data-tab') as 'temas' | 'manual' | 'competencia' | 'fuentes' }); loadScreenData('radar'); },
+  'run-radar-manual': () => {
+    const topic = (document.getElementById('rm-topic') as HTMLInputElement | null)?.value.trim() || '';
+    if (!topic) {
+      setState({ errorMsg: 'Por favor ingresa un tema o palabra clave para realizar el radar manual.' });
+      return;
+    }
+    const zone = (document.getElementById('rm-zone') as HTMLSelectElement | null)?.value || 'Perote, Veracruz';
+    const cat = (document.getElementById('rm-category') as HTMLSelectElement | null)?.value || 'general';
+    const tf = (document.getElementById('rm-timeframe') as HTMLSelectElement | null)?.value || '24h';
+    const specificSources = (document.getElementById('rm-sources') as HTMLInputElement | null)?.value.trim() || '';
+
+    // Armar query contextualizado para Perplexity
+    let queryParts = [`noticias, sucesos y novedades sobre "${topic}"`];
+
+    if (cat !== 'general') {
+      const catLabels: Record<string, string> = {
+        seguridad: 'en materia de seguridad y protección civil',
+        politica: 'en política local, cabildo y gobierno municipal',
+        cultura: 'sobre eventos culturales, festivales y turismo',
+        clima: 'sobre clima, medio ambiente y contingencias',
+        economia: 'sobre comercio local, agricultura y economía',
+      };
+      queryParts.push(catLabels[cat] || `en el ámbito de ${cat}`);
+    }
+
+    queryParts.push(`en ${zone}, México`);
+
+    const tfLabels: Record<string, string> = {
+      '24h': 'ocurridas en las últimas 24 horas',
+      '3d': 'ocurridas en los últimos 3 días',
+      '7d': 'ocurridas en la última semana',
+    };
+    queryParts.push(tfLabels[tf] || '');
+
+    if (specificSources) {
+      queryParts.push(`consultando fuentes como: ${specificSources}`);
+    }
+
+    const fullQuery = queryParts.filter(Boolean).join(' ');
+
+    setState({ radarBusy: true, errorMsg: null, radarManualResult: null });
+    adminApi<{ detected: number; topics: Topic[] }>('/api/listening/topics/detect', {
+      method: 'POST',
+      body: { query: fullQuery },
+    })
+      .then((res) => {
+        const foundTopics = Array.isArray(res.topics) ? res.topics : [];
+        setState({
+          radarBusy: false,
+          radarManualResult: { detected: res.detected, count: foundTopics.length, topics: foundTopics },
+          successMsg: res.detected > 0
+            ? `Radar manual completado: ${res.detected} tema(s) nuevo(s) detectado(s).`
+            : 'Radar manual completado: no se encontraron temas nuevos o ya estaban registrados.',
+        });
+        loadRadarTopics(true);
+        loadRadarSummary();
+        loadRadarStats();
+      })
+      .catch((err: ApiError) => {
+        setState({ radarBusy: false, errorMsg: err.message });
+      });
+  },
   'set-pipeline-tab': (el) => { setState({ pipelineTab: attr(el, 'data-tab') as 'edicion' | 'programacion' | 'agenda' }); },
   'toggle-radar-source': (el) => {
     const id = Number(attr(el, 'data-id'));
@@ -1163,6 +1264,11 @@ export function handleSubmit(e: SubmitEvent) {
 // Sincroniza en cada tecla y SIN setState: el DOM ya tiene el valor bueno, repintar sobra.
 export function handleInput(e: Event) {
   const t = e.target as HTMLElement;
+  if (t && t.id === 'radar-search-input') {
+    state.radarSearch = (t as HTMLInputElement).value;
+    setState({ radarSearch: state.radarSearch, radarPage: 0 });
+    return;
+  }
   if (t && t.id === 'comercial-search-input') {
     state.comercialSearch = (t as HTMLInputElement).value;
     setState({ comercialSearch: state.comercialSearch });
@@ -1194,6 +1300,12 @@ export function handleInput(e: Event) {
 
 export function handleChange(e: Event) {
   const target = e.target as HTMLElement;
+  if (target.id === 'radar-source-select') {
+    const val = (target as HTMLSelectElement).value;
+    setState({ radarSource: val, radarPage: 0 });
+    loadRadarTopics(true);
+    return;
+  }
   if (target.id === 'editor-cover') {
     const img = document.getElementById('editor-cover-thumb') as HTMLImageElement | null;
     const url = safeHttpUrl((target as HTMLInputElement).value);

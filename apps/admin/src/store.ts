@@ -425,8 +425,22 @@ export interface State {
   radarStatus: string;
   /** Filtro de verification_status: Todos | verified | checking | signal | risk | none */
   radarVerification: string;
+  /** Búsqueda por palabra clave en RADAR */
+  radarSearch: string;
+  /** Filtro por nivel de confianza/interés: 'todos' | 'alta' | 'media' | 'baja' */
+  radarConfidenceFilter: string;
+  /** IDs de topics seleccionados para acciones en lote */
+  radarSelectedTopicIds: number[];
+  /** Orden en pestaña Competencia: 'fecha' | 'engagement' */
+  radarCompetitorSort: 'fecha' | 'engagement';
   radarBusy: boolean;
-  radarTab: 'temas' | 'competencia' | 'fuentes';
+  radarTab: 'temas' | 'manual' | 'competencia' | 'fuentes';
+  /** Formulario para Radar Manual */
+  radarManualTopic: string;
+  radarManualZone: string;
+  radarManualCategory: string;
+  radarManualTimeframe: string;
+  radarManualResult: { detected: number; count: number; topics: Topic[] } | null;
   /** Tab activo en /admin/#pipeline ('edicion' | 'programacion' | 'agenda') */
   pipelineTab: 'edicion' | 'programacion' | 'agenda';
   /** Ventana de radar-stats: 7 | 30 */
@@ -558,8 +572,13 @@ export function initialState(): State {
   twoFaSetup: null, twoFaBackupCodes: null, twoFaBusy: false,
   data: initialData(),
   distBusy: null,
-  radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos', radarBusy: false,
-  radarTab: 'temas', pipelineTab: 'edicion', competitorsBusy: false, radarStatsDays: 30,
+  radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos',
+  radarSearch: '', radarConfidenceFilter: 'todos', radarSelectedTopicIds: [], radarCompetitorSort: 'fecha',
+  radarBusy: false,
+  radarTab: 'temas',
+  radarManualTopic: '', radarManualZone: 'Perote, Veracruz', radarManualCategory: 'general', radarManualTimeframe: '24h',
+  radarManualResult: null,
+  pipelineTab: 'edicion', competitorsBusy: false, radarStatsDays: 30,
   radarStatsError: null, radarTopicsHasMore: false, radarPage: 0,
   leadsStatus: 'todos', leadsPage: 0, comercialSearch: '',
   produccionesNetwork: 'todas', produccionesStatus: 'todos', produccionesSearch: '',
