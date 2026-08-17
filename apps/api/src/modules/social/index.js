@@ -29,10 +29,22 @@ const OEMBED_ENDPOINTS = {
 };
 
 const URL_RE = /^https?:\/\/\S+$/i;
-const TIKTOK_RE = /^https?:\/\/(www\.)?(tiktok\.com|vm\.tiktok\.com)\//i;
-const YOUTUBE_RE = /^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i;
-const FACEBOOK_RE = /^https?:\/\/(www\.)?(facebook\.com|fb\.watch)\//i;
-const INSTAGRAM_RE = /^https?:\/\/(www\.)?instagram\.com\//i;
+const TIKTOK_RE = /^https?:\/\/([a-z0-9-]+\.)?(tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)\//i;
+const YOUTUBE_RE = /^https?:\/\/([a-z0-9-]+\.)?(youtube\.com|youtu\.be)\//i;
+const FACEBOOK_RE = /^https?:\/\/([a-z0-9-]+\.)?(facebook\.com|fb\.watch)\//i;
+const INSTAGRAM_RE = /^https?:\/\/([a-z0-9-]+\.)?instagram\.com\//i;
+
+function extractYouTubeId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|v\/|u\/\w\/|embed\/|shorts\/|live\/|watch\?v=|&v=)([\w-]{11})/i);
+  if (m) return m[1];
+  try {
+    const parsed = new URL(url);
+    const v = parsed.searchParams.get('v');
+    if (v && /^[\w-]{11}$/.test(v)) return v;
+  } catch (_) {}
+  return null;
+}
 
 // Cache en memoria: 6h. oEmbed es público y barato de pedir pero no tiene sentido
 // pegarle cada render del feed. Ponytail: in-process map, fine para 1 instancia;
@@ -44,6 +56,15 @@ async function fetchOembed(network, url) {
   const builder = OEMBED_ENDPOINTS[network];
   if (!builder) throw Object.assign(new Error('Red no soportada'), { status: 400 });
 
+  // YouTube: normalizar URL hacia watch?v=... para que oEmbed siempre resuelva
+  // incluso si la URL original era /live/..., /shorts/... o youtu.be/...
+  let targetUrl = url;
+  let ytId = null;
+  if (network === 'youtube') {
+    ytId = extractYouTubeId(url);
+    if (ytId) targetUrl = `https://www.youtube.com/watch?v=${ytId}`;
+  }
+
   // Facebook/Instagram requieren token de app. Si no está configurado,
   // devolvemos metadata vacía para que el post se guarde sin romper el flujo.
   const isMeta = network === 'facebook' || network === 'instagram';
@@ -52,26 +73,38 @@ async function fetchOembed(network, url) {
     return { title: null, author_name: null, thumbnail_url: null, _noToken: true };
   }
 
-  const key = network + '|' + url;
+  const key = network + '|' + targetUrl;
   const now = Date.now();
   const hit = cache.get(key);
   if (hit && now - hit.at < CACHE_TTL_MS) return hit.value;
 
-  const endpoint = isMeta ? builder(url, metaToken) : builder(url);
+  const endpoint = isMeta ? builder(targetUrl, metaToken) : builder(targetUrl);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   let res;
   try { res = await fetch(endpoint, { headers: { 'User-Agent': 'CREA-Contenidos/1.0' }, signal: ctrl.signal }); }
+  catch (err) {
+    if (network === 'youtube' && ytId) {
+      return { title: null, author_name: null, thumbnail_url: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` };
+    }
+    throw err;
+  }
   finally { clearTimeout(timer); }
+
   if (!res.ok) {
+    if (network === 'youtube' && ytId) {
+      return { title: null, author_name: null, thumbnail_url: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` };
+    }
     const body = await res.text().catch(() => '');
     throw Object.assign(new Error(`oEmbed respondió ${res.status}`), { status: 502, detail: body.slice(0, 200) });
   }
+
   const data = await res.json();
+  const thumb = data.thumbnail_url || (network === 'youtube' && ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : null);
   const value = {
     title: data.title || data.author_name || null,
     author_name: data.author_name || null,
-    thumbnail_url: data.thumbnail_url || null,
+    thumbnail_url: thumb,
   };
   cache.set(key, { at: now, value });
   return value;
@@ -94,22 +127,25 @@ function buildEmbedHtml(network, externalUrl, title) {
     return '<iframe src="https://www.tiktok.com/embed/v2/' + m[1] + '" title="' + safeTitle + '" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy" style="width:100%;height:100%;border:0;"></iframe>';
   }
   if (network === 'youtube') {
-    const m = externalUrl.match(/(?:youtu\.be\/|v=|\/shorts\/)([\w-]{11})/);
-    if (!m) return null;
+    const ytId = extractYouTubeId(externalUrl);
+    if (!ytId) return null;
     const safeTitle = escAttr(title);
-    return '<iframe src="https://www.youtube.com/embed/' + m[1] + '?rel=0" title="' + safeTitle + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy" style="width:100%;height:100%;border:0;"></iframe>';
+    return '<iframe src="https://www.youtube.com/embed/' + ytId + '?rel=0" title="' + safeTitle + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy" style="width:100%;height:100%;border:0;"></iframe>';
   }
-  // Facebook: el Video Plugin (facebook.com/plugins/video.php) es público y no
-  // requiere App Token — a diferencia del oEmbed de Graph API. Alcanza con
-  // pasarle la URL del video como "href". Solo cubre posts de video
-  // (facebook.com/.../videos/<id>/); fotos o texto no tienen plugin equivalente
-  // y caen al fallback (thumbnail + link).
-  if (network === 'facebook' && /\/(videos|reel)\//.test(externalUrl)) {
-    const src = 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(externalUrl) + '&show_text=false&width=560&t=0';
-    return '<iframe src="' + src + '" style="width:100%;height:100%;border:0;" scrolling="no" frameborder="0" allowfullscreen loading="lazy" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>';
+  // Facebook: el Video Plugin y Post Plugin (facebook.com/plugins/...) son públicos y no
+  // requieren App Token. Cubre videos, reels, emisiones en vivo de Tercer Tiempo y posts.
+  if (network === 'facebook') {
+    const isReelOrVideo = /\/(videos|reel|watch|share\/v|share\/r)\//i.test(externalUrl) || /fb\.watch/i.test(externalUrl);
+    if (isReelOrVideo) {
+      const src = 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(externalUrl) + '&show_text=false&width=560&t=0';
+      return '<iframe src="' + src + '" style="width:100%;height:100%;min-height:280px;border:0;" scrolling="no" frameborder="0" allowfullscreen loading="lazy" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>';
+    }
+    const src = 'https://www.facebook.com/plugins/post.php?href=' + encodeURIComponent(externalUrl) + '&show_text=true&width=500';
+    return '<iframe src="' + src + '" style="width:100%;height:100%;min-height:280px;border:0;" scrolling="no" frameborder="0" allowfullscreen loading="lazy" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>';
   }
-  if (network === 'facebook' || network === 'instagram') {
-    return null;
+  if (network === 'instagram') {
+    const cleanUrl = externalUrl.split('?')[0].replace(/\/+$/, '');
+    return '<iframe src="' + cleanUrl + '/embed" style="width:100%;height:100%;min-height:380px;border:0;" frameborder="0" scrolling="no" allowtransparency="true" loading="lazy"></iframe>';
   }
   return null;
 }
@@ -147,14 +183,26 @@ const POST_FIELDS = 'id, network, external_url, title, author_name, thumbnail_ur
 // social-facebook-cron.js (ingesta automática de la página propia). Devuelve
 // { error: 'unrecognized_network' } o { duplicate: true } en vez de tirar, para que
 // ambos llamadores decidan qué hacer sin try/catch de códigos Postgres duplicado.
-async function insertSocialPost(externalUrl, { position = 0, published = true, createdBy = null } = {}) {
+async function insertSocialPost(externalUrl, { position = 0, published = true, createdBy = null, title = null, authorName = null, thumbnailUrl = null } = {}) {
   const network = detectNetwork(externalUrl);
   if (!network) return { error: 'unrecognized_network' };
 
-  let oembed = { title: null, author_name: null, thumbnail_url: null };
+  let oembed = { title, author_name: authorName, thumbnail_url: thumbnailUrl };
   let oembedFailed = false;
-  try { oembed = await fetchOembed(network, externalUrl); }
-  catch (err) { oembedFailed = true; }
+  try {
+    const fetched = await fetchOembed(network, externalUrl);
+    if (fetched.title) oembed.title = fetched.title;
+    if (fetched.author_name) oembed.author_name = fetched.author_name;
+    if (fetched.thumbnail_url) oembed.thumbnail_url = fetched.thumbnail_url;
+  } catch (err) {
+    oembedFailed = true;
+  }
+
+  // Si es YouTube y no tiene thumbnail, garantizamos el de i.ytimg.com
+  if (network === 'youtube' && !oembed.thumbnail_url) {
+    const ytId = extractYouTubeId(externalUrl);
+    if (ytId) oembed.thumbnail_url = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+  }
 
   const safeTitle = (oembed.title || '').slice(0, 300) || null;
   const safeAuthor = (oembed.author_name || '').slice(0, 200) || null;
@@ -360,6 +408,63 @@ router.delete('/admin/social/:id', requireAuth, requireRole('director'), async (
     if (!rows[0]) return res.status(404).json({ error: 'Post no encontrado' });
     res.status(204).end();
   } catch (err) { next(err); }
+});
+
+// POST /api/admin/social/sync-facebook — Sincronización manual bajo demanda de los
+// videos recientes (Tercer Tiempo, emisiones en directo y reels) de la página de Facebook de CREA.
+const CREA_FACEBOOK_PAGE_URL = 'https://www.facebook.com/profile.php?id=100079776720617';
+router.post('/admin/social/sync-facebook', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const config = require('../../config');
+    const { scrapeCompetitorPosts } = require('../../lib/competitor-scraper-client');
+    const { logActivity } = require('../../lib/ai-client');
+
+    if (!config.competitorScraperUrl) {
+      return res.status(503).json({ error: 'El servicio scraper no está configurado.' });
+    }
+
+    const maxPosts = Math.min(Math.max(parseInt(req.body && req.body.limit, 10) || 12, 1), 30);
+    const items = await scrapeCompetitorPosts({
+      baseUrl: config.competitorScraperUrl,
+      accounts: [CREA_FACEBOOK_PAGE_URL],
+      maxPostsPerAccount: maxPosts,
+      includeReels: true,
+    });
+
+    let inserted = 0;
+    let skipped = 0;
+    for (const item of items) {
+      if (item.media_type !== 'video' || !item.post_url) continue;
+      const title = item.post_text ? item.post_text.slice(0, 180) : 'Programa CREA Contenidos';
+      const result = await insertSocialPost(item.post_url, {
+        published: true,
+        createdBy: req.user.id,
+        title,
+        authorName: item.source_account || 'CREA Contenidos',
+      });
+      if (result.duplicate || result.error) { skipped += 1; continue; }
+      inserted += 1;
+    }
+
+    await logActivity(pool, 'social_sync_facebook_manual', `${inserted} videos sincronizados desde Facebook`, req.user.id, 'exito', {
+      returned: items.length,
+      inserted,
+      skipped,
+    });
+
+    // Devolver lista actualizada
+    const { rows: allPosts } = await pool.query(
+      `SELECT sp.id, sp.network, sp.external_url, sp.title, sp.author_name, sp.thumbnail_url,
+              sp.is_published, sp.position, sp.created_at, sp.updated_at, sp.fetched_at,
+              u.name AS created_by_name
+       FROM social_posts sp LEFT JOIN users u ON u.id = sp.created_by
+       ORDER BY sp.is_published DESC, sp.position ASC, sp.created_at DESC`
+    );
+
+    res.json({ inserted, skipped, posts: allPosts });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

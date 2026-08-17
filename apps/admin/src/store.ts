@@ -443,6 +443,18 @@ export interface State {
   leadsPage: number;
   /** Búsqueda/filtro en Pipeline Comercial. */
   comercialSearch: string;
+  /** Filtro de red en Producciones ('todas' | 'tiktok' | 'youtube' | 'facebook' | 'instagram') */
+  produccionesNetwork: string;
+  /** Filtro de estado en Producciones ('todos' | 'publicados' | 'borradores') */
+  produccionesStatus: string;
+  /** Búsqueda por texto en Producciones */
+  produccionesSearch: string;
+  /** ID del post de producción en vista previa embed */
+  previewSocialId: number | null;
+  /** HTML de embed resuelto para preview */
+  previewSocialEmbedHtml: string | null;
+  /** Estado de carga del preview embed */
+  previewSocialLoading: boolean;
   /** Página actual (0-based) de la tabla de Producciones (admin). */
   produccionesPage: number;
   propuestaRejecting: number | null;
@@ -480,6 +492,8 @@ export interface State {
   form: { kind: 'user' | 'service' | 'fbAccount' | 'client' | 'social'; editingId: number | null } | null;
   formError: string | null;
   socialBusy: boolean;
+  /** Estado de sincronización manual de videos de Facebook */
+  socialSyncBusy: boolean;
   newsletterContent: NewsletterContent | null;
   newsletterBusy: boolean;
   newsletterSending: boolean;
@@ -547,7 +561,10 @@ export function initialState(): State {
   radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos', radarBusy: false,
   radarTab: 'temas', pipelineTab: 'edicion', competitorsBusy: false, radarStatsDays: 30,
   radarStatsError: null, radarTopicsHasMore: false, radarPage: 0,
-  leadsStatus: 'todos', leadsPage: 0, comercialSearch: '', produccionesPage: 0,
+  leadsStatus: 'todos', leadsPage: 0, comercialSearch: '',
+  produccionesNetwork: 'todas', produccionesStatus: 'todos', produccionesSearch: '',
+  previewSocialId: null, previewSocialEmbedHtml: null, previewSocialLoading: false,
+  produccionesPage: 0,
   propuestaRejecting: null,
   editorProposalId: null, editorDraft: null,
   generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false,
@@ -560,7 +577,7 @@ export function initialState(): State {
   pickerPreview: null,
   selectedRadarId: null,
   configTab: 'usuarios', showNotifications: false,
-  form: null, formError: null, socialBusy: false,
+  form: null, formError: null, socialBusy: false, socialSyncBusy: false,
   newsletterContent: null, newsletterBusy: false, newsletterSending: false, newsletterSaving: false,
   newsletterPreview: null, newsletterPreviewDevice: 'desktop', newsletterSubscriberCount: null,
   newsletterAudioBusy: false, newsletterAudioUrl: null,

@@ -215,6 +215,35 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'set-leads-status': (el) => setState({ leadsStatus: attr(el, 'data-value'), leadsPage: 0 }),
   'set-leads-page': (el) => setState({ leadsPage: Math.max(0, Number(attr(el, 'data-value')) || 0) }),
   'set-producciones-page': (el) => setState({ produccionesPage: Math.max(0, Number(attr(el, 'data-value')) || 0) }),
+  'set-producciones-network': (el) => setState({ produccionesNetwork: attr(el, 'data-value'), produccionesPage: 0 }),
+  'set-producciones-status': (el) => setState({ produccionesStatus: attr(el, 'data-value'), produccionesPage: 0 }),
+  'clear-producciones-search': () => setState({ produccionesSearch: '', produccionesPage: 0 }),
+  'move-produccion-pos': (el) => {
+    const id = Number(attr(el, 'data-id'));
+    const dir = attr(el, 'data-dir');
+    const post = (state.data.socialPosts || []).find((p) => p.id === id);
+    if (!post) return;
+    const newPos = dir === 'up' ? Math.max(0, post.position - 1) : post.position + 1;
+    adminApi<SocialPost>('/api/admin/social/' + id, { method: 'PATCH', body: { position: newPos } })
+      .then((updated) => {
+        const list = (state.data.socialPosts || []).map((p) => p.id === id ? Object.assign({}, p, updated) : p)
+          .sort((a, b) => (b.is_published ? 1 : 0) - (a.is_published ? 1 : 0) || a.position - b.position || (new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        setData({ socialPosts: list });
+      })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
+  'open-preview-social': (el) => {
+    const id = Number(attr(el, 'data-id'));
+    setState({ previewSocialId: id, previewSocialLoading: true, previewSocialEmbedHtml: null });
+    adminApi<{ embed_html: string | null; fallback?: { thumbnail_url?: string; external_url?: string } }>('/api/public/social/' + id + '/embed')
+      .then((res) => {
+        setState({ previewSocialLoading: false, previewSocialEmbedHtml: res.embed_html || '' });
+      })
+      .catch((err: ApiError) => {
+        setState({ previewSocialLoading: false, errorMsg: 'No se pudo cargar el reproductor: ' + err.message });
+      });
+  },
+  'close-preview-social': () => setState({ previewSocialId: null, previewSocialEmbedHtml: null, previewSocialLoading: false }),
   'mark-lead': (el) => submitMarkLead(Number(attr(el, 'data-id')), attr(el, 'data-status')),
   'convert-lead': (el) => submitConvertLead(Number(attr(el, 'data-id'))),
   'delete-lead': (el) => submitDeleteLead(Number(attr(el, 'data-id'))),
@@ -511,6 +540,22 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'toggle-social': (el) => submitToggleSocial(Number(attr(el, 'data-id')), attr(el, 'data-pub') === 'true'),
   'refetch-social': (el) => submitRefetchSocial(Number(attr(el, 'data-id'))),
   'delete-social': (el) => submitDeleteSocial(Number(attr(el, 'data-id'))),
+  'sync-facebook-social': () => {
+    setState({ socialSyncBusy: true, errorMsg: null });
+    adminApi<{ inserted: number; skipped: number; posts: SocialPost[] }>('/api/admin/social/sync-facebook', { method: 'POST', body: { limit: 15 } })
+      .then((res) => {
+        setData({ socialPosts: res.posts || state.data.socialPosts });
+        setState({
+          socialSyncBusy: false,
+          successMsg: res.inserted > 0
+            ? `Sincronización completada: ${res.inserted} video(s) nuevo(s) importado(s).`
+            : 'Sincronización completada: sin videos nuevos pendientes.',
+        });
+      })
+      .catch((err: ApiError) => {
+        setState({ socialSyncBusy: false, errorMsg: err.message });
+      });
+  },
   'delete-newsletter-event': (el) => {
     const evId = Number(attr(el, 'data-id'));
     adminApi('/api/newsletter/events/' + evId, { method: 'DELETE' })
@@ -835,7 +880,7 @@ export function submitReopenPublished(id: number) {
 function copyToClipboard(text: string, btn: HTMLButtonElement) {
   navigator.clipboard.writeText(text).then(() => {
     const original = btn.textContent;
-    btn.textContent = 'Copiado ✓';
+    btn.textContent = 'Copiado';
     setTimeout(() => { btn.textContent = original; }, 1500);
   });
 }
@@ -1121,6 +1166,25 @@ export function handleInput(e: Event) {
   if (t && t.id === 'comercial-search-input') {
     state.comercialSearch = (t as HTMLInputElement).value;
     setState({ comercialSearch: state.comercialSearch });
+    return;
+  }
+  if (t && t.id === 'producciones-search-input') {
+    state.produccionesSearch = (t as HTMLInputElement).value;
+    setState({ produccionesSearch: state.produccionesSearch, produccionesPage: 0 });
+    return;
+  }
+  if (t && t.id === 'social-url') {
+    const val = (t as HTMLInputElement).value.trim();
+    const badgeEl = document.getElementById('social-detected-network');
+    if (badgeEl) {
+      let net = '';
+      if (/tiktok\.com/i.test(val)) net = 'TikTok';
+      else if (/youtu(\.be|be\.com)/i.test(val)) net = 'YouTube';
+      else if (/facebook\.com|fb\.watch/i.test(val)) net = 'Facebook';
+      else if (/instagram\.com/i.test(val)) net = 'Instagram';
+      badgeEl.textContent = net ? `Red detectada: ${net}` : '';
+      badgeEl.style.display = net ? 'inline-block' : 'none';
+    }
     return;
   }
   if (!state.editorDraft || !t.id || t.id.indexOf('editor-') !== 0) return;
