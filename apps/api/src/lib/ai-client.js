@@ -181,7 +181,20 @@ function directiveBlock(directive) {
 
 function parseJson(text) {
   const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-  return JSON.parse(match ? match[0] : text);
+  const raw = match ? match[0] : text;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    // Modelos débiles (fallback gratis de OpenRouter) a veces devuelven una
+    // palabra suelta sin comillas donde tocaba boolean/string, ej.
+    // `"reliable": moderately` en vez de `"reliable": false`. Reparación
+    // mínima: comillar cualquier palabra suelta tras ":" que no sea
+    // true/false/null (esas sí son JSON válido).
+    const repaired = raw.replace(/:(\s*)([a-zA-Z][a-zA-Z0-9_]*)(\s*[,}\]])/g, (m, pre, word, post) => (
+      ['true', 'false', 'null'].includes(word) ? m : `:${pre}"${word}"${post}`
+    ));
+    return JSON.parse(repaired);
+  }
 }
 
 function stripLeadingDuplicateTitle(body, title) {

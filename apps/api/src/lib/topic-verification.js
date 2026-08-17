@@ -379,7 +379,7 @@ const VERIFICATION_JSON_SPEC = `Campos de verificación editorial (obligatorios 
   · risk: rumor, clickbait, engagement bait, sin fundamento, titular alarmista sin autoridad
 - known_facts: qué se sabe (2-4 oraciones)
 - unknown_facts: qué no se sabe o falta confirmar (1-3 oraciones o null)
-- evidence: array de {label, url, kind, supports, reliable}. kind: primary|secondary|social|other. url SOLO si aparece en la entrada; si no, null. NO inventes URLs.
+- evidence: array de {label, url, kind, supports, reliable}. kind: primary|secondary|social|other. url SOLO si aparece en la entrada; si no, null. NO inventes URLs. reliable es boolean true/false (nunca una palabra suelta como "moderately").
 - risk_flags: array de strings (ej. single_source, rumor, clickbait, titular_alarmista, sin_fecha, geoloc_pendiente) o []
 - editorial_decision: una oración (apto / condicionado / no titular como hecho)
 - source_count: número de fuentes independientes contadas
