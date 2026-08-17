@@ -211,7 +211,7 @@ function renderRadarManual(): string {
           <p class="padmin-section-title" style="margin-bottom:6px;">Parámetros de escaneo manual</p>
           <p class="padmin-t-hint" style="margin-bottom:18px;">Configura los filtros temáticos y geográficos para que el agente rastree temas específicos con scoring de verificación.</p>
 
-          <form data-action="run-radar-manual" onsubmit="event.preventDefault();">
+          <form data-action="run-radar-manual">
             <div class="padmin-field" style="margin-bottom:14px;">
               <label style="font-weight:600;">Tema o palabra clave específica <span style="color:var(--danger);">* (Requerido)</span></label>
               <input id="rm-topic" type="text" required placeholder="Ej. corte de agua, obras en libramiento, festival de la nieve, hospital civil…" style="width:100%;box-sizing:border-box;">
@@ -262,11 +262,11 @@ function renderRadarManual(): string {
         <div class="padmin-card" style="padding:16px 20px;">
           <p class="padmin-section-title" style="margin-bottom:10px;">Plantillas de búsqueda rápida</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" class="padmin-chip" onclick="document.getElementById('rm-topic').value='servicios publicos agua luz basura';document.getElementById('rm-category').value='seguridad';">💧 Servicios y Agua</button>
-            <button type="button" class="padmin-chip" onclick="document.getElementById('rm-topic').value='seguridad policia accidentes proteccion civil';document.getElementById('rm-category').value='seguridad';">🚨 Seguridad y Vialidad</button>
-            <button type="button" class="padmin-chip" onclick="document.getElementById('rm-topic').value='cabildo ayuntamiento presidente municipal obras';document.getElementById('rm-category').value='politica';">🏛 Gobierno y Obras</button>
-            <button type="button" class="padmin-chip" onclick="document.getElementById('rm-topic').value='turismo eventos culturales feria';document.getElementById('rm-category').value='cultura';">🎭 Cultura y Turismo</button>
-            <button type="button" class="padmin-chip" onclick="document.getElementById('rm-topic').value='frio heladas frente frio cofre de perote';document.getElementById('rm-category').value='clima';">❄️ Clima y Cofre</button>
+            <button type="button" class="padmin-chip" data-action="apply-radar-preset" data-topic="servicios publicos agua luz basura" data-category="seguridad">💧 Servicios y Agua</button>
+            <button type="button" class="padmin-chip" data-action="apply-radar-preset" data-topic="seguridad policia accidentes proteccion civil" data-category="seguridad">🚨 Seguridad y Vialidad</button>
+            <button type="button" class="padmin-chip" data-action="apply-radar-preset" data-topic="cabildo ayuntamiento presidente municipal obras" data-category="politica">🏛 Gobierno y Obras</button>
+            <button type="button" class="padmin-chip" data-action="apply-radar-preset" data-topic="turismo eventos culturales feria" data-category="cultura">🎭 Cultura y Turismo</button>
+            <button type="button" class="padmin-chip" data-action="apply-radar-preset" data-topic="frio heladas frente frio cofre de perote" data-category="clima">❄️ Clima y Cofre</button>
           </div>
         </div>
       </div>
@@ -653,7 +653,7 @@ function renderRadarTemas(): string {
           : (r.source_count != null ? `${r.source_count} fuente(s)` : '');
 
         return `<div class="padmin-table-row clickable padmin-radar-row padmin-cols-radar" style="grid-template-columns: 36px minmax(160px, 1.6fr) 100px 70px 92px 132px 120px;align-items:center;background:${isSelected ? 'var(--brand-soft,#f0fdf4)' : 'transparent'};">
-          <div style="display:flex;align-items:center;" onclick="event.stopPropagation();">
+          <div style="display:flex;align-items:center;">
             <input type="checkbox" data-action="toggle-radar-topic-select" data-id="${r.id}" aria-label="Seleccionar tema ${esc(r.title)}"${isSelected ? ' checked' : ''}>
           </div>
           <div style="min-width:0;" data-action="open-radar" data-id="${r.id}"><span style="font-size:13px;color:var(--text);display:block;font-weight:500;">${esc(r.title)}</span>${sub ? `<span style="font-size:11px;color:var(--text-mute);display:block;margin-top:2px;">${sub}</span>` : ''}</div>

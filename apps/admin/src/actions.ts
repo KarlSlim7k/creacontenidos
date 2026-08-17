@@ -209,6 +209,12 @@ const clickHandlers: Record<string, (el: Element) => void> = {
     loadRadarStats();
   },
   'set-radar-tab': (el) => { setState({ radarTab: attr(el, 'data-tab') as 'temas' | 'manual' | 'competencia' | 'fuentes' }); loadScreenData('radar'); },
+  'apply-radar-preset': (el) => {
+    const topicInput = document.getElementById('rm-topic') as HTMLInputElement | null;
+    const categorySelect = document.getElementById('rm-category') as HTMLSelectElement | null;
+    if (topicInput) topicInput.value = attr(el, 'data-topic');
+    if (categorySelect) categorySelect.value = attr(el, 'data-category');
+  },
   'run-radar-manual': () => {
     const topic = (document.getElementById('rm-topic') as HTMLInputElement | null)?.value.trim() || '';
     if (!topic) {
@@ -1245,6 +1251,10 @@ export function handleSubmit(e: SubmitEvent) {
     }).catch((err: ApiError) => {
       setState({ formError: firstFieldError(err) });
     });
+  } else if (action === 'run-radar-manual') {
+    // El submit real (botón data-action="run-radar-manual" es type="button") solo
+    // dispara al presionar Enter en un input del form — evita el reload de página.
+    e.preventDefault();
   } else if (action === 'submit-social') {
     e.preventDefault();
     const url = q('#social-url').value.trim();
