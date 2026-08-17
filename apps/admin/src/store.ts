@@ -427,6 +427,8 @@ export interface State {
   radarVerification: string;
   radarBusy: boolean;
   radarTab: 'temas' | 'competencia' | 'fuentes';
+  /** Tab activo en /admin/#pipeline ('edicion' | 'programacion' | 'agenda') */
+  pipelineTab: 'edicion' | 'programacion' | 'agenda';
   /** Ventana de radar-stats: 7 | 30 */
   radarStatsDays: number;
   /** Error del fetch de radar-stats (se muestra inline en el bloque Calibración). */
@@ -439,6 +441,8 @@ export interface State {
   leadsStatus: string;
   /** Página actual (0-based) de la tabla de Leads. */
   leadsPage: number;
+  /** Búsqueda/filtro en Pipeline Comercial. */
+  comercialSearch: string;
   /** Página actual (0-based) de la tabla de Producciones (admin). */
   produccionesPage: number;
   propuestaRejecting: number | null;
@@ -481,6 +485,7 @@ export interface State {
   newsletterSending: boolean;
   newsletterSaving: boolean;
   newsletterPreview: string | null;
+  newsletterPreviewDevice: 'desktop' | 'mobile';
   newsletterSubscriberCount: number | null;
   newsletterAudioBusy: boolean;
   newsletterAudioUrl: string | null;
@@ -540,9 +545,9 @@ export function initialState(): State {
   data: initialData(),
   distBusy: null,
   radarSource: 'Todas', radarStatus: 'Todos', radarVerification: 'Todos', radarBusy: false,
-  radarTab: 'temas', competitorsBusy: false, radarStatsDays: 30,
+  radarTab: 'temas', pipelineTab: 'edicion', competitorsBusy: false, radarStatsDays: 30,
   radarStatsError: null, radarTopicsHasMore: false, radarPage: 0,
-  leadsStatus: 'todos', leadsPage: 0, produccionesPage: 0,
+  leadsStatus: 'todos', leadsPage: 0, comercialSearch: '', produccionesPage: 0,
   propuestaRejecting: null,
   editorProposalId: null, editorDraft: null,
   generatingProposal: false, generatingDraft: false, qaResult: null, qaBusy: false,
@@ -557,7 +562,7 @@ export function initialState(): State {
   configTab: 'usuarios', showNotifications: false,
   form: null, formError: null, socialBusy: false,
   newsletterContent: null, newsletterBusy: false, newsletterSending: false, newsletterSaving: false,
-  newsletterPreview: null, newsletterSubscriberCount: null,
+  newsletterPreview: null, newsletterPreviewDevice: 'desktop', newsletterSubscriberCount: null,
   newsletterAudioBusy: false, newsletterAudioUrl: null,
   demoNote: null, dangerConfirm: null, dangerConfirmError: null,
   // isSoundMuted() y no false: es preferencia por dispositivo (localStorage), así que
@@ -907,6 +912,8 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     fetchInto('/api/admin/activity?limit=20', 'activity');
   } else if (screen === 'pipeline') {
     fetchInto('/api/editorial/pipeline', 'pipeline');
+    fetchInto('/api/newsletter/settings', 'newsletterSettings');
+    fetchInto('/api/newsletter/events', 'newsletterEvents');
     adminApi<{ count: number }>('/api/newsletter/subscribers/count').then((r) => { setState({ newsletterSubscriberCount: r.count }); }).catch(() => { /* best-effort */ });
     if (!state.newsletterContent) {
       adminApi<NewsletterContent | null>('/api/newsletter/pending').then((r) => { if (r) setState({ newsletterContent: r }); }).catch(() => { /* best-effort */ });

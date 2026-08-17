@@ -165,6 +165,7 @@ const clickHandlers: Record<string, (el: Element) => void> = {
     loadRadarStats();
   },
   'set-radar-tab': (el) => { setState({ radarTab: attr(el, 'data-tab') as 'temas' | 'competencia' | 'fuentes' }); loadScreenData('radar'); },
+  'set-pipeline-tab': (el) => { setState({ pipelineTab: attr(el, 'data-tab') as 'edicion' | 'programacion' | 'agenda' }); },
   'toggle-radar-source': (el) => {
     const id = Number(attr(el, 'data-id'));
     const active = attr(el, 'data-active') !== 'true';
@@ -258,6 +259,33 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'start-reject-propuesta': (el) => setState({ propuestaRejecting: Number(attr(el, 'data-id')) }),
   'confirm-reject-propuesta': (el) => submitRejectProposal(Number(attr(el, 'data-id'))),
   'advance-client': (el) => submitAdvanceClient(Number(attr(el, 'data-id')), attr(el, 'data-stage')),
+  'set-client-stage': (el) => {
+    const id = Number(attr(el, 'data-id'));
+    const stage = attr(el, 'data-stage');
+    if (id && stage) submitAdvanceClient(id, stage);
+  },
+  'touch-client-contact': (el) => {
+    const id = Number(attr(el, 'data-id'));
+    if (!id) return;
+    adminApi<Client>('/api/commercial/clients/' + id, { method: 'PATCH', body: {} })
+      .then((updated) => {
+        const list = (state.data.clients || []).map((c) => c.id === id ? Object.assign({}, c, updated) : c);
+        setData({ clients: list });
+        setState({ successMsg: 'Seguimiento registrado hoy.' });
+      })
+      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+  },
+  'clear-comercial-search': () => setState({ comercialSearch: '' }),
+  'copy-podcast-script': (el) => {
+    const textarea = document.getElementById('nl-guion') as HTMLTextAreaElement | null;
+    const text = textarea ? textarea.value : (state.newsletterContent?.guionPodcast || '');
+    if (!text.trim()) { setState({ errorMsg: 'No hay guion de podcast para copiar.' }); return; }
+    copyToClipboard(text, el as HTMLButtonElement);
+    setState({ successMsg: 'Guion del podcast copiado al portapapeles.' });
+  },
+  'set-newsletter-preview-device': (el) => {
+    setState({ newsletterPreviewDevice: attr(el, 'data-device') === 'mobile' ? 'mobile' : 'desktop' });
+  },
   'delete-idea': (el) => submitDeleteIdea(Number(attr(el, 'data-id'))),
   'open-client-form': () => openForm('client'),
   'close-client-form': () => closeForm(),
@@ -390,6 +418,15 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'close-nota-preview': () => setState({ notaPreviewHtml: null }),
   'generate-newsletter': () => generateNewsletter(),
   'regenerate-newsletter': () => generateNewsletter(),
+  'revert-newsletter': () => {
+    if (!confirm('¿Descartar los cambios no guardados y restaurar la última versión guardada?')) return;
+    setState({ newsletterBusy: true, errorMsg: null });
+    adminApi<NewsletterContent | null>('/api/newsletter/pending')
+      .then((content) => {
+        setState({ newsletterBusy: false, newsletterContent: content, newsletterPreview: null, successMsg: 'Borrador restaurado.' });
+      })
+      .catch((err: ApiError) => { setState({ newsletterBusy: false, errorMsg: err.message }); });
+  },
   'preview-newsletter': () => {
     adminApi<{ html: string }>('/api/newsletter/preview', { method: 'POST', body: readNewsletterForm() })
       .then((res) => { setState({ newsletterPreview: res.html, errorMsg: null }); })
@@ -1081,6 +1118,11 @@ export function handleSubmit(e: SubmitEvent) {
 // Sincroniza en cada tecla y SIN setState: el DOM ya tiene el valor bueno, repintar sobra.
 export function handleInput(e: Event) {
   const t = e.target as HTMLElement;
+  if (t && t.id === 'comercial-search-input') {
+    state.comercialSearch = (t as HTMLInputElement).value;
+    setState({ comercialSearch: state.comercialSearch });
+    return;
+  }
   if (!state.editorDraft || !t.id || t.id.indexOf('editor-') !== 0) return;
   if (t.id === 'editor-image-prompt') { state.editorImagePrompt = (t as HTMLTextAreaElement).value; return; }
   state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
