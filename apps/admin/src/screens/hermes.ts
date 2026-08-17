@@ -1,6 +1,7 @@
 // CREA Panel Admin — pantallas Hermes (actividad) y Pipeline "Buenos días, Perote".
 import { state, type ActivityEntry, type PipelineStep } from '../store';
 import { esc, loadingCard, errorCard, relativeTime, badge, safeHttpUrl } from '../util';
+import { icon } from '../icons';
 
 export function renderHermes(): string {
   const activity = state.data.activity;
@@ -23,8 +24,8 @@ export function renderHermes(): string {
 }
 
 function pipelineStepStyle(st: PipelineStep) {
-  if (st.status === 'completado') return { dotColor: 'var(--brand)', ringColor: 'var(--brand)', badgeKey: 'activo', badgeLabel: '✅ Completado', textColor: 'var(--text)', weight: 500 };
-  if (st.status === 'esperando') return { dotColor: 'var(--accent)', ringColor: 'var(--accent)', badgeKey: 'en_revision', badgeLabel: '⏳ Esperando acción', textColor: 'var(--text)', weight: 600 };
+  if (st.status === 'completado') return { dotColor: 'var(--brand)', ringColor: 'var(--brand)', badgeKey: 'activo', badgeLabel: 'Completado', textColor: 'var(--text)', weight: 500 };
+  if (st.status === 'esperando') return { dotColor: 'var(--accent)', ringColor: 'var(--accent)', badgeKey: 'en_revision', badgeLabel: 'Esperando acción', textColor: 'var(--text)', weight: 600 };
   return { dotColor: 'var(--surface)', ringColor: 'var(--line-soft)', badgeKey: 'inactivo', badgeLabel: 'Pendiente', textColor: 'var(--mute-2)', weight: 400 };
 }
 
@@ -48,15 +49,15 @@ export function renderPipeline(): string {
         <p class="padmin-lede" style="margin:0;">Centro de control para la generación, agenda, automatización y envío del boletín matutino.</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="refresh-screen" title="Recargar estado">↻ Actualizar</button>
+        <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="refresh-screen" title="Recargar estado">${icon('refresh', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Actualizar</button>
       </div>
     </div>
 
     <!-- Navegación de pestañas del pipeline -->
     <div class="padmin-tabs" style="margin-bottom:16px;">
-      <button type="button" class="padmin-tab${tab === 'edicion' ? ' active' : ''}" data-action="set-pipeline-tab" data-tab="edicion">📰 Edición de hoy</button>
-      <button type="button" class="padmin-tab${tab === 'agenda' ? ' active' : ''}" data-action="set-pipeline-tab" data-tab="agenda">📅 Agenda (${events.length})</button>
-      <button type="button" class="padmin-tab${tab === 'programacion' ? ' active' : ''}" data-action="set-pipeline-tab" data-tab="programacion">⏰ Horario y Automatización</button>
+      <button type="button" class="padmin-tab${tab === 'edicion' ? ' active' : ''}" data-action="set-pipeline-tab" data-tab="edicion">${icon('newspaper', { size: 13, style: 'vertical-align:-2px;margin-right:4px;' })} Edición de hoy</button>
+      <button type="button" class="padmin-tab${tab === 'agenda' ? ' active' : ''}" data-action="set-pipeline-tab" data-tab="agenda">${icon('calendar', { size: 13, style: 'vertical-align:-2px;margin-right:4px;' })} Agenda (${events.length})</button>
+      <button type="button" class="padmin-tab${tab === 'programacion' ? ' active' : ''}" data-action="set-pipeline-tab" data-tab="programacion">${icon('clock', { size: 13, style: 'vertical-align:-2px;margin-right:4px;' })} Horario y Automatización</button>
     </div>
 
     ${tab === 'edicion' ? renderPipelineEdicion(steps, c, count, totalWords, readMins) : ''}
@@ -75,7 +76,7 @@ function renderPipelineEdicion(steps: PipelineStep[], c: any, count: number | nu
       </div>
       <div class="padmin-pipeline-metric-item">
         <span class="padmin-pipeline-metric-label">ESTADO BOLETÍN</span>
-        <span class="padmin-pipeline-metric-value">${c ? '📝 Listo para revisión' : '⏳ Pendiente de generar'}</span>
+        <span class="padmin-pipeline-metric-value">${c ? 'Listo para revisión' : 'Pendiente de generar'}</span>
       </div>
       <div class="padmin-pipeline-metric-item">
         <span class="padmin-pipeline-metric-label">TEMAS USADOS</span>
@@ -123,7 +124,7 @@ function renderPipelineAgenda(events: any[]): string {
         <label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Título / Descripción del evento</label>
         <input id="ne-title" type="text" placeholder="Ej. Jornada de vacunación en Centro de Salud, 9:00 a 14:00" required style="width:100%;box-sizing:border-box;">
       </div>
-      <button type="submit" class="padmin-btn padmin-btn-brand padmin-btn-sm">+ Agregar evento</button>
+      <button type="submit" class="padmin-btn padmin-btn-brand padmin-btn-sm">${icon('plus', { size: 12, style: 'vertical-align:-1px;margin-right:3px;' })} Agregar evento</button>
     </form>
 
     <div class="padmin-card" style="margin:0;">
@@ -137,7 +138,7 @@ function renderPipelineAgenda(events: any[]): string {
           <span class="padmin-t-mute" style="font-size:12px;font-weight:500;">${esc(ev.event_date)}</span>
           <span class="padmin-row-title" style="font-size:13px;margin:0;">${esc(ev.title)}</span>
           <span style="text-align:right;">
-            <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-newsletter-event" data-id="${ev.id}">Eliminar</button>
+            <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-newsletter-event" data-id="${ev.id}">${icon('trash', { size: 11, style: 'vertical-align:-1px;' })} Eliminar</button>
           </span>
         </div>`
       ).join('') : '<p class="padmin-lede" style="padding:16px;">Sin eventos cargados. Agrega eventos para que aparezcan en el boletín matutino.</p>'}
@@ -173,7 +174,7 @@ function renderPipelineProgramacion(settings: any): string {
 
       <p style="font-size:11px;color:var(--mute-2);margin:0 0 16px;">Zona horaria configurada: America/Mexico_City.</p>
       ${state.errorMsg ? `<p style="font-size:12px;color:var(--danger);margin:0 0 12px;">${esc(state.errorMsg)}</p>` : ''}
-      <button type="submit" class="padmin-btn padmin-btn-brand padmin-btn-sm">💾 Guardar horario</button>
+      <button type="submit" class="padmin-btn padmin-btn-brand padmin-btn-sm">${icon('save', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Guardar horario</button>
     </form>
   </div>`;
 }
@@ -217,7 +218,7 @@ function renderNewsletterCard(): string {
         <p class="padmin-row-meta" style="margin-bottom:16px;">Genera la edición matutina a partir de las notas editoriales y temas detectados en RADAR.</p>
         ${countHtml}
         <button type="button" class="padmin-btn padmin-btn-brand" style="margin-top:12px;" data-action="generate-newsletter" ${state.newsletterBusy ? 'disabled' : ''}>
-          ${state.newsletterBusy ? 'Generando contenido con IA…' : '✨ Generar contenido con IA'}
+          ${state.newsletterBusy ? 'Generando contenido con IA…' : `${icon('sparkles', { size: 13, style: 'vertical-align:-2px;margin-right:4px;' })} Generar contenido con IA`}
         </button>
         ${state.errorMsg ? `<p style="font-size:12px;color:var(--danger);margin:12px 0 0;">${esc(state.errorMsg)}</p>` : ''}
       </div>
@@ -240,19 +241,19 @@ function renderNewsletterCard(): string {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="regenerate-newsletter" ${state.newsletterBusy ? 'disabled' : ''} title="Volver a generar todo con IA">
-          ${state.newsletterBusy ? 'Generando…' : '🔄 Regenerar IA'}
+          ${state.newsletterBusy ? 'Generando…' : `${icon('refresh', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Regenerar IA`}
         </button>
         <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="save-newsletter" ${state.newsletterSaving ? 'disabled' : ''} title="Guardar borrador actual">
-          ${state.newsletterSaving ? 'Guardando…' : '💾 Guardar borrador'}
+          ${state.newsletterSaving ? 'Guardando…' : `${icon('save', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Guardar borrador`}
         </button>
         <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="revert-newsletter" ${state.newsletterBusy ? 'disabled' : ''} title="Descartar cambios no guardados y volver al último guardado">
-          ↩ Deshacer cambios
+          ${icon('undo', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Deshacer cambios
         </button>
         <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="preview-newsletter">
-          👁 Vista previa
+          ${icon('eye', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Vista previa
         </button>
         <button type="button" class="padmin-btn-sm padmin-btn-brand" data-action="send-newsletter" ${state.newsletterSending ? 'disabled' : ''}>
-          ${state.newsletterSending ? 'Enviando…' : '🚀 Enviar newsletter'}
+          ${state.newsletterSending ? 'Enviando…' : `${icon('send', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Enviar newsletter`}
         </button>
       </div>
     </div>
@@ -264,7 +265,7 @@ function renderNewsletterCard(): string {
       <div class="padmin-card padmin-pipeline-block">
         <div class="padmin-pipeline-block-header">
           <div>
-            <p class="padmin-pipeline-block-title">📰 Contenido del Newsletter</p>
+            <p class="padmin-pipeline-block-title">Contenido del Newsletter</p>
             <p class="padmin-t-hint">Estructura editorial que recibirán los suscriptores por correo.</p>
           </div>
         </div>
@@ -291,10 +292,10 @@ function renderNewsletterCard(): string {
         <div class="padmin-card padmin-pipeline-block">
           <div class="padmin-pipeline-block-header">
             <div>
-              <p class="padmin-pipeline-block-title">🤝 Patrocinio Comercial</p>
+              <p class="padmin-pipeline-block-title">Patrocinio Comercial</p>
               <p class="padmin-t-hint">Espacio publicitario integrado en la plantilla.</p>
             </div>
-            ${patroLinkSafe ? `<a href="${esc(patroLinkSafe)}" target="_blank" rel="noopener noreferrer" class="padmin-btn-sm padmin-btn-outline" style="text-decoration:none;font-size:11px;">↗ Probar enlace</a>` : ''}
+            ${patroLinkSafe ? `<a href="${esc(patroLinkSafe)}" target="_blank" rel="noopener noreferrer" class="padmin-btn-sm padmin-btn-outline" style="text-decoration:none;font-size:11px;display:inline-flex;align-items:center;gap:3px;">${icon('externalLink', { size: 11 })} Probar enlace</a>` : ''}
           </div>
 
           <div class="padmin-grid2" style="gap:10px;margin-bottom:10px;">
@@ -308,10 +309,10 @@ function renderNewsletterCard(): string {
         <div class="padmin-card padmin-pipeline-block">
           <div class="padmin-pipeline-block-header">
             <div>
-              <p class="padmin-pipeline-block-title">🎙️ Podcast Matutino & Audio</p>
+              <p class="padmin-pipeline-block-title">Podcast Matutino & Audio</p>
               <p class="padmin-t-hint">Guion adaptado a locución radial (${podcastEstDuration}).</p>
             </div>
-            <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="copy-podcast-script" title="Copiar guion al portapapeles">📋 Copiar guion</button>
+            <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="copy-podcast-script" title="Copiar guion al portapapeles">${icon('copy', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Copiar guion</button>
           </div>
 
           <div class="padmin-field">
@@ -321,7 +322,7 @@ function renderNewsletterCard(): string {
 
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:6px;border-top:0.5px solid var(--line-soft);">
             <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="generate-newsletter-audio" ${state.newsletterAudioBusy ? 'disabled' : ''}>
-              ${state.newsletterAudioBusy ? '⏳ Sintetizando audio…' : '🔊 Generar audio (TTS)'}
+              ${state.newsletterAudioBusy ? 'Sintetizando audio…' : `${icon('audio', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Generar audio (TTS)`}
             </button>
             <span style="font-size:11px;color:var(--mute-2);">Mezcla voz con cortinillas fijas</span>
           </div>
@@ -347,8 +348,8 @@ function renderNewsletterPreview(): string {
       <div style="display:flex;align-items:center;gap:8px;">
         <p style="font-size:12px;font-weight:600;color:var(--text);margin:0;">VISTA PREVIA DEL CORREO</p>
         <div class="padmin-tabs" style="margin:0;display:inline-flex;">
-          <button type="button" class="padmin-tab${!isMobile ? ' active' : ''}" style="padding:4px 10px;font-size:11px;" data-action="set-newsletter-preview-device" data-device="desktop">🖥 Escritorio</button>
-          <button type="button" class="padmin-tab${isMobile ? ' active' : ''}" style="padding:4px 10px;font-size:11px;" data-action="set-newsletter-preview-device" data-device="mobile">📱 Móvil</button>
+          <button type="button" class="padmin-tab${!isMobile ? ' active' : ''}" style="padding:4px 10px;font-size:11px;" data-action="set-newsletter-preview-device" data-device="desktop">${icon('desktop', { size: 12, style: 'vertical-align:-1px;margin-right:3px;' })} Escritorio</button>
+          <button type="button" class="padmin-tab${isMobile ? ' active' : ''}" style="padding:4px 10px;font-size:11px;" data-action="set-newsletter-preview-device" data-device="mobile">${icon('mobile', { size: 12, style: 'vertical-align:-1px;margin-right:3px;' })} Móvil</button>
         </div>
       </div>
       <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="close-newsletter-preview">Cerrar vista previa &times;</button>
@@ -358,4 +359,5 @@ function renderNewsletterPreview(): string {
     </div>
   </div>`;
 }
+
 

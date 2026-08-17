@@ -1,6 +1,7 @@
 // CREA Panel Admin — shell (sidebar, nav, campana, toasts, sonido).
 import { state } from './store';
 import { esc, relativeTime, navItemsAll, roleLabels } from './util';
+import { icon } from './icons';
 
 export function renderNav(): string {
   const allowed = state.allowedModules || [];
@@ -86,10 +87,10 @@ export function renderSidebar(): string {
 export function renderToasts(): string {
   let html = '';
   if (state.errorMsg) {
-    html += `<div class="padmin-toast padmin-toast-error" role="alert"><span class="padmin-toast-icon">⚠</span><span class="padmin-toast-msg">${esc(state.errorMsg)}</span><button type="button" class="padmin-toast-close" data-action="dismiss-toast" data-kind="error" aria-label="Cerrar aviso">×</button></div>`;
+    html += `<div class="padmin-toast padmin-toast-error" role="alert"><span class="padmin-toast-icon" style="display:inline-flex;align-items:center;">${icon('alert', { size: 14 })}</span><span class="padmin-toast-msg">${esc(state.errorMsg)}</span><button type="button" class="padmin-toast-close" data-action="dismiss-toast" data-kind="error" aria-label="Cerrar aviso">×</button></div>`;
   }
   if (state.successMsg) {
-    html += `<div class="padmin-toast padmin-toast-success" role="status"><span class="padmin-toast-icon">✓</span><span class="padmin-toast-msg">${esc(state.successMsg)}</span><button type="button" class="padmin-toast-close" data-action="dismiss-toast" data-kind="success" aria-label="Cerrar aviso">×</button></div>`;
+    html += `<div class="padmin-toast padmin-toast-success" role="status"><span class="padmin-toast-icon" style="display:inline-flex;align-items:center;">${icon('check', { size: 14 })}</span><span class="padmin-toast-msg">${esc(state.successMsg)}</span><button type="button" class="padmin-toast-close" data-action="dismiss-toast" data-kind="success" aria-label="Cerrar aviso">×</button></div>`;
   }
   return html ? `<div class="padmin-toast-stack">${html}</div>` : '';
 }

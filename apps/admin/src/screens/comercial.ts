@@ -1,6 +1,7 @@
 // CREA Panel Admin — pantallas Comercial (pipeline de clientes) y Leads.
 import { state, type Client, type Lead } from '../store';
 import { esc, badge, loadingCard, errorCard, STATUS_LABEL, relativeTime, paginateRows, renderPager, safeHttpUrl } from '../util';
+import { icon } from '../icons';
 
 const PIPELINE_STAGES_ORDER = ['identificado', 'contactado', 'propuesta_enviada', 'cerrado'];
 const STAGE_NAMES: Record<string, string> = {
@@ -16,7 +17,7 @@ function sponsorFieldsHtml(c: Client): string {
     <input type="text" id="sponsor-link-${c.id}" class="padmin-sponsor-input" placeholder="Sitio web / WhatsApp (https://…)" value="${esc(c.website_url || '')}">
     <input type="text" id="sponsor-copy-${c.id}" class="padmin-sponsor-input" placeholder="Copy (ej. Lo mejor para tu hogar)" value="${esc(c.sponsor_copy || '')}">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:4px;">
-      <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="save-sponsor-info" data-id="${c.id}">Guardar datos</button>
+      <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="save-sponsor-info" data-id="${c.id}">${icon('save', { size: 11, style: 'vertical-align:-1px;margin-right:2px;' })} Guardar</button>
       ${c.last_sponsored_at ? `<span style="font-size:10px;color:var(--mute-2);">Último: ${new Date(c.last_sponsored_at).toLocaleDateString('es-MX')}</span>` : ''}
     </div>
   </div>`;
@@ -56,25 +57,25 @@ function commColumn(title: string, stage: string, color: string, clients: Client
           
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <span style="font-size:12px;font-weight:600;color:${color};">${esc(c.estimated_value || '—')}</span>
-            <span style="font-size:10px;color:${isStale ? 'var(--danger)' : 'var(--mute-2)'};font-weight:${isStale ? '600' : '400'};" title="${c.last_contact_at ? new Date(c.last_contact_at).toLocaleString('es-MX') : 'Sin registro'}">
-              ${isStale ? '⚠️ ' : ''}${c.last_contact_at ? `Contacto: hace ${days}d` : 'Sin contacto'}
+            <span style="font-size:10px;color:${isStale ? 'var(--danger)' : 'var(--mute-2)'};font-weight:${isStale ? '600' : '400'};display:inline-flex;align-items:center;gap:3px;" title="${c.last_contact_at ? new Date(c.last_contact_at).toLocaleString('es-MX') : 'Sin registro'}">
+              ${isStale ? icon('alert', { size: 11 }) : ''}${c.last_contact_at ? `Contacto: hace ${days}d` : 'Sin contacto'}
             </span>
           </div>
 
           <!-- Contacto rápido -->
           <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
-            ${c.phone ? `<a href="tel:${esc(phoneClean)}" class="padmin-btn-sm padmin-btn-outline" style="text-decoration:none;padding:2px 6px;font-size:11px;" title="Llamar / WhatsApp">📞 Tel</a>` : ''}
-            ${c.email ? `<a href="mailto:${esc(c.email)}" class="padmin-btn-sm padmin-btn-outline" style="text-decoration:none;padding:2px 6px;font-size:11px;" title="Enviar correo">✉️ Email</a>` : ''}
-            ${canMove ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" style="padding:2px 6px;font-size:11px;" data-action="touch-client-contact" data-id="${c.id}" title="Registrar contacto hoy">Hoy ✓</button>` : ''}
+            ${c.phone ? `<a href="tel:${esc(phoneClean)}" class="padmin-btn-sm padmin-btn-outline" style="text-decoration:none;padding:2px 6px;font-size:11px;display:inline-flex;align-items:center;gap:3px;" title="Llamar / WhatsApp">${icon('phone', { size: 10 })} Tel</a>` : ''}
+            ${c.email ? `<a href="mailto:${esc(c.email)}" class="padmin-btn-sm padmin-btn-outline" style="text-decoration:none;padding:2px 6px;font-size:11px;display:inline-flex;align-items:center;gap:3px;" title="Enviar correo">${icon('mail', { size: 10 })} Email</a>` : ''}
+            ${canMove ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" style="padding:2px 6px;font-size:11px;display:inline-flex;align-items:center;gap:3px;" data-action="touch-client-contact" data-id="${c.id}" title="Registrar contacto hoy">${icon('check', { size: 10 })} Hoy</button>` : ''}
           </div>
 
           <!-- Acciones de movimiento -->
           <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;flex-wrap:wrap;padding-top:6px;border-top:0.5px solid var(--line-soft);">
             <div style="display:flex;gap:4px;">
-              ${canMove && prevStage ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" style="padding:3px 7px;" data-action="set-client-stage" data-id="${c.id}" data-stage="${prevStage}" title="Mover a ${STAGE_NAMES[prevStage]}">&larr;</button>` : ''}
-              ${canMove && nextStage ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" style="padding:3px 7px;" data-action="set-client-stage" data-id="${c.id}" data-stage="${nextStage}" title="Mover a ${STAGE_NAMES[nextStage]}">&rarr;</button>` : ''}
+              ${canMove && prevStage ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" style="padding:3px 7px;" data-action="set-client-stage" data-id="${c.id}" data-stage="${prevStage}" title="Mover a ${STAGE_NAMES[prevStage]}">${icon('arrowLeft', { size: 11 })}</button>` : ''}
+              ${canMove && nextStage ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" style="padding:3px 7px;" data-action="set-client-stage" data-id="${c.id}" data-stage="${nextStage}" title="Mover a ${STAGE_NAMES[nextStage]}">${icon('arrowRight', { size: 11 })}</button>` : ''}
             </div>
-            ${canDelete ? `<button type="button" class="padmin-btn-sm padmin-btn-danger" style="padding:3px 7px;" data-action="delete-client" data-id="${c.id}" title="Eliminar cliente">🗑</button>` : ''}
+            ${canDelete ? `<button type="button" class="padmin-btn-sm padmin-btn-danger" style="padding:3px 7px;" data-action="delete-client" data-id="${c.id}" title="Eliminar cliente">${icon('trash', { size: 11 })}</button>` : ''}
           </div>
 
           ${stage === 'cerrado' ? sponsorFieldsHtml(c) : ''}
@@ -120,13 +121,13 @@ export function renderComercial(): string {
         <h1 class="padmin-h1" style="margin-bottom:4px;">Pipeline comercial</h1>
         <p class="padmin-lede" style="margin:0;">Gestión de prospectos, patrocinios y clientes en proceso.</p>
       </div>
-      ${canMove && state.form?.kind !== 'client' ? `<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-brand" data-action="open-client-form">+ Nuevo cliente</button>` : ''}
+      ${canMove && state.form?.kind !== 'client' ? `<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-brand" data-action="open-client-form">${icon('plus', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Nuevo cliente</button>` : ''}
     </div>
 
     <!-- Barra de búsqueda y resumen -->
     <div class="padmin-card padmin-pipeline-action-bar" style="margin-bottom:16px;">
       <div style="display:flex;align-items:center;gap:10px;flex:1;max-width:380px;">
-        <input id="comercial-search-input" type="search" placeholder="🔍 Buscar por nombre, negocio o paquete…" value="${esc(state.comercialSearch || '')}" style="width:100%;font-size:12px;padding:6px 10px;border-radius:6px;border:0.5px solid var(--line-soft);background:var(--bg-admin);color:var(--text);">
+        <input id="comercial-search-input" type="search" placeholder="Buscar por nombre, negocio o paquete…" value="${esc(state.comercialSearch || '')}" style="width:100%;font-size:12px;padding:6px 10px;border-radius:6px;border:0.5px solid var(--line-soft);background:var(--bg-admin);color:var(--text);">
         ${state.comercialSearch ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="clear-comercial-search" style="padding:4px 8px;">&times;</button>` : ''}
       </div>
       <div style="display:flex;gap:14px;align-items:center;font-size:12px;color:var(--text-mute);">
@@ -173,10 +174,10 @@ export function renderLeads(): string {
           <span style="font-size:12px;color:var(--text-2);line-height:1.4;" title="${esc(l.message || '')}">${esc((l.message || '—').slice(0, 140))}${(l.message || '').length > 140 ? '…' : ''}</span>
           <span>${badge(l.status)}</span>
           <span style="display:flex;gap:4px;flex-wrap:wrap;">
-            ${l.status === 'nuevo' ? `<button type="button" class="padmin-icon-btn" title="Marcar contactado" aria-label="Marcar lead como contactado" data-action="mark-lead" data-id="${l.id}" data-status="contactado">✓</button>` : ''}
-            ${l.status !== 'descartado' ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="convert-lead" data-id="${l.id}">→ Cliente</button>` : ''}
-            ${l.status !== 'descartado' ? `<button type="button" class="padmin-icon-btn" title="Descartar" aria-label="Descartar lead" data-action="mark-lead" data-id="${l.id}" data-status="descartado">✕</button>` : ''}
-            ${canDelete ? `<button type="button" class="padmin-icon-btn" title="Eliminar" aria-label="Eliminar lead" data-action="delete-lead" data-id="${l.id}">🗑</button>` : ''}
+            ${l.status === 'nuevo' ? `<button type="button" class="padmin-icon-btn" title="Marcar contactado" aria-label="Marcar lead como contactado" data-action="mark-lead" data-id="${l.id}" data-status="contactado">${icon('check', { size: 12 })}</button>` : ''}
+            ${l.status !== 'descartado' ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="convert-lead" data-id="${l.id}">${icon('arrowRight', { size: 10, style: 'vertical-align:-1px;' })} Cliente</button>` : ''}
+            ${l.status !== 'descartado' ? `<button type="button" class="padmin-icon-btn" title="Descartar" aria-label="Descartar lead" data-action="mark-lead" data-id="${l.id}" data-status="descartado">${icon('x', { size: 12 })}</button>` : ''}
+            ${canDelete ? `<button type="button" class="padmin-icon-btn" title="Eliminar" aria-label="Eliminar lead" data-action="delete-lead" data-id="${l.id}">${icon('trash', { size: 12 })}</button>` : ''}
           </span>
         </div>`
       ).join('') : `<div class="padmin-row"><p class="padmin-row-meta">${leads.length ? 'Sin leads con ese estado.' : 'Todavía no llegan mensajes del formulario de contacto.'}</p></div>`}
@@ -184,4 +185,5 @@ export function renderLeads(): string {
     </div>
   </div>`;
 }
+
 

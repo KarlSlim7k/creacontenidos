@@ -1,6 +1,7 @@
 // CREA Panel Admin — pantalla RADAR (social listening + verificación editorial).
 import { state, type Topic, type CompetitorPost, type RadarSource, type RadarStats } from '../store';
 import { esc, loadingCard, errorCard, badge, statusStyle, paginateRows, renderPager, safeHttpUrl } from '../util';
+import { icon } from '../icons';
 
 function canManageRadar(): boolean {
   return state.user!.role === 'director' || state.user!.role === 'produccion';
@@ -112,9 +113,11 @@ function renderRadarDetail(): string {
           <select id="proposal-format-${topic.id}" style="font-size:12px;border:0.5px solid var(--line-soft);border-radius:6px;padding:6px 8px;background:#fff;">
             ${['nota', 'post', 'guion_audio', 'guion_video'].map((f) => `<option value="${f}">${f}</option>`).join('')}
           </select>
-          <button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-proposal-from-topic" data-id="${topic.id}" data-force-risk="${topic.verification_status === 'risk' ? '1' : '0'}" ${state.generatingProposal ? 'disabled' : ''}>${state.generatingProposal ? 'Generando…' : (topic.verification_status === 'risk' ? '⚠ Forzar propuesta IA' : 'Generar propuesta IA')}</button>
-          ${topic.status !== 'Revisado' ? `<button type="button" class="padmin-btn-sm" style="background:var(--brand-soft);color:var(--brand);" data-action="approve-topic" data-id="${topic.id}">✓ Aprobar</button>` : ''}
-          <button type="button" class="padmin-btn-sm padmin-btn-danger" style="margin-left:auto;" data-action="delete-topic" data-id="${topic.id}">🗑 Eliminar</button>
+          <button type="button" class="padmin-btn padmin-btn-sm" data-action="generate-proposal-from-topic" data-id="${topic.id}" data-force-risk="${topic.verification_status === 'risk' ? '1' : '0'}" ${state.generatingProposal ? 'disabled' : ''}>
+            ${state.generatingProposal ? 'Generando…' : (topic.verification_status === 'risk' ? `${icon('alert', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Forzar propuesta IA` : `${icon('sparkles', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Generar propuesta IA`)}
+          </button>
+          ${topic.status !== 'Revisado' ? `<button type="button" class="padmin-btn-sm" style="background:var(--brand-soft);color:var(--brand);" data-action="approve-topic" data-id="${topic.id}">${icon('check', { size: 12, style: 'vertical-align:-1px;margin-right:3px;' })} Aprobar</button>` : ''}
+          <button type="button" class="padmin-btn-sm padmin-btn-danger" style="margin-left:auto;" data-action="delete-topic" data-id="${topic.id}">${icon('trash', { size: 12, style: 'vertical-align:-1px;margin-right:3px;' })} Eliminar</button>
         </div>` : ''}
     </div>
   </div>`;
@@ -179,9 +182,9 @@ function renderRadarCompetencia(): string {
   const canManage = state.user!.role === 'director' || state.user!.role === 'produccion';
   const detectBtn = canManage
     ? `<div class="padmin-radar-actions">
-        <button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" data-action="detect-competitors-fb" ${state.competitorsBusy ? 'disabled' : ''}>${state.competitorsBusy ? 'Escaneando…' : '📘 Escanear Facebook'}</button>
-        <button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-competitors" ${state.competitorsBusy ? 'disabled' : ''}>${state.competitorsBusy ? 'Explorando…' : '🔎 Explorar competencia'}</button>
-        ${posts.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-competitors">🗑 Limpiar todo</button>' : ''}
+        <button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" data-action="detect-competitors-fb" ${state.competitorsBusy ? 'disabled' : ''}>${state.competitorsBusy ? 'Escaneando…' : `${icon('facebook', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Escanear Facebook`}</button>
+        <button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-competitors" ${state.competitorsBusy ? 'disabled' : ''}>${state.competitorsBusy ? 'Explorando…' : `${icon('search', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Explorar competencia`}</button>
+        ${posts.length ? `<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-competitors">${icon('trash', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Limpiar todo</button>` : ''}
       </div>`
     : '';
   const { pageItems, page, totalPages } = paginateRows(posts, state.radarPage);
@@ -199,9 +202,9 @@ function renderRadarCompetencia(): string {
           <span style="font-size:12px;font-weight:600;color:var(--text);">${inter}</span>
           <span>${badge(p.analyzed ? 'analizado' : 'nuevo')}</span>
           <span style="display:flex;gap:4px;flex-wrap:wrap;">
-            ${canManage ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" title="Crear idea en la bandeja a partir de esta publicación" data-action="competitor-to-idea" data-id="${p.id}">→ Idea</button>` : ''}
-            ${canManage && !p.analyzed ? `<button type="button" class="padmin-icon-btn" title="Marcar analizado" aria-label="Marcar publicación como analizada" data-action="analyze-competitor" data-id="${p.id}">✓</button>` : ''}
-            ${canManage ? `<button type="button" class="padmin-icon-btn" title="Eliminar" aria-label="Eliminar publicación de competencia" data-action="delete-competitor" data-id="${p.id}">🗑</button>` : ''}
+            ${canManage ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" title="Crear idea en la bandeja a partir de esta publicación" data-action="competitor-to-idea" data-id="${p.id}">${icon('arrowRight', { size: 10, style: 'vertical-align:-1px;' })} Idea</button>` : ''}
+            ${canManage && !p.analyzed ? `<button type="button" class="padmin-icon-btn" title="Marcar analizado" aria-label="Marcar publicación como analizada" data-action="analyze-competitor" data-id="${p.id}">${icon('check', { size: 12 })}</button>` : ''}
+            ${canManage ? `<button type="button" class="padmin-icon-btn" title="Eliminar" aria-label="Eliminar publicación de competencia" data-action="delete-competitor" data-id="${p.id}">${icon('trash', { size: 12 })}</button>` : ''}
           </span>
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">Sin publicaciones de competencia. Usa "Explorar competencia" para escanear con IA.</p></div>'}
@@ -301,10 +304,10 @@ function renderRadarTemas(): string {
       <div class="padmin-radar-actions" style="justify-content:space-between;margin-bottom:10px;">
         <div class="padmin-radar-filter-group" style="margin-bottom:0;"><span class="padmin-radar-filter-label">Fuente</span>${sourceChips}</div>
         <span style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" title="Recargar temas, resumen y calibración" data-action="refresh-radar">↻ Actualizar</button>
+          <button type="button" class="padmin-btn padmin-btn-sm padmin-btn-outline" title="Recargar temas, resumen y calibración" data-action="refresh-radar">${icon('refresh', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Actualizar</button>
           ${state.user!.role === 'director' || state.user!.role === 'produccion' ?
-            `${topics.length ? '<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-topics">🗑 Limpiar todo</button>' : ''}
-            <button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ${state.radarBusy ? 'disabled' : ''}>${state.radarBusy ? 'Buscando…' : '🔍 Buscar tendencias'}</button>` : ''}
+            `${topics.length ? `<button type="button" class="padmin-btn padmin-btn-sm padmin-btn-danger" data-action="clear-topics">${icon('trash', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Limpiar todo</button>` : ''}
+            <button type="button" class="padmin-btn padmin-btn-sm" data-action="detect-radar" ${state.radarBusy ? 'disabled' : ''}>${state.radarBusy ? 'Buscando…' : `${icon('search', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Buscar tendencias`}</button>` : ''}
         </span>
       </div>
       <div class="padmin-radar-filter-group"><span class="padmin-radar-filter-label">Verificación</span>${verifyChips}</div>
@@ -327,9 +330,9 @@ function renderRadarTemas(): string {
           <span>${confidenceBadge(r.confidence)}</span>
           ${verificationBadge(r.verification_status)}
           <span style="display:flex;gap:4px;">
-            <button type="button" title="Ver ficha" aria-label="Ver ficha de verificación" data-action="open-radar" data-id="${r.id}" class="padmin-icon-btn">👁</button>
-            ${canManage ? `<button type="button" title="Aprobar" aria-label="Aprobar tema" data-action="approve-topic" data-id="${r.id}" class="padmin-icon-btn" ${r.status === 'Revisado' ? 'disabled' : ''}>✓</button>` : ''}
-            ${canManage ? `<button type="button" title="Eliminar" aria-label="Eliminar tema" data-action="delete-topic" data-id="${r.id}" class="padmin-icon-btn">🗑</button>` : ''}
+            <button type="button" title="Ver ficha" aria-label="Ver ficha de verificación" data-action="open-radar" data-id="${r.id}" class="padmin-icon-btn">${icon('eye', { size: 12 })}</button>
+            ${canManage ? `<button type="button" title="Aprobar" aria-label="Aprobar tema" data-action="approve-topic" data-id="${r.id}" class="padmin-icon-btn" ${r.status === 'Revisado' ? 'disabled' : ''}>${icon('check', { size: 12 })}</button>` : ''}
+            ${canManage ? `<button type="button" title="Eliminar" aria-label="Eliminar tema" data-action="delete-topic" data-id="${r.id}" class="padmin-icon-btn">${icon('trash', { size: 12 })}</button>` : ''}
           </span>
         </div>`;
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">No hay temas con estos filtros.</p></div>'}

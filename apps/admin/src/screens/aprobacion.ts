@@ -1,6 +1,7 @@
 // CREA Panel Admin — pantallas Aprobación y Distribución.
 import { state, type Proposal, type DistLogEntry, type DistChannel } from '../store';
 import { esc, loadingCard, errorCard, emptyCard, relativeTime } from '../util';
+import { icon } from '../icons';
 
 const transparencyLabels = ['100% humano', 'Asistido por IA', 'Generado con IA'];
 
@@ -58,8 +59,8 @@ function renderDistribucion(): string {
       const push = lastPush[p.id + ':' + ch.channel];
       const busy = state.distBusy === ch.channel + ':' + p.id;
       let mark = '';
-      if (push && push.status === 'ok') mark = `<span title="Enviado ${esc(relativeTime(push.published_at))}" style="color:var(--brand);font-size:11px;margin-left:2px;">✓</span>`;
-      else if (push) mark = `<span title="${esc(push.detail || 'Falló')}" style="color:var(--danger);font-size:11px;margin-left:2px;">✕</span>`;
+      if (push && push.status === 'ok') mark = `<span title="Enviado ${esc(relativeTime(push.published_at))}" style="color:var(--brand);margin-left:4px;display:inline-flex;align-items:center;">${icon('check', { size: 12 })}</span>`;
+      else if (push) mark = `<span title="${esc(push.detail || 'Falló')}" style="color:var(--danger);margin-left:4px;display:inline-flex;align-items:center;">${icon('x', { size: 12 })}</span>`;
       return `<span style="display:inline-flex;align-items:center;">
         <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="distribute" data-channel="${ch.channel}" data-id="${p.id}" ${!ch.connected || busy ? 'disabled' : ''}${!ch.connected ? ' title="Canal no configurado (variables de entorno)"' : ''}>${busy ? 'Enviando…' : esc(ch.label)}</button>${mark}</span>`;
     }).join('');

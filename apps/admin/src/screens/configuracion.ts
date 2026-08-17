@@ -3,6 +3,7 @@
 import { state, type AdminUser, type Integration, type NewsletterEvent, type Service, type FbAccount, type TrustedDevice } from '../store';
 import { esc, loadingCard, errorCard, relativeTime, roleLabels, navItemsAll, badge } from '../util';
 import { isPwaInstalled, isIosDevice, pushSupported } from '../pwa';
+import { icon } from '../icons';
 
 function renderPwaInstallCard(): string {
   let body: string;
@@ -93,7 +94,7 @@ export function renderConfigPermisos(): string {
   const roles = state.data.roleModules;
   if (!roles) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
   const roleOrder = ['director', 'produccion', 'comercial', 'colaborador'];
-  const mark = (v: boolean) => v ? '<span style="color:var(--brand);">✓</span>' : '<span style="color:var(--line);">—</span>';
+  const mark = (v: boolean) => v ? `<span style="color:var(--brand);display:inline-flex;align-items:center;">${icon('check', { size: 14 })}</span>` : '<span style="color:var(--line);">—</span>';
   return `<div class="padmin-card" style="max-width:780px;overflow:auto;">
     <div class="padmin-table-head padmin-cols-permisos"><span>MÓDULO</span><span>DIRECTOR</span><span>PRODUCCIÓN</span><span>COMERCIAL</span><span>COLABORADOR</span></div>
     ${navItemsAll.map((n) =>
