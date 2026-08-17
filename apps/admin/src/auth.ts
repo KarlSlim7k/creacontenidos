@@ -177,6 +177,10 @@ export function goHome() {
 const eyeIconOpen = '<svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
 const eyeIconClosed = '<svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 
+function loginBrand(): string {
+  return `<div class="padmin-login-brand"><img src="${import.meta.env.BASE_URL}assets/img/logo-crea.png" alt="CREA Contenidos" class="padmin-login-logo"><span class="badge">PANEL INTERNO</span></div>`;
+}
+
 function passwordField(id: string, label: string, autocomplete: string, minlength?: number): string {
   return `<div class="padmin-field"><label for="${id}">${label}</label>
     <div class="padmin-password-wrap">
@@ -190,7 +194,7 @@ export function renderLogin(): string {
   const errorHtml = state.loginError ? `<p class="padmin-lede" style="color:var(--danger);margin:0 0 12px;">${esc(state.loginError)}</p>` : '';
   if (state.loginTwoFaRequired) {
     return `<div class="padmin-login-screen"><div class="padmin-login-card">
-      <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
+      ${loginBrand()}
       <p class="padmin-login-sub">Ingresa el código de tu app de autenticación</p>
       ${errorHtml}
       <form data-action="submit-2fa-verify">
@@ -202,11 +206,11 @@ export function renderLogin(): string {
   }
   if (state.loginView === 'forgot') {
     return `<div class="padmin-login-screen"><div class="padmin-login-card">
-      <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
+      ${loginBrand()}
       <p class="padmin-login-sub">Te mandamos un enlace para elegir una nueva contraseña</p>
       ${errorHtml}
       <form data-action="submit-forgot-password">
-        <div class="padmin-field"><label for="pl-forgot-email">Correo</label><input id="pl-forgot-email" type="email" placeholder="tu@crearcontenidos.com" autocomplete="username" required autofocus></div>
+        <div class="padmin-field"><label for="pl-forgot-email">Correo</label><input id="pl-forgot-email" type="email" placeholder="tu@crea-contenidos.com" autocomplete="username" required autofocus></div>
         <button type="submit" class="padmin-btn" style="width:100%;text-align:center;" ${state.loginBusy ? 'disabled' : ''}>${state.loginBusy ? 'Enviando…' : 'Enviar enlace'}</button>
       </form>
       <p style="margin:16px 0 0;text-align:center;"><button type="button" data-action="show-login" style="background:none;border:none;cursor:pointer;font-size:var(--fs-sm);color:var(--text-mute);text-decoration:underline;">&larr; Volver a iniciar sesión</button></p>
@@ -214,14 +218,14 @@ export function renderLogin(): string {
   }
   if (state.loginView === 'forgot-sent') {
     return `<div class="padmin-login-screen"><div class="padmin-login-card">
-      <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
+      ${loginBrand()}
       <p class="padmin-login-sub">Si ese correo existe en el panel, ya te llegó un enlace para recuperar tu contraseña. Revisa también spam.</p>
       <button type="button" class="padmin-btn" data-action="show-login" style="width:100%;text-align:center;">Volver a iniciar sesión</button>
     </div></div>`;
   }
   if (state.loginView === 'reset') {
     return `<div class="padmin-login-screen"><div class="padmin-login-card">
-      <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
+      ${loginBrand()}
       <p class="padmin-login-sub">Elige tu nueva contraseña</p>
       ${errorHtml}
       <form data-action="submit-reset-password">
@@ -232,11 +236,11 @@ export function renderLogin(): string {
     </div></div>`;
   }
   return `<div class="padmin-login-screen"><div class="padmin-login-card">
-    <div class="padmin-login-brand"><span class="name">CREA</span><span class="badge">PANEL INTERNO</span></div>
+    ${loginBrand()}
     <p class="padmin-login-sub">Herramienta de trabajo para el equipo CREA</p>
     ${errorHtml}
     <form data-action="submit-login">
-      <div class="padmin-field"><label for="pl-email">Correo</label><input id="pl-email" type="email" placeholder="tu@crearcontenidos.com" autocomplete="username" required></div>
+      <div class="padmin-field"><label for="pl-email">Correo</label><input id="pl-email" type="email" placeholder="tu@crea-contenidos.com" autocomplete="username" required></div>
       ${passwordField('pl-pass', 'Contraseña', 'current-password')}
       <button type="submit" class="padmin-btn" style="width:100%;text-align:center;" ${state.loginBusy ? 'disabled' : ''}>${state.loginBusy ? 'Ingresando…' : 'Iniciar sesión'}</button>
     </form>

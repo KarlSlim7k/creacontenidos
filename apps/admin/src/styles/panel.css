@@ -50,13 +50,17 @@
 /* ---------- login ---------- */
 .padmin-login-screen {
   min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
-  background: var(--bg-admin); padding: 24px;
+  padding: 24px;
+  background: var(--bg-admin);
+  background-image:
+    radial-gradient(circle at 12% 10%, rgba(47,82,51,0.05), transparent 42%),
+    radial-gradient(circle at 88% 90%, rgba(199,125,46,0.06), transparent 42%);
 }
-.padmin-login-card { width: 100%; max-width: 360px; background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 10px; padding: 32px; }
-.padmin-login-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.padmin-login-brand .name { font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--text); }
-.padmin-login-brand .badge { font-size: var(--fs-xs); color: var(--text-mute); border-left: 1px solid var(--line-soft); padding-left: 8px; }
-.padmin-login-sub { font-size: var(--fs-sm); color: var(--text-mute); margin: 0 0 24px; }
+.padmin-login-card { width: 100%; max-width: 380px; background: var(--surface); border: 0.5px solid var(--line-soft); border-radius: 14px; padding: 36px 32px; box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 16px 40px -16px rgba(0,0,0,0.16); }
+.padmin-login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.padmin-login-logo { height: 42px; width: auto; display: block; }
+.padmin-login-brand .badge { font-size: var(--fs-xs); color: var(--text-mute); border-left: 1px solid var(--line-soft); padding-left: 10px; align-self: center; }
+.padmin-login-sub { font-size: var(--fs-sm); color: var(--text-mute); margin: 0 0 26px; }
 .padmin-demo-note { border-top: 1px dashed var(--line-soft); padding-top: 16px; margin-top: 6px; }
 .padmin-demo-note .label { font-size: var(--fs-label); color: var(--mute-2); letter-spacing: 0.06em; margin: 0 0 10px; }
 .padmin-demo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
