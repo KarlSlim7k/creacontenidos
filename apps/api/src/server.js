@@ -18,6 +18,7 @@ const commercialRouter = require('./modules/commercial');
 const socialRouter = require('./modules/social');
 const newsletterRouter = require('./modules/newsletter');
 const telegramRouter = require('./modules/telegram');
+const signalsRouter = require('./modules/signals');
 const { startNewsletterCron } = require('./lib/newsletter-cron');
 const { startListeningCron } = require('./lib/listening-cron');
 const { startSocialFacebookCron } = require('./lib/social-facebook-cron');
@@ -77,6 +78,12 @@ app.use(helmet({
 // Abierto en dev (portal en :4000, API en :3000). En producción, restringir
 // con CORS_ORIGIN (lista separada por comas) en .env.
 app.use(cors(config.corsOrigin ? { origin: config.corsOrigin.split(',') } : undefined));
+
+// Auth de máquina (API key), no JWT de sesión: montado ANTES del body parser
+// global para que su límite de payload propio (512kb, ver modules/signals/
+// index.js) aplique de verdad y no herede el de 100kb por accidente (R2-12).
+app.use('/api/signals', signalsRouter);
+
 app.use(express.json({ limit: '100kb' }));
 
 // sitemap.xml generado desde la BD: portada, secciones y cada nota publicada.
