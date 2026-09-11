@@ -2,6 +2,7 @@
 import { state, type Proposal, type DistLogEntry, type DistChannel } from '../store';
 import { esc, loadingCard, errorCard, emptyCard, relativeTime } from '../util';
 import { icon } from '../icons';
+import { reasonSelectOptions } from '../reasons';
 
 const transparencyLabels = ['100% humano', 'Asistido por IA', 'Generado con IA'];
 
@@ -36,6 +37,7 @@ function renderComentarioModal(): string {
       <p style="font-size:14px;font-weight:600;color:var(--text);margin:0 0 4px;">Devolver con comentarios</p>
       <p style="font-size:12px;color:var(--text-mute);margin:0 0 16px;">${esc(piece.title)}</p>
       <label style="font-size:11px;color:var(--text-mute);display:block;margin-bottom:6px;">Motivo de la devolución</label>
+      <select id="comentario-code" style="width:100%;border:0.5px solid var(--line-soft);border-radius:6px;background:var(--bg-admin);margin-bottom:10px;padding:8px;font:inherit;font-size:12px;box-sizing:border-box;">${reasonSelectOptions()}</select>
       <textarea id="comentario-text" class="padmin-modal-textarea" placeholder="Describe qué debe ajustarse antes de publicar...">${esc(state.comentarioText)}</textarea>
       <div style="display:flex;gap:10px;justify-content:flex-end;">
         <button type="button" class="padmin-btn-outline" data-action="close-comentario">Cancelar</button>

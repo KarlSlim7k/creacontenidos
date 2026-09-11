@@ -81,6 +81,31 @@ test.describe('RADAR', () => {
     await expect(page.getByText('Propuesta creada')).toHaveCount(0);
   });
 
+  // R2-07/R2-08: descartar un tema exige motivo — ya no es un confirm() nativo.
+  // No confirma el descarte (no borra fila de seed real): solo prueba que el
+  // modal exige motivo y se puede cancelar. El camino feliz (descarte con
+  // motivo válido → 204/200 + bitácora) ya está cubierto a nivel API en
+  // check-listening.js (H_DISCARD_REASON).
+  test('H. discard topic modal requires a reason, cancel leaves nothing deleted', async ({ page }) => {
+    const rows = page.locator('.padmin-table-row.clickable');
+    const firstRow = rows.first();
+    await expect(firstRow).toBeVisible();
+    const rowCountBefore = await rows.count();
+
+    await firstRow.locator('[data-action="delete-topic"]').click();
+
+    const modal = page.locator('.padmin-modal', { hasText: 'Descartar tema' });
+    await expect(modal).toBeVisible();
+    await modal.locator('[data-action="confirm-discard-topics"]').click();
+    await expect(page.getByText('Elige un motivo antes de descartar.')).toBeVisible();
+    await expect(modal).toBeVisible(); // sin motivo, el modal no se cierra ni descarta nada
+
+    await modal.locator('select#discard-reason-code').selectOption('poca_relevancia');
+    await modal.locator('[data-action="close-discard-topics"]').click();
+    await expect(modal).toHaveCount(0);
+    await expect(rows).toHaveCount(rowCountBefore); // cancelar no borró la fila
+  });
+
   test('G. Fuentes tab lists seed domains with trust badges, toggle reverts', async ({ page }) => {
     await page.locator('.padmin-tab[data-action="set-radar-tab"][data-tab="fuentes"]').click();
 

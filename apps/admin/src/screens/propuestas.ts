@@ -1,6 +1,7 @@
 // CREA Panel Admin — pantalla Propuestas IA.
 import { state, type Proposal } from '../store';
 import { esc, loadingCard, errorCard } from '../util';
+import { reasonSelectOptions, reasonLabel } from '../reasons';
 
 const sensColorMap: Record<string, string> = { verde: 'var(--brand)', amarillo: 'var(--accent-2)', rojo: 'var(--danger)' };
 
@@ -8,10 +9,11 @@ function renderPropuestasRechazadas(): string {
   const rechazadas = state.data.proposalsByKey.rechazada;
   if (!rechazadas || !rechazadas.length || state.user!.role !== 'director') return '';
   return `<p class="padmin-section-title" style="margin-top:24px;">Rechazadas</p>
-    <div class="padmin-card">${rechazadas.map((p: Proposal) =>
-      `<div class="padmin-row"><div><p class="padmin-row-title">${esc(p.title)}</p><p class="padmin-row-meta">${esc(p.review_comment || '')}</p></div>
-        <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-propuesta" data-id="${p.id}">Eliminar</button></div>`
-    ).join('')}</div>`;
+    <div class="padmin-card">${rechazadas.map((p: Proposal) => {
+      const reason = reasonLabel(p.review_reason_code);
+      return `<div class="padmin-row"><div><p class="padmin-row-title">${esc(p.title)}</p><p class="padmin-row-meta">${reason ? `<b>${esc(reason)}</b> · ` : ''}${esc(p.review_comment || '')}</p></div>
+        <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-propuesta" data-id="${p.id}">Eliminar</button></div>`;
+    }).join('')}</div>`;
 }
 
 export function renderPropuestas(): string {
@@ -25,7 +27,8 @@ export function renderPropuestas(): string {
       let body: string;
       if (isRejecting) {
         body = `<div><label style="font-size:11px;color:var(--text-mute);display:block;margin:0 0 6px;">Motivo del rechazo</label>
-          <textarea id="reject-reason-${p.id}" style="width:100%;min-height:56px;border:0.5px solid var(--line-soft);border-radius:6px;background:var(--bg-admin);margin-bottom:8px;padding:8px;font:inherit;font-size:12px;box-sizing:border-box;"></textarea>
+          <select id="reject-code-${p.id}" style="width:100%;border:0.5px solid var(--line-soft);border-radius:6px;background:var(--bg-admin);margin-bottom:8px;padding:8px;font:inherit;font-size:12px;box-sizing:border-box;">${reasonSelectOptions()}</select>
+          <textarea id="reject-reason-${p.id}" placeholder="Describe el motivo con más detalle..." style="width:100%;min-height:56px;border:0.5px solid var(--line-soft);border-radius:6px;background:var(--bg-admin);margin-bottom:8px;padding:8px;font:inherit;font-size:12px;box-sizing:border-box;"></textarea>
           <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="confirm-reject-propuesta" data-id="${p.id}">Confirmar rechazo</button></div>`;
       } else {
         body = `<div style="display:flex;gap:6px;">

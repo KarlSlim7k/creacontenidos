@@ -2,6 +2,7 @@
 import { state, type Topic, type CompetitorPost, type RadarSource, type RadarStats } from '../store';
 import { esc, loadingCard, errorCard, badge, statusStyle, paginateRows, renderPager, safeHttpUrl } from '../util';
 import { icon } from '../icons';
+import { reasonSelectOptions } from '../reasons';
 
 function canManageRadar(): boolean {
   return state.user!.role === 'director' || state.user!.role === 'produccion';
@@ -126,6 +127,33 @@ function renderRadarDetail(): string {
           ${topic.status !== 'Revisado' ? `<button type="button" class="padmin-btn-sm" style="background:var(--brand-soft);color:var(--brand);" data-action="approve-topic" data-id="${topic.id}">${icon('check', { size: 12, style: 'vertical-align:-1px;margin-right:3px;' })} Aprobar</button>` : ''}
           <button type="button" class="padmin-btn-sm padmin-btn-danger" style="margin-left:auto;" data-action="delete-topic" data-id="${topic.id}">${icon('trash', { size: 12, style: 'vertical-align:-1px;margin-right:3px;' })} Eliminar</button>
         </div>` : ''}
+    </div>
+  </div>`;
+}
+
+// Descarte de tema(s) con motivo obligatorio (R2-07/R2-08) — reemplaza el
+// confirm() nativo que no podía pedir un motivo. Mismo patrón de overlay que
+// renderRadarDetail()/renderComentarioModal(): Escape y foco los maneja
+// main.ts solo con la clase .padmin-overlay, sin registrar nada aparte.
+function renderDiscardTopicsModal(): string {
+  const ids = state.discardTopicIds;
+  if (!ids || !ids.length) return '';
+  const topics = state.data.topics || [];
+  const titles = ids.map((id) => topics.find((t: Topic) => t.id === id)?.title).filter(Boolean) as string[];
+  const label = ids.length === 1
+    ? (titles[0] || 'este tema')
+    : `${ids.length} temas seleccionados`;
+  return `<div class="padmin-overlay">
+    <div class="padmin-overlay-bg" data-action="close-discard-topics"></div>
+    <div class="padmin-modal" role="dialog" aria-modal="true" aria-label="Descartar tema de RADAR">
+      <p style="font-size:14px;font-weight:600;color:var(--text);margin:0 0 4px;">Descartar ${ids.length === 1 ? 'tema' : 'temas'}</p>
+      <p style="font-size:12px;color:var(--text-mute);margin:0 0 16px;">${esc(label)}. No se puede deshacer.</p>
+      <label style="font-size:11px;color:var(--text-mute);display:block;margin-bottom:6px;">Motivo del descarte</label>
+      <select id="discard-reason-code" style="width:100%;border:0.5px solid var(--line-soft);border-radius:6px;background:var(--bg-admin);margin-bottom:16px;padding:8px;font:inherit;font-size:12px;box-sizing:border-box;">${reasonSelectOptions()}</select>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" class="padmin-btn-outline" data-action="close-discard-topics">Cancelar</button>
+        <button type="button" class="padmin-btn padmin-btn-danger" data-action="confirm-discard-topics">Confirmar descarte</button>
+      </div>
     </div>
   </div>`;
 }
@@ -670,5 +698,6 @@ function renderRadarTemas(): string {
       }).join('') : '<div class="padmin-row"><p class="padmin-row-meta">No hay temas que coincidan con estos filtros o búsqueda.</p></div>'}
     </div>
     ${radarPager(page, totalPages, filteredTopics.length, state.radarTopicsHasMore)}
-    ${renderRadarDetail()}`;
+    ${renderRadarDetail()}
+    ${renderDiscardTopicsModal()}`;
 }

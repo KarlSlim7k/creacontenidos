@@ -39,6 +39,7 @@ export interface Proposal {
   status: string;
   author_id: number | null;
   review_comment: string | null;
+  review_reason_code: string | null;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -492,6 +493,9 @@ export interface State {
   transparency: Record<string, unknown>;
   comentarioPieceId: number | null;
   comentarioText: string;
+  /** Descarte de tema(s) de RADAR pendiente de motivo (R2-07/R2-08). null = modal cerrado;
+   * 1 id = descarte individual, N ids = descarte en lote. */
+  discardTopicIds: number[] | null;
   deletePublishedId: number | null;
   deletePublishedError: string | null;
   pickerPreview: Proposal | null;
@@ -591,7 +595,7 @@ export function initialState(): State {
   editChatModel: null, editChatProvider: null, editChatUsesLeft: null, editChatError: null,
   notaPreviewHtml: null,
   editorImagePrompt: null, generatingImage: false, suggestingSlug: false,
-  transparency: {}, comentarioPieceId: null, comentarioText: '',
+  transparency: {}, comentarioPieceId: null, comentarioText: '', discardTopicIds: null,
   deletePublishedId: null, deletePublishedError: null,
   pickerPreview: null,
   selectedRadarId: null,

@@ -172,19 +172,14 @@ const clickHandlers: Record<string, (el: Element) => void> = {
       })
       .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
   },
+  // Motivo obligatorio (R2-07/R2-08): abre el modal en vez de eliminar directo.
   'batch-delete-topics': () => {
     const ids = state.radarSelectedTopicIds || [];
     if (!ids.length) return;
-    if (!confirm(`¿Eliminar los ${ids.length} temas seleccionados? Esta acción no se puede deshacer.`)) return;
-    adminApi<{ deleted: number }>('/api/listening/topics/batch-delete', { method: 'POST', body: { ids } })
-      .then((res) => {
-        const topics = (state.data.topics || []).filter((t: Topic) => !ids.includes(t.id));
-        setData({ topics });
-        setState({ radarSelectedTopicIds: [], successMsg: `${res.deleted} tema(s) eliminados.` });
-        loadRadarSummary();
-      })
-      .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+    setState({ discardTopicIds: ids });
   },
+  'close-discard-topics': () => setState({ discardTopicIds: null }),
+  'confirm-discard-topics': () => submitDiscardTopics(),
   // Paginación cliente (10 filas/página) sobre lo ya cargado. Si el tab activo
   // es temas y la página pedida cae fuera de lo cargado pero el servidor
   // puede tener más (radarTopicsHasMore), pide el siguiente lote de 50 antes
@@ -362,7 +357,8 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'open-radar': (el) => setState({ selectedRadarId: Number(attr(el, 'data-id')) }),
   'close-radar': () => setState({ selectedRadarId: null }),
   'approve-topic': (el) => submitApproveTopic(Number(attr(el, 'data-id'))),
-  'delete-topic': (el) => submitDeleteTopic(Number(attr(el, 'data-id'))),
+  // Motivo obligatorio (R2-07/R2-08): abre el modal en vez de eliminar directo.
+  'delete-topic': (el) => setState({ discardTopicIds: [Number(attr(el, 'data-id'))] }),
   'clear-topics': () => {
     const n = (state.data.topicSummary && state.data.topicSummary.total) || (state.data.topics || []).length;
     if (!n) return;
@@ -718,10 +714,13 @@ export function submitApproveProposal(id: number) {
 }
 
 export function submitRejectProposal(id: number) {
+  const select = document.getElementById('reject-code-' + id) as HTMLSelectElement | null;
+  const reason_code = select ? select.value : '';
+  if (!reason_code) { if (select) select.focus(); setState({ errorMsg: 'Elige un motivo antes de rechazar la propuesta.' }); return; }
   const textarea = document.getElementById('reject-reason-' + id) as HTMLTextAreaElement | null;
   const reason = textarea ? textarea.value.trim() : '';
   if (!reason) { if (textarea) textarea.focus(); setState({ errorMsg: 'Escribe un motivo antes de rechazar la propuesta.' }); return; }
-  adminApi('/api/editorial/proposals/' + id + '/reject', { method: 'PATCH', body: { reason } })
+  adminApi('/api/editorial/proposals/' + id + '/reject', { method: 'PATCH', body: { reason, reason_code } })
     .then(() => {
       const list = state.data.proposalsByKey.propuesta.filter((p) => p.id !== id);
       setState({ propuestaRejecting: null, successMsg: 'Propuesta rechazada.' });
@@ -766,9 +765,11 @@ export function submitPublish(id: number) {
 }
 
 export function submitReturn(id: number) {
+  const reason_code = (document.getElementById('comentario-code') as HTMLSelectElement | null)?.value || '';
+  if (!reason_code) { setState({ errorMsg: 'Elige un motivo antes de regresar la nota.' }); return; }
   const comentarioText = (document.getElementById('comentario-text') as HTMLTextAreaElement | null)?.value || '';
   if (!comentarioText.trim()) { setState({ errorMsg: 'Escribe un comentario antes de regresar la nota.' }); return; }
-  adminApi('/api/editorial/proposals/' + id + '/return', { method: 'PATCH', body: { comment: comentarioText } })
+  adminApi('/api/editorial/proposals/' + id + '/return', { method: 'PATCH', body: { comment: comentarioText, reason_code } })
     .then(() => {
       const list = state.data.proposalsByKey.en_revision.filter((p) => p.id !== id);
       setState({ comentarioPieceId: null, comentarioText: '', successMsg: 'Nota regresada a borrador.' });
@@ -945,13 +946,28 @@ export function submitApproveTopic(id: number) {
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
 }
 
-export function submitDeleteTopic(id: number) {
-  if (!confirm('¿Eliminar este tema detectado? No se puede deshacer.')) return;
-  adminApi('/api/listening/topics/' + id, { method: 'DELETE' })
+// Descarte de tema(s) de RADAR con motivo obligatorio (R2-07/R2-08). Un solo
+// id = DELETE individual; varios = POST batch-delete. Lee el <select> del
+// modal directamente, como ya hace submitReturn/submitRejectProposal con sus
+// textareas — el estado del formulario no vive en `state`.
+export function submitDiscardTopics() {
+  const ids = state.discardTopicIds || [];
+  if (!ids.length) return;
+  const reasonCode = (document.getElementById('discard-reason-code') as HTMLSelectElement | null)?.value || '';
+  if (!reasonCode) { setState({ errorMsg: 'Elige un motivo antes de descartar.' }); return; }
+  const request = ids.length === 1
+    ? adminApi<null>('/api/listening/topics/' + ids[0], { method: 'DELETE', body: { reason_code: reasonCode } })
+    : adminApi<{ deleted: number }>('/api/listening/topics/batch-delete', { method: 'POST', body: { ids, reason_code: reasonCode } });
+  request
     .then(() => {
-      const topics = (state.data.topics || []).filter((t) => t.id !== id);
+      const topics = (state.data.topics || []).filter((t) => !ids.includes(t.id));
       setData({ topics });
-      if (state.selectedRadarId === id) setState({ selectedRadarId: null });
+      setState({
+        discardTopicIds: null,
+        successMsg: ids.length === 1 ? 'Tema descartado.' : `${ids.length} tema(s) descartados.`,
+        selectedRadarId: (state.selectedRadarId != null && ids.includes(state.selectedRadarId)) ? null : state.selectedRadarId,
+        radarSelectedTopicIds: ids.length > 1 ? [] : state.radarSelectedTopicIds,
+      });
       loadRadarSummary();
     })
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
