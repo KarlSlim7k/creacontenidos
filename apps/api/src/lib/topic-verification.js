@@ -54,6 +54,20 @@ function normalizeRiskFlags(raw) {
   return out;
 }
 
+/** Alcance territorial válido (contrato de señal externa, R2-03). null si no matchea. */
+const TERRITORIAL_SCOPES = new Set(['local', 'regional', 'estatal', 'nacional', 'internacional']);
+function normalizeTerritorialScope(raw) {
+  const s = String(raw || '').toLowerCase().trim();
+  return TERRITORIAL_SCOPES.has(s) ? s : null;
+}
+
+/** Fecha del hecho (event_date, R2-10) — Date válida o null. Nunca inventar una fecha. */
+function normalizeEventDate(raw) {
+  if (raw == null || raw === '') return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function flagText(flag) {
   if (typeof flag === 'string') return flag;
   return [flag.code, flag.message].filter(Boolean).join(' ');
@@ -366,6 +380,16 @@ function normalizeVerification(topic) {
     risk_flags,
     editorial_decision: topic.editorial_decision != null ? String(topic.editorial_decision) : null,
     source_count,
+    // Campos de señal externa (R2-10/contrato-senales-externas.md). Ausentes
+    // en los caminos internos (Firecrawl/Perplexity/Facebook) → todos null,
+    // como ya quedan las filas legacy.
+    event_date: normalizeEventDate(topic.event_date),
+    locality: topic.locality != null ? String(topic.locality).slice(0, 200) : null,
+    territorial_scope: normalizeTerritorialScope(topic.territorial_scope),
+    category: topic.category != null ? String(topic.category).slice(0, 60) : null,
+    provider: topic.provider != null ? String(topic.provider).slice(0, 80) : null,
+    external_id: topic.external_id != null ? String(topic.external_id).slice(0, 200) : null,
+    media_available: typeof topic.media_available === 'boolean' ? topic.media_available : null,
   };
 }
 

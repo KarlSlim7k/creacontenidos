@@ -165,7 +165,14 @@ async function insertTopicIfNew(topicRaw, overrides = {}, options = {}) {
          evidence = $13::jsonb,
          risk_flags = $14::jsonb,
          editorial_decision = COALESCE($15, editorial_decision),
-         source_count = $16
+         source_count = $16,
+         event_date = COALESCE($17, event_date),
+         locality = COALESCE($18, locality),
+         territorial_scope = COALESCE($19, territorial_scope),
+         category = COALESCE($20, category),
+         provider = COALESCE($21, provider),
+         external_id = COALESCE($22, external_id),
+         media_available = COALESCE($23, media_available)
        WHERE id = $1
        RETURNING *`,
       [
@@ -185,6 +192,13 @@ async function insertTopicIfNew(topicRaw, overrides = {}, options = {}) {
         JSON.stringify(upgraded.risk_flags),
         upgraded.editorial_decision,
         upgraded.source_count,
+        upgraded.event_date,
+        upgraded.locality,
+        upgraded.territorial_scope,
+        upgraded.category,
+        upgraded.provider,
+        upgraded.external_id,
+        upgraded.media_available,
       ]
     );
     if (!rows[0]) return null;
@@ -195,11 +209,12 @@ async function insertTopicIfNew(topicRaw, overrides = {}, options = {}) {
     `INSERT INTO topics (
        title, source, mentions, sentiment, antecedentes, actores, angulos, audiencia,
        confidence, verification_status, known_facts, unknown_facts, evidence, risk_flags,
-       editorial_decision, source_count
+       editorial_decision, source_count, event_date, locality, territorial_scope, category,
+       provider, external_id, media_available
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8,
        $9, $10, $11, $12, $13::jsonb, $14::jsonb,
-       $15, $16
+       $15, $16, $17, $18, $19, $20, $21, $22, $23
      ) RETURNING *`,
     [
       t.title,
@@ -218,11 +233,69 @@ async function insertTopicIfNew(topicRaw, overrides = {}, options = {}) {
       JSON.stringify(t.risk_flags),
       t.editorial_decision,
       t.source_count,
+      t.event_date,
+      t.locality,
+      t.territorial_scope,
+      t.category,
+      t.provider,
+      t.external_id,
+      t.media_available,
     ]
   );
   if (!rows[0]) return null;
   return Object.assign(rows[0], { _action: 'inserted' });
 }
+
+// Registry de proveedores de descubrimiento (R2-14). Orden = prioridad: el
+// primero cuyo detect() devuelva un array de topics gana; uno que devuelve
+// `null` (no configurado) se salta en silencio; uno que devuelve
+// `{ topics: null, metaExtra }` (lo intentó, falló) deja su metaExtra y pasa
+// al siguiente. Añadir un proveedor nuevo (ej. Grok — 07-explorer-grok.md)
+// es agregar una entrada acá, sin tocar detectAndSaveTopics().
+const DISCOVERY_PROVIDERS = [
+  {
+    name: 'firecrawl',
+    async detect(query) {
+      try {
+        const viaFc = await detectViaFirecrawl(query);
+        if (!viaFc) return null; // sin FIRECRAWL_API_KEY/URLs: no configurado
+        const scrapeUrls = viaFc.sourcesUsed || [];
+        return {
+          topics: viaFc.topics,
+          usage: viaFc.usage,
+          model: viaFc.model,
+          provider: 'firecrawl',
+          usedFallback: Boolean(viaFc.usedFallback),
+          scrapeUrls,
+          metaExtra: {
+            sources: scrapeUrls,
+            scrape_errors: viaFc.scrapeErrors && viaFc.scrapeErrors.length ? viaFc.scrapeErrors : undefined,
+          },
+        };
+      } catch (err) {
+        return {
+          topics: null, // lo intentó y falló → el loop sigue al próximo proveedor
+          metaExtra: {
+            firecrawl_fallback: true,
+            firecrawl_error: String(err && err.message || err).slice(0, 300),
+          },
+        };
+      }
+    },
+  },
+  {
+    name: 'perplexity',
+    async detect(query) {
+      const viaPplx = await detectTopics(query);
+      return {
+        topics: viaPplx.topics,
+        usage: viaPplx.usage,
+        model: viaPplx.model || 'sonar-pro',
+        provider: 'perplexity',
+      };
+    },
+  },
+];
 
 async function detectAndSaveTopics(query, userId, trigger) {
   let detected;
@@ -233,33 +306,18 @@ async function detectAndSaveTopics(query, userId, trigger) {
   let metaExtra = {};
   let scrapeUrls = [];
 
-  try {
-    const viaFc = await detectViaFirecrawl(query);
-    if (viaFc) {
-      detected = viaFc.topics;
-      usage = viaFc.usage;
-      model = viaFc.model;
-      usedFallback = Boolean(viaFc.usedFallback);
-      provider = 'firecrawl';
-      scrapeUrls = viaFc.sourcesUsed || [];
-      metaExtra = {
-        sources: scrapeUrls,
-        scrape_errors: viaFc.scrapeErrors && viaFc.scrapeErrors.length ? viaFc.scrapeErrors : undefined,
-      };
-    }
-  } catch (err) {
-    metaExtra = {
-      firecrawl_fallback: true,
-      firecrawl_error: String(err && err.message || err).slice(0, 300),
-    };
-  }
-
-  if (!detected) {
-    const viaPplx = await detectTopics(query);
-    detected = viaPplx.topics;
-    usage = viaPplx.usage;
-    model = viaPplx.model || 'sonar-pro';
-    provider = 'perplexity';
+  for (const discoveryProvider of DISCOVERY_PROVIDERS) {
+    const result = await discoveryProvider.detect(query);
+    if (!result) continue;
+    if (result.metaExtra) metaExtra = { ...metaExtra, ...result.metaExtra };
+    if (!Array.isArray(result.topics)) continue; // intentó y falló: sigue al próximo
+    detected = result.topics;
+    usage = result.usage;
+    model = result.model;
+    provider = result.provider;
+    usedFallback = Boolean(result.usedFallback);
+    scrapeUrls = result.scrapeUrls || [];
+    break;
   }
 
   if (!Array.isArray(detected)) detected = [];
