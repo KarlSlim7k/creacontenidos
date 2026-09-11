@@ -7,6 +7,7 @@ const { detectCompetitorPosts, enrichFacebookTopics, logActivity } = require('..
 const { scrapeCompetitorPosts } = require('../../lib/competitor-scraper-client');
 const { detectAndSaveTopics, insertTopicIfNew } = require('../../lib/topic-detection');
 const { isValidReasonCode } = require('../../lib/editorial-reasons');
+const { generateApiKey, hashApiKey } = require('../../lib/signal-auth');
 
 const router = express.Router();
 
@@ -153,7 +154,8 @@ router.get('/topics', requireAuth, async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT id, title, source, mentions, sentiment, status, antecedentes, actores, angulos, audiencia,
               confidence, verification_status, known_facts, unknown_facts, evidence, risk_flags,
-              editorial_decision, source_count, detected_at
+              editorial_decision, source_count, detected_at,
+              event_date, locality, territorial_scope, category, provider, external_id, media_available
        FROM topics ${where} ORDER BY detected_at DESC${paging}`,
       params
     );
@@ -751,6 +753,109 @@ router.delete('/radar-sources/:id', requireAuth, requireRole('director'), async 
     const { rows } = await pool.query('DELETE FROM radar_sources WHERE id = $1 RETURNING id', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Fuente no encontrada' });
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Proveedores de señales externas (signal_providers, migración 046, R2-11) ---
+// Solo director: dar de alta un proveedor con acceso de escritura a
+// POST /api/signals es una decisión de mayor confianza que curar radar_sources
+// (que sí permite director|produccion). La API key cruda solo existe en la
+// respuesta de create/rotate — nunca se persiste ni se loguea.
+
+// GET /api/listening/signal-providers — lista sin exponer key ni hash.
+router.get('/signal-providers', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, trust, active, created_at FROM signal_providers ORDER BY created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/listening/signal-providers — crea un proveedor y devuelve su
+// API key cruda UNA sola vez (el caller debe copiarla; no se puede recuperar
+// después, solo rotar).
+router.post('/signal-providers', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const name = req.body && typeof req.body.name === 'string' ? req.body.name.trim() : '';
+    const trust = String((req.body && req.body.trust) || 'medium').toLowerCase();
+    const errors = {};
+    if (!name) errors.name = 'Campo requerido';
+    if (!['high', 'medium', 'low'].includes(trust)) errors.trust = 'Debe ser high, medium o low';
+    if (Object.keys(errors).length) return res.status(400).json({ error: 'Datos inválidos', fields: errors });
+
+    const apiKey = generateApiKey();
+    const { rows } = await pool.query(
+      `INSERT INTO signal_providers (name, api_key_hash, trust) VALUES ($1, $2, $3)
+       RETURNING id, name, trust, active, created_at`,
+      [name, hashApiKey(apiKey), trust]
+    );
+    await logActivity(pool, 'signal_provider_create', `Proveedor de señales creado: ${name}`, req.user.id, 'exito', {
+      provider_id: rows[0].id, name, trust,
+    });
+    // api_key solo viaja en ESTA respuesta — nunca se vuelve a poder leer.
+    res.status(201).json({ ...rows[0], api_key: apiKey });
+  } catch (err) {
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'Ya existe un proveedor con ese nombre' });
+    }
+    next(err);
+  }
+});
+
+// PATCH /api/listening/signal-providers/:id — renombrar, cambiar trust, o
+// revocar/reactivar (active). Nunca toca la key.
+router.patch('/signal-providers/:id', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const { name, trust, active } = req.body || {};
+    if (name === undefined && trust === undefined && active === undefined) {
+      return res.status(400).json({ error: 'Nada que actualizar' });
+    }
+    if (trust !== undefined && !['high', 'medium', 'low'].includes(String(trust).toLowerCase())) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { trust: 'Debe ser high, medium o low' } });
+    }
+    const { rows } = await pool.query(
+      `UPDATE signal_providers SET
+         name = COALESCE($1, name),
+         trust = COALESCE($2, trust),
+         active = COALESCE($3, active)
+       WHERE id = $4 RETURNING id, name, trust, active, created_at`,
+      [
+        name === undefined ? null : String(name).trim(),
+        trust === undefined ? null : String(trust).toLowerCase(),
+        active === undefined ? null : Boolean(active),
+        req.params.id,
+      ]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
+    await logActivity(pool, 'signal_provider_update', `Proveedor de señales actualizado: ${rows[0].name}`, req.user.id, 'exito', {
+      provider_id: rows[0].id, active: rows[0].active, trust: rows[0].trust,
+    });
+    res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/listening/signal-providers/:id/rotate — invalida la key vieja
+// (deja de autenticar de inmediato) y devuelve una nueva, una sola vez.
+router.post('/signal-providers/:id/rotate', requireAuth, requireRole('director'), async (req, res, next) => {
+  try {
+    const apiKey = generateApiKey();
+    const { rows } = await pool.query(
+      `UPDATE signal_providers SET api_key_hash = $1 WHERE id = $2
+       RETURNING id, name, trust, active, created_at`,
+      [hashApiKey(apiKey), req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
+    await logActivity(pool, 'signal_provider_rotate', `API key rotada: ${rows[0].name}`, req.user.id, 'exito', {
+      provider_id: rows[0].id,
+    });
+    res.json({ ...rows[0], api_key: apiKey });
   } catch (err) {
     next(err);
   }
