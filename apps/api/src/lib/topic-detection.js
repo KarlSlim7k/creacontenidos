@@ -17,6 +17,7 @@ const {
   isBetterTopic,
   mergeEvidenceLists,
 } = require('./topic-verification');
+const { calculateCreaScore } = require('./crea-score');
 
 const MARKDOWN_PER_URL = 8000;
 // Umbral de títulos “mismo tema” (pg_trgm). Canibalización de notas usa 0.35;
@@ -98,6 +99,53 @@ async function loadActiveRadarSources() {
 }
 
 /**
+ * CREA Score, factor "originalidad" (R2-25/R2-26): similarity() contra
+ * content_proposals publicadas, mismo mecanismo que ya usa la canibalización
+ * en content-engine/index.js. Sin publicadas todavía → 0 (nada que
+ * canibalizar, plenamente original) — null solo si la consulta falla, para
+ * no tumbar la detección por esto.
+ */
+async function loadMaxSimilarityToPublished(title) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT max(similarity(title, $1)) AS s FROM content_proposals WHERE status = 'published'`,
+      [title]
+    );
+    const s = rows[0] && rows[0].s;
+    return s == null ? 0 : Number(s);
+  } catch (err) {
+    return null;
+  }
+}
+
+/** Análisis del Motor Editorial más reciente de un topic, o null (R2-26: se
+ * recalcula el score al hacer upgrade — un tema ya analizado puede volver a
+ * traer sus factores impacto_potencial/implicaciones_practicas). */
+async function loadLatestAnalysis(topicId) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM editorial_analyses WHERE topic_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [topicId]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    if (err && err.code === '42P01') return null; // tabla aún no migrada
+    throw err;
+  }
+}
+
+/**
+ * Calcula { crea_score, crea_score_breakdown } para un topic normalizado.
+ * @param {object} t salida de normalizeVerification()
+ * @param {object|null} [analysis] análisis más reciente, si existe
+ */
+async function computeCreaScoreFields(t, analysis) {
+  const maxSimilarityToPublished = await loadMaxSimilarityToPublished(t.title);
+  const { score, breakdown } = calculateCreaScore(t, analysis, { maxSimilarityToPublished });
+  return { crea_score: score, crea_score_breakdown: breakdown };
+}
+
+/**
  * Inserta o mejora un topic normalizado.
  * - Sin similar reciente → INSERT
  * - Similar y el nuevo es peor/igual → null (skip; no inflar agenda)
@@ -149,6 +197,17 @@ async function insertTopicIfNew(topicRaw, overrides = {}, options = {}) {
     });
     if (!upgraded) return null;
 
+    // R2-26: recalcular el score al enriquecer — un tema que ya tenía
+    // análisis conserva sus factores impacto_potencial/implicaciones_practicas.
+    const existingAnalysis = await loadLatestAnalysis(existing.id);
+    // detected_at no lo toca el UPDATE (queda el de la detección original) —
+    // se lo pasamos explícito para el factor "actualidad": t/upgraded nunca
+    // lo traen, es una columna con DEFAULT de la DB, no un campo normalizado.
+    const { crea_score, crea_score_breakdown } = await computeCreaScoreFields(
+      { ...upgraded, detected_at: existing.detected_at },
+      existingAnalysis
+    );
+
     const { rows } = await pool.query(
       `UPDATE topics SET
          source = $2,
@@ -172,7 +231,9 @@ async function insertTopicIfNew(topicRaw, overrides = {}, options = {}) {
          category = COALESCE($20, category),
          provider = COALESCE($21, provider),
          external_id = COALESCE($22, external_id),
-         media_available = COALESCE($23, media_available)
+         media_available = COALESCE($23, media_available),
+         crea_score = $24,
+         crea_score_breakdown = $25::jsonb
        WHERE id = $1
        RETURNING *`,
       [
@@ -199,22 +260,33 @@ async function insertTopicIfNew(topicRaw, overrides = {}, options = {}) {
         upgraded.provider,
         upgraded.external_id,
         upgraded.media_available,
+        crea_score,
+        JSON.stringify(crea_score_breakdown),
       ]
     );
     if (!rows[0]) return null;
     return Object.assign(rows[0], { _action: 'upgraded' });
   }
 
+  // R2-26: score al insertar — sin topic_id todavía, así que sin análisis
+  // (uno recién detectado nunca tiene editorial_analyses previo). detected_at
+  // tampoco lo trae `t` (columna con DEFAULT now() de la DB, no un campo
+  // normalizado) — se lo damos explícito para el factor "actualidad".
+  const { crea_score, crea_score_breakdown } = await computeCreaScoreFields(
+    { ...t, detected_at: new Date().toISOString() },
+    null
+  );
+
   const { rows } = await pool.query(
     `INSERT INTO topics (
        title, source, mentions, sentiment, antecedentes, actores, angulos, audiencia,
        confidence, verification_status, known_facts, unknown_facts, evidence, risk_flags,
        editorial_decision, source_count, event_date, locality, territorial_scope, category,
-       provider, external_id, media_available
+       provider, external_id, media_available, crea_score, crea_score_breakdown
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8,
        $9, $10, $11, $12, $13::jsonb, $14::jsonb,
-       $15, $16, $17, $18, $19, $20, $21, $22, $23
+       $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::jsonb
      ) RETURNING *`,
     [
       t.title,
@@ -240,6 +312,8 @@ async function insertTopicIfNew(topicRaw, overrides = {}, options = {}) {
       t.provider,
       t.external_id,
       t.media_available,
+      crea_score,
+      JSON.stringify(crea_score_breakdown),
     ]
   );
   if (!rows[0]) return null;
@@ -364,6 +438,9 @@ module.exports = {
   insertTopicIfNew,
   findRecentSimilarTopic,
   loadActiveRadarSources,
+  loadMaxSimilarityToPublished,
+  loadLatestAnalysis,
+  computeCreaScoreFields,
   normalizeVerification,
   TITLE_SIMILARITY_THRESHOLD,
 };
