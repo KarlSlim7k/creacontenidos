@@ -92,6 +92,30 @@ async function main() {
   });
   ok(derived.verification_status === 'risk', 'normalize: conf baja deriva risk');
 
+  // --- H_CREA_SCORE: fórmula pura, sin DB (R2-25) ---
+  const { calculateCreaScore } = require('../src/lib/crea-score');
+  const scoreNoData = calculateCreaScore({}, null, {});
+  ok(scoreNoData.score === null, 'crea-score: sin ningún factor presente, score es null (no 0)');
+  ok(Object.values(scoreNoData.breakdown).every((f) => !f.present && f.score === null), 'crea-score: breakdown marca todos los factores ausentes');
+
+  const scorePartial = calculateCreaScore({ detected_at: new Date().toISOString(), mentions: 0, source_count: 0, evidence: [] }, null, {});
+  ok(scorePartial.score != null, 'crea-score: con solo actualidad/fuentes/interés presentes, igual da un score (promedio de lo presente)');
+  ok(!scorePartial.breakdown.relevancia_local.present && !scorePartial.breakdown.impacto_potencial.present, 'crea-score: factores sin insumo quedan ausentes, no en 0');
+
+  const scoreFull = calculateCreaScore(
+    {
+      detected_at: new Date(Date.now() - 86400000).toISOString(), // ayer
+      mentions: 100, source_count: 4,
+      evidence: [{ reliable: true }, { reliable: true }, { reliable: false }],
+      territorial_scope: 'local',
+    },
+    { implicaciones: ['a', 'b', 'c', 'd'], para_el_ciudadano: 'haz x', conversacion: null },
+    { maxSimilarityToPublished: 0 }
+  );
+  ok(scoreFull.score >= 80, `crea-score: tema completo y favorable → score alto (fue ${scoreFull.score})`);
+  ok(scoreFull.breakdown.conversacion.present === false, 'crea-score: conversacion siempre ausente hoy (regla no negociable de la fase 03)');
+  ok(scoreFull.breakdown.interes_ciudadano.weight === 5, 'crea-score: interés ciudadano pesa 5 (el más bajo) — sesgo a Facebook documentado');
+
   // --- H_MULTISOURCE: scrape match + hosts independientes (sin API de pago) ---
   const scrapeUrls = [
     'https://ayuntamiento.perote.gob.mx/noticias/1',
@@ -189,6 +213,9 @@ async function main() {
       `insert aplica cap verified (fue ${inserted.verification_status})`);
     ok(Number(inserted.confidence) <= 74, 'insert confidence capada');
     ok(Array.isArray(inserted.evidence), 'insert evidence es array/jsonb');
+    ok(inserted.crea_score != null, `insertTopicIfNew calcula crea_score real, no queda NULL (R2-26) (fue ${inserted.crea_score})`);
+    ok(inserted.crea_score_breakdown && inserted.crea_score_breakdown.actualidad.present === true,
+      'crea_score_breakdown.actualidad presente — detected_at se pasa aunque t no lo traiga (bug real que se corrigió acá)');
     const dupe = await insertTopicIfNew({ title: insertTitle, confidence: 10, verification_status: 'risk' });
     ok(dupe === null, 'insertTopicIfNew dedupe 24h peor/igual → null');
 
@@ -209,6 +236,7 @@ async function main() {
     ok(upgraded && upgraded._action === 'upgraded', `similar mejor → upgraded (action=${upgraded && upgraded._action})`);
     ok(upgraded.id === inserted.id, 'upgrade reusa el mismo id');
     ok(Number(upgraded.confidence) >= 75, 'upgrade sube confidence');
+    ok(upgraded.crea_score != null, `upgrade también recalcula crea_score (R2-26) (fue ${upgraded.crea_score})`);
     const { rows: afterUp } = await pool.query('SELECT count(*)::int AS n FROM topics WHERE lower(title) = lower($1) OR id = $2', [insertTitle, inserted.id]);
     ok(afterUp[0].n === 1, 'no se duplicó la fila al upgrade');
     await pool.query('DELETE FROM topics WHERE id = $1', [inserted.id]);
@@ -320,6 +348,18 @@ async function main() {
     ok(Array.isArray(noneTopics) && noneTopics.every((t) => t.verification_status == null),
       'filtro verification_status=none solo devuelve nulls');
 
+    // --- H_ORDER_SCORE (R2-27): ?order=score es explícito, no cambia el default ---
+    const defaultOrder = await (await fetch(`${BASE}/api/listening/topics?limit=500`, authDirector)).json();
+    const byScoreOrder = await (await fetch(`${BASE}/api/listening/topics?limit=500&order=score`, authDirector)).json();
+    ok(byScoreOrder.length === defaultOrder.length, 'order=score no cambia cuántos topics devuelve, solo el orden');
+    ok(defaultOrder.map((t) => t.id).join(',') !== '' , 'sanity: hay topics para comparar orden');
+    const scored = byScoreOrder.filter((t) => t.crea_score != null).map((t) => t.crea_score);
+    ok(scored.every((s, i) => i === 0 || scored[i - 1] >= s), 'order=score: los que tienen score quedan de mayor a menor');
+    const firstNullIdx = byScoreOrder.findIndex((t) => t.crea_score == null);
+    const lastScoredIdx = byScoreOrder.map((t) => t.crea_score != null).lastIndexOf(true);
+    ok(firstNullIdx === -1 || lastScoredIdx === -1 || firstNullIdx > lastScoredIdx, 'order=score: los NULL quedan al final (NULLS LAST)');
+    ok(defaultOrder[0].id === topicsBody[0].id, 'sin order=, sigue cronológico (mismo primero que antes)');
+
     // --- H_TOPICS_SUMMARY: totales + sources coherentes con la lista ---
     const sumRes = await fetch(`${BASE}/api/listening/topics/summary`, authDirector);
     ok(sumRes.status === 200, `GET /topics/summary → 200 (llegó ${sumRes.status})`);
@@ -331,6 +371,18 @@ async function main() {
     ok((sum.by_verification.none || 0) === noneTopics.length, 'summary.none = filtro none');
     ok(sum.sources.includes('Web Search'), 'summary.sources incluye Web Search');
     ok((await fetch(`${BASE}/api/listening/topics/summary`)).status === 401, 'summary sin token → 401');
+
+    // --- H_SCORE_BANDS (R2-27/R2-28): bandas del CREA Score, etiqueta, nunca filtro ---
+    ok(sum.by_score_band && typeof sum.by_score_band.alta === 'number', 'summary trae by_score_band');
+    const bandParts = Object.values(sum.by_score_band).reduce((a, b) => a + b, 0);
+    ok(bandParts === sum.total, `by_score_band suma total (${bandParts} vs ${sum.total})`);
+
+    // --- H_TODAY_SYNTHESIS (R2-29): síntesis operativa, números reales ---
+    ok(sum.today && typeof sum.today.since_last_cutoff === 'number', 'summary.today.since_last_cutoff existe');
+    ok(typeof sum.today.discarded === 'number' && sum.today.discarded >= 0, 'summary.today.discarded existe y no es negativo');
+    ok(sum.today.signals === (sum.by_verification.signal || 0), 'summary.today.signals coincide con by_verification.signal');
+    ok(sum.today.to_contextualize === (sum.by_verification.checking || 0), 'summary.today.to_contextualize = checking');
+    ok(typeof sum.today.crea_analyses === 'number', 'summary.today.crea_analyses existe');
 
     // --- H_RADAR_SOURCES: lista editorial ---
     const srcRes = await fetch(`${BASE}/api/listening/radar-sources`, {
