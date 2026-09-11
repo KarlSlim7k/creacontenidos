@@ -232,6 +232,30 @@ export interface Topic {
   media_available: boolean | null;
 }
 
+/** Motor Editorial CREA (RADAR 2.0, punto 11, R2-19…R2-21). Objeto DISTINTO de
+ * Topic: verificación = "es defendible", análisis = "qué significa". Los
+ * campos que un nivel no llena quedan null — nunca inventados a medias.
+ * docs/ia/motor-editorial-crea.md fija qué llena cada nivel. */
+export interface EditorialAnalysis {
+  id: number;
+  topic_id: number;
+  analysis_level: 1 | 2 | 3;
+  que_paso: { resumen: string | null; hechos: string[] } | null;
+  por_que_importa: string | null;
+  contexto: string | null;
+  datos: { label: string; value: string; source: string | null }[] | null;
+  implicaciones: string[] | null;
+  conversacion: unknown | null;
+  pendientes: string | null;
+  relevancia_perote: string | null;
+  para_el_ciudadano: string | null;
+  model: string | null;
+  provider: string | null;
+  tokens_used: number | null;
+  created_by: number | null;
+  created_at: string;
+}
+
 export interface CompetitorPost {
   id: number;
   source_platform: string;
@@ -509,6 +533,11 @@ export interface State {
   deletePublishedError: string | null;
   pickerPreview: Proposal | null;
   selectedRadarId: number | null;
+  /** Historial de análisis del Motor Editorial por topic_id (R2-21). undefined =
+   * no pedido todavía; [] = pedido, sin análisis previos. Más reciente primero. */
+  radarAnalysisByTopic: Record<number, EditorialAnalysis[] | undefined>;
+  /** Nivel (1|2|3) en curso de generación, o null. Solo puede haber uno a la vez. */
+  radarAnalysisBusy: 1 | 2 | 3 | null;
   configTab: string;
   showNotifications: boolean;
   /** Formulario de alta/edición abierto. Los cinco (usuario, servicio, cuenta FB,
@@ -608,6 +637,7 @@ export function initialState(): State {
   deletePublishedId: null, deletePublishedError: null,
   pickerPreview: null,
   selectedRadarId: null,
+  radarAnalysisByTopic: {}, radarAnalysisBusy: null,
   configTab: 'usuarios', showNotifications: false,
   form: null, formError: null, socialBusy: false, socialSyncBusy: false,
   newsletterContent: null, newsletterBusy: false, newsletterSending: false, newsletterSaving: false,
@@ -821,6 +851,17 @@ export function loadRadarSummary() {
   adminApi<TopicSummary>('/api/listening/topics/summary')
     .then((r) => { setData({ topicSummary: r }); })
     .catch(() => { /* tarjetas en guion */ });
+}
+
+// Historial de análisis del Motor Editorial de un topic (R2-21). No repite el
+// fetch si ya está en caché — refrescar (tras generar uno nuevo) pasa force:true.
+export function loadRadarAnalysis(topicId: number, force?: boolean) {
+  if (!force && state.radarAnalysisByTopic[topicId] !== undefined) return;
+  adminApi<EditorialAnalysis[]>(`/api/listening/topics/${topicId}/analysis`)
+    .then((rows) => {
+      setState({ radarAnalysisByTopic: Object.assign({}, state.radarAnalysisByTopic, { [topicId]: rows }) });
+    })
+    .catch(() => { /* la ficha sigue mostrando "sin análisis" */ });
 }
 
 // Guard contra respuestas fuera de orden al alternar 7d/30d rápido.

@@ -1,6 +1,6 @@
 // CREA Panel Admin — pantalla RADAR (social listening + verificación editorial).
-import { state, type Topic, type CompetitorPost, type RadarSource, type RadarStats } from '../store';
-import { esc, loadingCard, errorCard, badge, statusStyle, paginateRows, renderPager, safeHttpUrl } from '../util';
+import { state, type Topic, type CompetitorPost, type RadarSource, type RadarStats, type EditorialAnalysis } from '../store';
+import { esc, loadingCard, errorCard, badge, statusStyle, paginateRows, renderPager, safeHttpUrl, relativeTime } from '../util';
 import { icon } from '../icons';
 import { reasonSelectOptions } from '../reasons';
 
@@ -66,6 +66,61 @@ function riskFlagText(flag: string | { code?: string; message?: string }): strin
 // clampea por tabla, así que cambiar de tab nunca deja una página inválida.
 const radarPager = (page: number, totalPages: number, total: number, hasMore?: boolean) =>
   renderPager(page, totalPages, total, 'set-radar-page', hasMore);
+
+const ANALYSIS_LEVEL_LABEL: Record<1 | 2 | 3, string> = { 1: 'Nivel 1 · Señal', 2: 'Nivel 2 · Contexto', 3: 'Nivel 3 · Análisis CREA' };
+const ANALYSIS_LEVEL_COST: Record<1 | 2 | 3, string> = { 1: 'Costo bajo', 2: 'Costo bajo-medio', 3: 'Costo alto' };
+
+// Ficha del Motor Editorial CREA (R2-19…R2-21) — objeto DISTINTO de la ficha
+// de verificación de arriba: verificación = "es defendible", esto = "qué
+// significa". Por eso va en su propio bloque, con su propio eyebrow de color
+// distinto, nunca mezclado campo a campo con lo de verificación.
+function analysisSection(topic: Topic): string {
+  const analyses = state.radarAnalysisByTopic[topic.id];
+  const latest: EditorialAnalysis | null = analyses && analyses.length ? analyses[0] : null;
+  const busy = state.radarAnalysisBusy;
+
+  const buttons = ([1, 2, 3] as const).map((level) => {
+    const isBusy = busy === level;
+    return `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="analyze-topic" data-id="${topic.id}" data-level="${level}" ${busy ? 'disabled' : ''} title="${ANALYSIS_LEVEL_COST[level]}">${isBusy ? 'Generando…' : ANALYSIS_LEVEL_LABEL[level]}</button>`;
+  }).join('');
+  const costLegend = `<p style="font-size:11px;color:var(--text-mute);margin:6px 0 0;">Costo declarado: Nivel 1 bajo · Nivel 2 bajo-medio · Nivel 3 alto (modelo de razonamiento). Siempre un clic humano — ningún nivel se dispara solo.</p>`;
+
+  if (!latest) {
+    return `<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid var(--line-soft);">
+      <p class="padmin-drawer-eyebrow" style="color:var(--accent-text);">ANÁLISIS EDITORIAL · MOTOR CREA</p>
+      <p class="padmin-drawer-section-body">Sin análisis editorial todavía.</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">${buttons}</div>
+      ${costLegend}
+    </div>`;
+  }
+
+  const hechosHtml = latest.que_paso && latest.que_paso.hechos && latest.que_paso.hechos.length
+    ? `<ul style="margin:0 0 12px;padding-left:18px;">${latest.que_paso.hechos.map((h) => `<li style="font-size:12px;color:var(--text-2);margin-bottom:2px;">${esc(h)}</li>`).join('')}</ul>`
+    : '';
+  const datosHtml = latest.datos && latest.datos.length
+    ? `<p class="padmin-drawer-section-title">QUÉ DICEN LOS DATOS</p><ul style="margin:0 0 12px;padding-left:18px;">${latest.datos.map((d) => `<li style="font-size:12px;color:var(--text-2);margin-bottom:2px;"><b>${esc(d.label)}:</b> ${esc(d.value)}${d.source ? ` (${esc(d.source)})` : ''}</li>`).join('')}</ul>`
+    : '';
+  const implicacionesHtml = latest.implicaciones && latest.implicaciones.length
+    ? `<p class="padmin-drawer-section-title">IMPLICACIONES</p><ul style="margin:0 0 12px;padding-left:18px;">${latest.implicaciones.map((i) => `<li style="font-size:12px;color:var(--text-2);margin-bottom:2px;">${esc(i)}</li>`).join('')}</ul>`
+    : '';
+
+  return `<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid var(--line-soft);">
+    <p class="padmin-drawer-eyebrow" style="color:var(--accent-text);">ANÁLISIS EDITORIAL · MOTOR CREA</p>
+    ${latest.que_paso && latest.que_paso.resumen ? `<p class="padmin-drawer-section-title">QUÉ PASÓ</p><p class="padmin-drawer-section-body">${esc(latest.que_paso.resumen)}</p>` : ''}
+    ${hechosHtml}
+    ${latest.por_que_importa ? `<p class="padmin-drawer-section-title">POR QUÉ IMPORTA</p><p class="padmin-drawer-section-body">${esc(latest.por_que_importa)}</p>` : ''}
+    ${latest.contexto ? `<p class="padmin-drawer-section-title">CONTEXTO</p><p class="padmin-drawer-section-body">${esc(latest.contexto)}</p>` : ''}
+    ${datosHtml}
+    ${implicacionesHtml}
+    <p class="padmin-drawer-section-title">QUÉ SE ESTÁ DICIENDO</p><p class="padmin-drawer-section-body">${latest.conversacion ? esc(JSON.stringify(latest.conversacion)) : 'Sin datos — pendiente de la investigación de Conversación Digital (punto 13).'}</p>
+    ${latest.pendientes ? `<p class="padmin-drawer-section-title">QUÉ NO SABEMOS</p><p class="padmin-drawer-section-body">${esc(latest.pendientes)}</p>` : ''}
+    ${latest.para_el_ciudadano ? `<p class="padmin-drawer-section-title">QUÉ NECESITA SABER EL CIUDADANO</p><p class="padmin-drawer-section-body">${esc(latest.para_el_ciudadano)}</p>` : ''}
+    ${latest.relevancia_perote ? `<p class="padmin-drawer-section-title">RELEVANCIA PARA PEROTE</p><p class="padmin-drawer-section-body">${esc(latest.relevancia_perote)}</p>` : ''}
+    <p style="font-size:11px;color:var(--text-mute);margin:0 0 10px;">${esc(ANALYSIS_LEVEL_LABEL[latest.analysis_level])} · ${esc(latest.model || '—')} · ${esc(relativeTime(latest.created_at))}${analyses && analyses.length > 1 ? ` · ${analyses.length} análisis en el historial` : ''}</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">${buttons}</div>
+    ${costLegend}
+  </div>`;
+}
 
 function renderRadarDetail(): string {
   if (state.selectedRadarId == null) return '';
@@ -136,6 +191,7 @@ function renderRadarDetail(): string {
       <p class="padmin-drawer-section-title">ACTORES INVOLUCRADOS</p><p class="padmin-drawer-section-body">${esc(topic.actores || 'Sin datos.')}</p>
       <p class="padmin-drawer-section-title">ÁNGULOS DE COBERTURA SUGERIDOS</p><p class="padmin-drawer-section-body">${esc(topic.angulos || 'Sin datos.')}</p>
       <p class="padmin-drawer-section-title">POTENCIAL DE AUDIENCIA</p><p class="padmin-drawer-section-body" style="margin-bottom:0;">${esc(topic.audiencia || 'Sin datos.')}</p>
+      ${canManageRadar() ? analysisSection(topic) : ''}
       ${canManageRadar() ?
         `<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid var(--line-soft);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           ${topic.verification_status === 'risk' ? '<p style="width:100%;margin:0 0 8px;font-size:12px;color:var(--danger);">Riesgo alto: generar propuesta requiere confirmación explícita (force).</p>' : ''}

@@ -1,11 +1,11 @@
 // CREA Panel Admin — acciones (submit/handle) y delegación de eventos por data-action.
 import {
   state, setState, setData, adminApi, adminApiBlob, loadScreenData, mergeKey, setProposalsKey, isSoundMuted,
-  loadRadarTopics, loadRadarSummary, loadRadarStats, refreshCurrentScreen,
+  loadRadarTopics, loadRadarSummary, loadRadarStats, loadRadarAnalysis, refreshCurrentScreen,
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult, type TrustedDevice,
-  type EditChatHunk, type MyProfile, type EditorialSettings, type TwoFaSetup,
+  type EditChatHunk, type MyProfile, type EditorialSettings, type TwoFaSetup, type EditorialAnalysis,
 } from './store';
 import { TABLE_PAGE_SIZE, safeHttpUrl } from './util';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
@@ -354,7 +354,12 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'mark-lead': (el) => submitMarkLead(Number(attr(el, 'data-id')), attr(el, 'data-status')),
   'convert-lead': (el) => submitConvertLead(Number(attr(el, 'data-id'))),
   'delete-lead': (el) => submitDeleteLead(Number(attr(el, 'data-id'))),
-  'open-radar': (el) => setState({ selectedRadarId: Number(attr(el, 'data-id')) }),
+  'open-radar': (el) => {
+    const id = Number(attr(el, 'data-id'));
+    setState({ selectedRadarId: id });
+    loadRadarAnalysis(id);
+  },
+  'analyze-topic': (el) => submitAnalyzeTopic(Number(attr(el, 'data-id')), Number(attr(el, 'data-level')) as 1 | 2 | 3),
   'close-radar': () => setState({ selectedRadarId: null }),
   'approve-topic': (el) => submitApproveTopic(Number(attr(el, 'data-id'))),
   // Motivo obligatorio (R2-07/R2-08): abre el modal en vez de eliminar directo.
@@ -944,6 +949,20 @@ export function submitApproveTopic(id: number) {
       setData({ topics });
     })
     .catch((err: ApiError) => { setState({ errorMsg: err.message }); });
+}
+
+// Motor Editorial CREA (R2-19…R2-21): dispara un análisis de nivel N. Siempre
+// un clic humano explícito — docs/ia/motor-editorial-crea.md. Un nivel a la
+// vez (radarAnalysisBusy) para no mandar dos clics del mismo botón en fila.
+export function submitAnalyzeTopic(topicId: number, level: 1 | 2 | 3) {
+  if (state.radarAnalysisBusy) return;
+  setState({ radarAnalysisBusy: level });
+  adminApi<EditorialAnalysis>(`/api/listening/topics/${topicId}/analyze`, { method: 'POST', body: { level } })
+    .then(() => {
+      setState({ radarAnalysisBusy: null, successMsg: `Análisis nivel ${level} generado.` });
+      loadRadarAnalysis(topicId, true);
+    })
+    .catch((err: ApiError) => { setState({ radarAnalysisBusy: null, errorMsg: err.message }); });
 }
 
 // Descarte de tema(s) de RADAR con motivo obligatorio (R2-07/R2-08). Un solo
