@@ -221,6 +221,15 @@ export interface Topic {
   editorial_decision: string | null;
   source_count: number | null;
   detected_at: string;
+  // Señal externa (RADAR 2.0, R2-10/R2-15) — null en temas legacy y en los
+  // detectados por los caminos internos (Firecrawl/Perplexity/Facebook).
+  event_date: string | null;
+  locality: string | null;
+  territorial_scope: string | null;
+  category: string | null;
+  provider: string | null;
+  external_id: string | null;
+  media_available: boolean | null;
 }
 
 export interface CompetitorPost {

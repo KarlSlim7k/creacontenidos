@@ -32,6 +32,31 @@ function evidenceList(topic: Topic): NonNullable<Topic['evidence']> {
   return Array.isArray(e) ? e : [];
 }
 
+const SCOPE_LABEL: Record<string, string> = {
+  local: 'Local', regional: 'Regional', estatal: 'Estatal', nacional: 'Nacional', internacional: 'Internacional',
+};
+
+// Procedencia de una señal externa (RADAR 2.0, R2-10/R2-15) — null-safe: un
+// tema legacy o detectado por los caminos internos (Firecrawl/Perplexity/
+// Facebook) no trae `provider`, y esta sección simplemente no se renderiza.
+function provenanceBlock(topic: Topic): string {
+  if (!topic.provider) return '';
+  const eventDate = topic.event_date
+    ? new Date(topic.event_date).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+  const chips = [
+    { label: 'Proveedor', value: topic.provider },
+    { label: 'Fecha del hecho', value: eventDate },
+    { label: 'Localidad', value: topic.locality },
+    { label: 'Alcance', value: topic.territorial_scope ? SCOPE_LABEL[topic.territorial_scope] || topic.territorial_scope : null },
+  ].filter((c) => c.value);
+  if (!chips.length) return '';
+  return `<p class="padmin-drawer-section-title">PROCEDENCIA</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+      ${chips.map((c) => `<span class="padmin-t-small" style="background:var(--bg-soft,#f8faf7);border-radius:12px;padding:4px 10px;">${esc(c.label)}: <b style="color:var(--text);">${esc(String(c.value))}</b></span>`).join('')}
+    </div>`;
+}
+
 function riskFlagText(flag: string | { code?: string; message?: string }): string {
   if (typeof flag === 'string') return flag;
   return flag.message || flag.code || JSON.stringify(flag);
@@ -101,6 +126,7 @@ function renderRadarDetail(): string {
         <div style="padding:10px;background:var(--bg-soft,#f8faf7);border-radius:6px;"><span style="display:block;font-size:10px;color:var(--text-mute);text-transform:uppercase;">Fuente canal</span><b style="display:block;margin-top:4px;font-size:14px;">${esc(topic.source || '—')}</b></div>
         <div style="padding:10px;background:var(--bg-soft,#f8faf7);border-radius:6px;"><span style="display:block;font-size:10px;color:var(--text-mute);text-transform:uppercase;">Confianza</span><b style="display:block;margin-top:4px;font-size:14px;">${topic.confidence != null ? esc(String(Math.round(Number(topic.confidence)))) : '—'}</b></div>
       </div>
+      ${provenanceBlock(topic)}
       ${topic.known_facts ? `<p class="padmin-drawer-section-title">QUÉ SE SABE</p><p class="padmin-drawer-section-body">${esc(topic.known_facts)}</p>` : ''}
       ${topic.unknown_facts ? `<p class="padmin-drawer-section-title">QUÉ NO SE SABE</p><p class="padmin-drawer-section-body">${esc(topic.unknown_facts)}</p>` : ''}
       <p class="padmin-drawer-section-title">EVIDENCIA Y FUENTES</p>${evidenceHtml}
