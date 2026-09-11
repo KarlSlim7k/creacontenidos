@@ -322,16 +322,40 @@ Devuelve SOLO un JSON array de longitud ${posts.length}, mismo orden que la entr
   return parseJson(content);
 }
 
+// R2-22: si el tema tiene un análisis del Motor Editorial (editorial_analyses),
+// resume los campos ya sintetizados para que generateProposal() los use en
+// vez de (o además de) la ficha cruda del tema — sin esto, generar-propuesta
+// sigue leyendo solo topics, comportamiento idéntico a antes de esta fase.
+function analysisBlock(analysis) {
+  if (!analysis) return '';
+  const parts = [];
+  if (analysis.contexto) parts.push(`Contexto: ${analysis.contexto}`);
+  if (analysis.por_que_importa) parts.push(`Por qué importa: ${analysis.por_que_importa}`);
+  if (Array.isArray(analysis.implicaciones) && analysis.implicaciones.length) {
+    parts.push(`Implicaciones: ${analysis.implicaciones.join('; ')}`);
+  }
+  if (Array.isArray(analysis.datos) && analysis.datos.length) {
+    parts.push(`Datos: ${analysis.datos.map((d) => `${d.label}: ${d.value}`).join('; ')}`);
+  }
+  if (analysis.pendientes) parts.push(`Qué falta confirmar: ${analysis.pendientes}`);
+  if (analysis.para_el_ciudadano) parts.push(`Qué necesita saber el ciudadano: ${analysis.para_el_ciudadano}`);
+  if (analysis.relevancia_perote) parts.push(`Relevancia local: ${analysis.relevancia_perote}`);
+  if (!parts.length) return '';
+  return `\n\nAnálisis editorial CREA ya hecho (nivel ${analysis.analysis_level}) — enriquece el enfoque con esto, no te limites a repetir el resumen del tema:\n${parts.join('\n')}`;
+}
+
 // competitorPosts (opcional): posts de competencia ya recuperados por
 // similarity() en content-engine/index.js — solo para que el modelo elija un
 // ángulo distinto, nunca para copiar/parafrasear su texto (se le dice explícito).
-async function generateProposal(context, format, angle, competitorPosts, directive) {
+// analysis (opcional, R2-22): fila más reciente de editorial_analyses para
+// este topic, o null — sin análisis, el prompt queda igual que antes de R2-22.
+async function generateProposal(context, format, angle, competitorPosts, directive, analysis) {
   const modelKey = format === 'guion_audio' || format === 'guion_video' ? 'complex' : 'default';
   const system = 'Eres un editor asistente para CREA Contenidos, un medio digital en Perote, Veracruz. Generas propuestas de contenido en español mexicano profesional.';
   const competitorBlock = competitorPosts && competitorPosts.length
     ? `\n\nCobertura reciente de competencia sobre temas similares (SOLO para elegir un ángulo distinto — NO copies ni parafrasees su texto):\n${JSON.stringify(competitorPosts.map((p) => ({ medio: p.source_account, texto: String(p.post_text || '').slice(0, 300) })))}`
     : '';
-  const user = `${directiveBlock(directive)}Tema: ${context.title}\nDescripción: ${context.description || ''}\nAntecedentes: ${context.antecedentes || ''}\nActores: ${context.actores || ''}\nÁngulos sugeridos: ${context.angulos || ''}\nAudiencia: ${context.audiencia || ''}\nFormato pedido: ${format}\nÁngulo editorial: ${angle || 'libre'}${competitorBlock}\n\nGenera una propuesta de contenido. Devuelve SOLO un JSON con: title, body (resumen de 2-3 párrafos), dek (subtítulo de 1 línea), section (una de: ${SECTIONS.join(', ')}), angulo, sensibilidad (verde/amarillo/rojo).`;
+  const user = `${directiveBlock(directive)}Tema: ${context.title}\nDescripción: ${context.description || ''}\nAntecedentes: ${context.antecedentes || ''}\nActores: ${context.actores || ''}\nÁngulos sugeridos: ${context.angulos || ''}\nAudiencia: ${context.audiencia || ''}\nFormato pedido: ${format}\nÁngulo editorial: ${angle || 'libre'}${competitorBlock}${analysisBlock(analysis)}\n\nGenera una propuesta de contenido. Devuelve SOLO un JSON con: title, body (resumen de 2-3 párrafos), dek (subtítulo de 1 línea), section (una de: ${SECTIONS.join(', ')}), angulo, sensibilidad (verde/amarillo/rojo).`;
   const { content, ...metadata } = await chatComplete(system, user, modelKey);
   return { proposal: parseJson(content), ...metadata };
 }
@@ -422,4 +446,4 @@ async function logActivity(pool, action, detail, userId, status, metadata) {
   );
 }
 
-module.exports = { chatComplete, requestNousCompletion, requestOpenRouterTextCompletion, detectTopics, detectTopicsFromMarkdown, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, editNoteChat, qaCheck, generateNewsletterEditorial, generateImage, logActivity, stripLeadingDuplicateTitle };
+module.exports = { chatComplete, requestNousCompletion, requestOpenRouterTextCompletion, detectTopics, detectTopicsFromMarkdown, detectCompetitorPosts, enrichFacebookTopics, generateProposal, generateDraft, editNoteChat, qaCheck, generateNewsletterEditorial, generateImage, logActivity, stripLeadingDuplicateTitle, parseJson, directiveBlock };
