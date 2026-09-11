@@ -29,14 +29,17 @@ async function publishProposal(pool, proposalId, origin) {
   return rows[0];
 }
 
-async function returnProposal(pool, proposalId, comment) {
+// reasonCode es opcional aquí a propósito: esta función también la usa el
+// flujo de Telegram (modules/telegram/index.js), que hoy no tiene selector de
+// motivo — ver R2-06/R2-08. El motivo libre (comment) sigue siendo obligatorio.
+async function returnProposal(pool, proposalId, comment, reasonCode) {
   if (typeof comment !== 'string' || !comment.trim()) throw workflowError(400, 'Motivo requerido');
   const proposal = await readProposal(pool, proposalId);
   if (proposal.status !== 'en_revision') throw workflowError(409, `Solo aplica cuando el estado es 'en_revision' (actual: '${proposal.status}')`);
   const { rows } = await pool.query(
-    `UPDATE content_proposals SET status = 'borrador', review_comment = $1, updated_at = now()
-     WHERE id = $2 AND status = 'en_revision' RETURNING *`,
-    [comment.trim(), proposalId]
+    `UPDATE content_proposals SET status = 'borrador', review_comment = $1, review_reason_code = $2, updated_at = now()
+     WHERE id = $3 AND status = 'en_revision' RETURNING *`,
+    [comment.trim(), reasonCode || null, proposalId]
   );
   if (!rows[0]) throw workflowError(409, 'La nota ya fue atendida por otro director');
   return rows[0];

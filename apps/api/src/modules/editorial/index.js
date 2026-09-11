@@ -6,6 +6,23 @@ const { logActivity } = require('../../lib/ai-client');
 const { publishProposal, returnProposal } = require('../../lib/editorial-review');
 const { slugify } = require('../../lib/slug');
 const { sendPushToRoles } = require('../../lib/push');
+const { isValidReasonCode } = require('../../lib/editorial-reasons');
+
+// Motivo (taxonomía R2-05) + verification_status del topic origen, para la
+// bitácora de /reject y /return (R2-06) — insumo de aprendizaje editorial
+// (punto 16). crea_score se suma cuando exista la fase 04 (CREA Score).
+async function reasonLogMetadata(proposalId, reasonCode) {
+  const { rows } = await pool.query(
+    `SELECT t.verification_status FROM content_proposals cp
+     LEFT JOIN topics t ON t.id = cp.topic_id WHERE cp.id = $1`,
+    [proposalId]
+  );
+  return {
+    proposal_id: Number(proposalId),
+    reason_code: reasonCode,
+    verification_status: (rows[0] && rows[0].verification_status) || null,
+  };
+}
 
 const router = express.Router();
 
@@ -91,7 +108,7 @@ router.use('/proposals', requireAuth, requireRole('director', 'produccion'));
 
 const PROPOSAL_FIELDS = `id, topic_id, format, title, body, dek, section, slug, cover_image_url,
   author_name, is_sponsored, sponsor_name, image_prompt, editorial_directive,
-  angulo, sensibilidad, origin, status, author_id, review_comment, published_at, created_at, updated_at, view_count`;
+  angulo, sensibilidad, origin, status, author_id, review_comment, review_reason_code, published_at, created_at, updated_at, view_count`;
 
 // GET /api/editorial/proposals?status=a,b&author_id=
 router.get('/proposals', requireAuth, async (req, res, next) => {
@@ -157,19 +174,25 @@ router.patch('/proposals/:id/approve', requireAuth, requireRole('director', 'pro
   }
 });
 
-// Propuestas IA: rechazar con motivo.
+// Propuestas IA: rechazar con motivo. El motivo libre (reason) sigue siendo
+// obligatorio; reason_code (taxonomía R2-05) es un campo adicional, no un
+// reemplazo — ver docs/implementaciones/radar2/01-feedback-editorial.md.
 router.patch('/proposals/:id/reject', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     if (!(await requireStatus(req.params.id, 'propuesta', res))) return;
-    const { reason } = req.body || {};
+    const { reason, reason_code } = req.body || {};
     if (typeof reason !== 'string' || !reason.trim()) {
       return res.status(400).json({ error: 'Datos inválidos', fields: { reason: 'Motivo requerido' } });
     }
+    if (!isValidReasonCode(reason_code)) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { reason_code: 'Requerido, valor de la taxonomía de motivos' } });
+    }
     const { rows } = await pool.query(
-      `UPDATE content_proposals SET status = 'rechazada', review_comment = $1, updated_at = now()
-       WHERE id = $2 RETURNING ${PROPOSAL_FIELDS}`,
-      [reason.trim(), req.params.id]
+      `UPDATE content_proposals SET status = 'rechazada', review_comment = $1, review_reason_code = $2, updated_at = now()
+       WHERE id = $3 RETURNING ${PROPOSAL_FIELDS}`,
+      [reason.trim(), reason_code, req.params.id]
     );
+    await logActivity(pool, 'proposal_reject', `Propuesta rechazada: ${rows[0].title}`, req.user.id, 'exito', await reasonLogMetadata(req.params.id, reason_code));
     res.json(rows[0]);
   } catch (err) {
     next(err);
@@ -261,11 +284,16 @@ router.patch('/proposals/:id/publish', requireAuth, requireRole('director'), asy
   }
 });
 
-// Aprobación (solo director): devolver con comentarios.
+// Aprobación (solo director): devolver con comentarios + motivo (R2-05/R2-06).
 router.patch('/proposals/:id/return', requireAuth, requireRole('director'), async (req, res, next) => {
   try {
-    const { comment } = req.body || {};
-    res.json(await returnProposal(pool, req.params.id, comment));
+    const { comment, reason_code } = req.body || {};
+    if (!isValidReasonCode(reason_code)) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { reason_code: 'Requerido, valor de la taxonomía de motivos' } });
+    }
+    const proposal = await returnProposal(pool, req.params.id, comment, reason_code);
+    await logActivity(pool, 'proposal_return', `Nota devuelta: ${proposal.title}`, req.user.id, 'exito', await reasonLogMetadata(req.params.id, reason_code));
+    res.json(proposal);
   } catch (err) {
     if (err.status === 400 && err.message === 'Motivo requerido') return res.status(400).json({ error: 'Datos inválidos', fields: { comment: err.message } });
     next(err);

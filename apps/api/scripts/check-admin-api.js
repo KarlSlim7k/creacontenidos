@@ -31,6 +31,7 @@ async function main() {
 
   let proposalId;
   let sensitiveProposalId;
+  let rejectTestProposalId;
   try {
     await waitForHealth(BASE);
 
@@ -198,11 +199,33 @@ async function main() {
     });
     assert.strictEqual(sensitivePublish.status, 400, 'sensibilidad roja sin revisión documentada no debe publicarse');
     assert.ok((await sensitivePublish.json()).fields.review_comment);
+    // R2-06: reason_code (taxonomía R2-05) obligatorio en /return, además del
+    // comentario libre — ambos coexisten, ninguno reemplaza al otro.
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${sensitiveProposalId}/return`, {
+        method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment: '[check] sin motivo' }),
+      })).status, 400, '/return sin reason_code debería fallar'
+    );
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${sensitiveProposalId}/return`, {
+        method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment: '[check] motivo inválido', reason_code: 'no_existe' }),
+      })).status, 400, '/return con reason_code fuera de la taxonomía debería fallar'
+    );
     p = await (await fetch(`${BASE}/api/editorial/proposals/${sensitiveProposalId}/return`, {
       method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ comment: '[check] revisión sensible documentada' }),
+      body: JSON.stringify({ comment: '[check] revisión sensible documentada', reason_code: 'falta_contexto' }),
     })).json();
     assert.strictEqual(p.status, 'borrador');
+    assert.strictEqual(p.review_reason_code, 'falta_contexto', '/return persiste reason_code');
+    const returnLog = await pool.query(
+      `SELECT metadata FROM activity_log WHERE action = 'proposal_return' AND metadata->>'proposal_id' = $1 ORDER BY created_at DESC LIMIT 1`,
+      [String(sensitiveProposalId)]
+    );
+    assert.ok(returnLog.rows[0], '/return deja bitácora en activity_log (R2-06)');
+    assert.strictEqual(returnLog.rows[0].metadata.reason_code, 'falta_contexto');
+    assert.strictEqual(returnLog.rows[0].metadata.verification_status, null, 'sin topic asociado, verification_status es null');
     p = await (await fetch(`${BASE}/api/editorial/proposals/${sensitiveProposalId}/submit-review`, {
       method: 'PATCH', headers: auth(produccionToken),
     })).json();
@@ -212,6 +235,38 @@ async function main() {
       body: JSON.stringify({ origin: '100% humano' }),
     })).json();
     assert.strictEqual(p.status, 'published', 'la pieza sensible puede publicarse después de documentar la revisión');
+
+    // 6d. Rechazo de propuesta: reason (libre) + reason_code (taxonomía R2-05)
+    // obligatorios, ambos coexisten; queda bitácora en activity_log (R2-06).
+    const { rows: [rejectRow] } = await pool.query(
+      `INSERT INTO content_proposals (format, title, body, status)
+       VALUES ('nota', '[check] a rechazar', 'cuerpo de prueba', 'propuesta') RETURNING id`
+    );
+    rejectTestProposalId = rejectRow.id;
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${rejectTestProposalId}/reject`, {
+        method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: '[check] sin código' }),
+      })).status, 400, '/reject sin reason_code debería fallar'
+    );
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${rejectTestProposalId}/reject`, {
+        method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason_code: 'duplicado' }),
+      })).status, 400, '/reject sin reason (texto libre) debería fallar'
+    );
+    p = await (await fetch(`${BASE}/api/editorial/proposals/${rejectTestProposalId}/reject`, {
+      method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: '[check] motivo de rechazo', reason_code: 'duplicado' }),
+    })).json();
+    assert.strictEqual(p.status, 'rechazada');
+    assert.strictEqual(p.review_reason_code, 'duplicado', '/reject persiste reason_code');
+    const rejectLog = await pool.query(
+      `SELECT metadata FROM activity_log WHERE action = 'proposal_reject' AND metadata->>'proposal_id' = $1 ORDER BY created_at DESC LIMIT 1`,
+      [String(rejectTestProposalId)]
+    );
+    assert.ok(rejectLog.rows[0], '/reject deja bitácora en activity_log (R2-06)');
+    assert.strictEqual(rejectLog.rows[0].metadata.reason_code, 'duplicado');
 
     // 7. RADAR: solo lectura, filtro por fuente.
     const topics = await (await fetch(`${BASE}/api/listening/topics?source=Facebook`, { headers: auth(directorToken) })).json();
@@ -435,6 +490,7 @@ async function main() {
       );
     }
     if (sensitiveProposalId) await pool.query('DELETE FROM content_proposals WHERE id = $1', [sensitiveProposalId]);
+    if (rejectTestProposalId) await pool.query('DELETE FROM content_proposals WHERE id = $1', [rejectTestProposalId]);
     await pool.end();
   }
 }
