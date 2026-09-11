@@ -42,7 +42,11 @@ async function tick() {
 
   running = true;
   try {
-    const content = await generateContent();
+    // El cron nunca manda selección (README de radar2/: "la selección siempre
+    // es un paso humano") — generateContent() sin argumento es el mismo
+    // camino legacy exacto que corría antes de R2-31. selectionItems queda
+    // [] y no hay nada que trazar.
+    const { content } = await generateContent();
     await pool.query(
       `INSERT INTO newsletter_editions (edition_date, weekday, date_label, content, status)
        VALUES (CURRENT_DATE, $1, $2, $3, 'pendiente')

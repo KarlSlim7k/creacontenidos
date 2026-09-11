@@ -19,7 +19,13 @@ function esc(str) {
 }
 
 // data: { weekday, date, clima, notaDelDia: {titulo, cuerpo}, enBreve: [str],
-//         datoDelDia, agenda, patrocinador: {nombre, copy, link} | null }
+//         datoDelDia, agenda, patrocinador: {nombre, copy, link} | null,
+//         paraEntender: {titulo, cuerpo} | null }
+// paraEntender es aditivo (RADAR 2.0, R2-34): bloque nuevo, opcional, entre
+// EN BREVE y DATO DEL DÍA — solo aparece si el caller lo llenó (un análisis
+// nivel 3 elegido a propósito, ver newsletter-content.js). Estructura fija
+// existente (saludo/clima/nota del día/en breve/dato del día/agenda/cierre/
+// patrocinador) sin cambios — ver cabecera del archivo.
 function renderNewsletterHtml(data) {
   const enBreveHtml = (data.enBreve || [])
     .map((item) => `<li style="margin:0 0 8px;line-height:1.5;">${esc(item)}</li>`)
@@ -63,6 +69,11 @@ function renderNewsletterHtml(data) {
           <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:0.06em;color:${COLORS.ochre};">EN BREVE</p>
           <ul style="margin:0;padding-left:18px;font-size:14px;color:${COLORS.ink};">${enBreveHtml}</ul>
         </td></tr>` : ''}
+        ${data.paraEntender ? `<tr><td style="padding:20px 24px 0;font-family:Inter,Arial,sans-serif;">
+          <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.06em;color:${COLORS.ochre};">PARA ENTENDER</p>
+          <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:${COLORS.ink};font-family:Georgia,'Roboto Slab',serif;">${esc(data.paraEntender.titulo)}</p>
+          <p style="margin:0;font-size:14px;line-height:1.6;color:${COLORS.ink};">${esc(data.paraEntender.cuerpo)}</p>
+        </td></tr>` : ''}
         ${data.datoDelDia ? `<tr><td style="padding:20px 24px 0;font-family:Inter,Arial,sans-serif;">
           <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.06em;color:${COLORS.ochre};">DATO DEL DÍA</p>
           <p style="margin:0;font-size:14px;line-height:1.5;color:${COLORS.ink};">${esc(data.datoDelDia)}</p>
@@ -97,6 +108,7 @@ function renderNewsletterText(data) {
   if (data.enBreve && data.enBreve.length) {
     lines.push('', 'EN BREVE:', ...data.enBreve.map((i) => `- ${i}`));
   }
+  if (data.paraEntender) lines.push('', `PARA ENTENDER: ${data.paraEntender.titulo} — ${data.paraEntender.cuerpo}`);
   if (data.datoDelDia) lines.push('', `DATO DEL DÍA: ${data.datoDelDia}`);
   if (data.agenda) lines.push('', `AGENDA: ${data.agenda}`);
   lines.push('', `Que tengas un buen ${data.weekday}. Nos leemos pronto.`, 'CREA Contenidos — crea-contenidos.com');
@@ -122,6 +134,7 @@ function renderPodcastScript(data) {
   if (data.enBreve && data.enBreve.length) {
     lines.push('', 'En breve:', ...data.enBreve);
   }
+  if (data.paraEntender) lines.push('', `Para entender: ${data.paraEntender.titulo}. ${data.paraEntender.cuerpo}`);
   if (data.datoDelDia) lines.push('', `Dato del día: ${data.datoDelDia}`);
   if (data.agenda) lines.push('', `Agenda: ${data.agenda}`);
   lines.push('', `Esto fue Buenos días, Perote. Que tengas un buen ${data.weekday}.`, 'CREA Contenidos.');

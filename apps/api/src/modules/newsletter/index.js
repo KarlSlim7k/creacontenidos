@@ -7,7 +7,7 @@ const { sendBroadcast, countActiveSubscribers } = require('../../lib/resend-clie
 const { synthesizeSpeech } = require('../../lib/elevenlabs-client');
 const { mixPodcast } = require('../../lib/podcast-audio');
 const { logActivity } = require('../../lib/ai-client');
-const { generateContent } = require('../../lib/newsletter-content');
+const { generateContent, replaceEditionItems } = require('../../lib/newsletter-content');
 
 const router = express.Router();
 
@@ -28,13 +28,18 @@ const audioLimiter = rateLimit({
 });
 
 function buildContent(body) {
-  const { weekday, date, clima, notaDelDia, enBreve, datoDelDia, agenda, patrocinador, guionPodcast } = body || {};
+  const { weekday, date, clima, notaDelDia, enBreve, datoDelDia, agenda, patrocinador, guionPodcast, paraEntender } = body || {};
   if (!weekday || !date || !clima || !notaDelDia || !notaDelDia.titulo || !notaDelDia.cuerpo) {
     const err = new Error('Datos inválidos: weekday, date, clima y notaDelDia (titulo, cuerpo) son requeridos');
     err.status = 400;
     throw err;
   }
-  return { weekday, date, clima, notaDelDia, enBreve: enBreve || [], datoDelDia, agenda, patrocinador: patrocinador || null, guionPodcast: guionPodcast || null };
+  return {
+    weekday, date, clima, notaDelDia, enBreve: enBreve || [], datoDelDia, agenda,
+    patrocinador: patrocinador || null, guionPodcast: guionPodcast || null,
+    // R2-34: aditivo, pasa de largo si el editor lo dejó vacío/lo borró a mano.
+    paraEntender: (paraEntender && paraEntender.titulo && paraEntender.cuerpo) ? paraEntender : null,
+  };
 }
 
 // POST /api/newsletter/generate — arma el contenido del día y lo deja guardado
@@ -42,14 +47,23 @@ function buildContent(body) {
 // que nadie tenga el panel abierto). Nunca envía nada.
 router.post('/generate', requireAuth, aiLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
-    const content = await generateContent();
-    await pool.query(
+    // R2-31: selección editorial explícita, opcional. Sin ella (undefined),
+    // generateContent() es byte-a-byte el mismo camino que corría antes de
+    // esta fase — el cron cada minuto sigue funcionando sin romperse.
+    const selection = Array.isArray(req.body && req.body.selection) ? req.body.selection : undefined;
+    const { content, selectionItems } = await generateContent(selection);
+    const { rows } = await pool.query(
       `INSERT INTO newsletter_editions (edition_date, weekday, date_label, content, status, generated_at)
        VALUES (CURRENT_DATE, $1, $2, $3, 'pendiente', now())
-       ON CONFLICT (edition_date) DO UPDATE SET content = $3, status = 'pendiente', generated_at = now()`,
+       ON CONFLICT (edition_date) DO UPDATE SET content = $3, status = 'pendiente', generated_at = now()
+       RETURNING id`,
       [content.weekday, content.date, JSON.stringify(content)]
     );
-    await logActivity(pool, 'newsletter_generate', `Contenido generado para ${content.weekday} ${content.date}`, req.user.id, 'exito', { topicsUsed: content.topicsUsed });
+    await replaceEditionItems(rows[0].id, selectionItems);
+    await logActivity(pool, 'newsletter_generate', `Contenido generado para ${content.weekday} ${content.date}`, req.user.id, 'exito', {
+      topicsUsed: content.topicsUsed,
+      selection: selectionItems.length ? selectionItems.map((i) => i.topic_id) : undefined,
+    });
     res.json(content);
   } catch (err) {
     await logActivity(pool, 'newsletter_generate', err.message, req.user.id, 'fallo', null);
