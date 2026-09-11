@@ -5,7 +5,7 @@ const config = require('../../config');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { detectCompetitorPosts, enrichFacebookTopics, logActivity } = require('../../lib/ai-client');
 const { scrapeCompetitorPosts } = require('../../lib/competitor-scraper-client');
-const { detectAndSaveTopics, insertTopicIfNew } = require('../../lib/topic-detection');
+const { detectAndSaveTopics, insertTopicIfNew, computeCreaScoreFields } = require('../../lib/topic-detection');
 const { isValidReasonCode } = require('../../lib/editorial-reasons');
 const { generateApiKey, hashApiKey } = require('../../lib/signal-auth');
 const { createEditorialAnalysis, isValidLevel, EDITORIAL_ANALYSIS_FIELDS } = require('../../lib/editorial-engine');
@@ -141,6 +141,12 @@ router.get('/topics', requireAuth, async (req, res, next) => {
       clauses.push(`verification_status = $${params.length}`);
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    // R2-27: orden por defecto sigue siendo cronológico — ?order=score es una
+    // elección explícita, nunca el comportamiento implícito. El score ordena,
+    // nunca decide: no hay ningún WHERE que oculte por score bajo.
+    const orderClause = req.query.order === 'score'
+      ? 'ORDER BY crea_score DESC NULLS LAST, detected_at DESC'
+      : 'ORDER BY detected_at DESC';
     let paging = '';
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 0, 0), 500);
     if (limit > 0) {
@@ -156,8 +162,9 @@ router.get('/topics', requireAuth, async (req, res, next) => {
       `SELECT id, title, source, mentions, sentiment, status, antecedentes, actores, angulos, audiencia,
               confidence, verification_status, known_facts, unknown_facts, evidence, risk_flags,
               editorial_decision, source_count, detected_at,
-              event_date, locality, territorial_scope, category, provider, external_id, media_available
-       FROM topics ${where} ORDER BY detected_at DESC${paging}`,
+              event_date, locality, territorial_scope, category, provider, external_id, media_available,
+              crea_score, crea_score_breakdown
+       FROM topics ${where} ${orderClause}${paging}`,
       params
     );
     res.json(rows);
@@ -184,10 +191,57 @@ router.get('/topics/summary', requireAuth, async (req, res, next) => {
     const { rows: sources } = await pool.query(
       `SELECT DISTINCT source FROM topics WHERE source IS NOT NULL ORDER BY source`
     );
+
+    // R2-27/R2-28: bandas del CREA Score. Etiqueta visual, nunca un filtro —
+    // por eso van en el summary junto al resto de agregados, no como una
+    // forma de esconder nada. sin_calcular = topics sin score todavía
+    // (legacy, o insertados antes de que existiera esta columna).
+    const { rows: scoreBandRows } = await pool.query(
+      `SELECT
+         CASE
+           WHEN crea_score IS NULL THEN 'sin_calcular'
+           WHEN crea_score >= 80 THEN 'alta'
+           WHEN crea_score >= 60 THEN 'media'
+           ELSE 'baja'
+         END AS band,
+         count(*)::int AS n
+       FROM topics GROUP BY 1`
+    );
+    const byScoreBand = { alta: 0, media: 0, baja: 0, sin_calcular: 0 };
+    for (const r of scoreBandRows) byScoreBand[r.band] = r.n;
+
+    // R2-29: síntesis operativa del día — números reales, no simulados.
+    // "Desde el último corte" = ventana de 24h (mismo criterio de "reciente"
+    // que ya usa el resto de RADAR: dedupe, calibración). "Contextualizar" =
+    // temas en 'checking' (plausibles, falta corroborar). "Descartadas hoy"
+    // suma descartes individuales y en lote de activity_log (R2-06/R2-07).
+    const [{ rows: since }, { rows: discardedRows }, { rows: analysesToday }] = await Promise.all([
+      pool.query(`SELECT count(*)::int AS n FROM topics WHERE detected_at >= now() - interval '24 hours'`),
+      pool.query(
+        `SELECT action, metadata FROM activity_log
+         WHERE action IN ('radar_delete', 'radar_batch_delete')
+           AND status = 'exito' AND created_at >= date_trunc('day', now())`
+      ),
+      pool.query(`SELECT count(*)::int AS n FROM editorial_analyses WHERE created_at >= date_trunc('day', now())`).catch(() => ({ rows: [{ n: 0 }] })),
+    ]);
+    let discardedToday = 0;
+    for (const r of discardedRows) {
+      if (r.action === 'radar_delete') discardedToday += 1;
+      else if (Array.isArray(r.metadata && r.metadata.ids)) discardedToday += r.metadata.ids.length;
+    }
+
     res.json({
       total,
       by_verification: byVerification,
+      by_score_band: byScoreBand,
       sources: sources.map((r) => r.source),
+      today: {
+        since_last_cutoff: since[0].n,
+        discarded: discardedToday,
+        signals: byVerification.signal || 0,
+        to_contextualize: byVerification.checking || 0,
+        crea_analyses: analysesToday[0].n,
+      },
     });
   } catch (err) {
     next(err);
@@ -321,6 +375,17 @@ router.post('/topics/:id/analyze', requireAuth, radarAiLimiter, requireRole('dir
       }
       throw err;
     }
+    // Recalcular el CREA Score: el análisis recién creado puede sumar los
+    // factores impacto_potencial/implicaciones_practicas que antes estaban
+    // ausentes — no es parte literal de R2-26 (esa solo pide el hook en
+    // insertTopicIfNew), pero dejarlo sin recalcular hasta la próxima
+    // detección/upgrade del mismo tema haría el score obsoleto justo cuando
+    // más información nueva hay.
+    const { crea_score, crea_score_breakdown } = await computeCreaScoreFields(topic, row);
+    await pool.query(
+      'UPDATE topics SET crea_score = $1, crea_score_breakdown = $2::jsonb WHERE id = $3',
+      [crea_score, JSON.stringify(crea_score_breakdown), topic.id]
+    );
     res.status(201).json(row);
   } catch (err) {
     next(err);
