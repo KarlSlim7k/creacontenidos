@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 // Check ejecutable de la automatización de RADAR: cron de detección
 // (listening-cron.js), canibalización (content-engine/generate-proposal) y
-// validación de sección (editorial draft). NO gasta en APIs de pago: solo
-// guards + lógica SQL (similarity() de pg_trgm, filtro de metadata.usage en
-// ai-usage) — el happy-path real de detección/generación con IA queda fuera
+// validación de sección (editorial draft). NO gasta en APIs de pago: guards +
+// lógica SQL (similarity() de pg_trgm, filtro de metadata.usage en ai-usage)
+// más el happy-path de detectAndSaveTopics() con fetch mockeado (H_AI_HAPPY_PATH,
+// R2-02) — el de generación (content-engine/generate-proposal) sigue fuera
 // (mismo criterio que check-content-engine.js / check-newsletter.js).
 const assert = require('node:assert');
 const {
   runMigrate, runSeed, createPool, startApi, stopApi, waitForHealth,
-  login: loginAt, postJson, patchJson,
+  login: loginAt, postJson, patchJson, withMockedFetch, chatCompletionResponse,
 } = require('./lib/check-helpers');
 
 const PORT = Number(process.env.CHECK_PORT) || 3995;
@@ -212,6 +213,73 @@ async function main() {
     ok(afterUp[0].n === 1, 'no se duplicó la fila al upgrade');
     await pool.query('DELETE FROM topics WHERE id = $1', [inserted.id]);
 
+    // --- H_AI_HAPPY_PATH: detectAndSaveTopics() de punta a punta con IA
+    //     mockeada (R2-02) — sin red real, sin gastar en API de pago. Prueba
+    //     el pipeline completo fetch → parseJson() → normalizeVerification()
+    //     → insertTopicIfNew(), y falla si cualquiera de esos tres se rompe. ---
+    const config = require('../src/config');
+    const { rows: directorRow } = await pool.query('SELECT id FROM users WHERE email = $1', [DIRECTOR]);
+    const directorId = directorRow[0].id;
+    const realFirecrawlKey = config.firecrawlApiKey;
+    config.firecrawlApiKey = null; // fuerza el camino Perplexity, determinista sin importar el .env local
+
+    const happyTitle = `[check] IA happy path ${Date.now()}`;
+    const validPayload = JSON.stringify([{
+      title: happyTitle,
+      source: 'Web Search',
+      mentions: 12,
+      sentiment: 'neutral',
+      antecedentes: 'CMAS confirmó el corte para mantenimiento el 10 de septiembre.',
+      actores: 'CMAS, ayuntamiento de Perote',
+      angulos: 'Impacto en colonias sin servicio',
+      audiencia: 'Vecinos de Perote',
+      confidence: 90,
+      verification_status: 'verified',
+      known_facts: 'CMAS confirmó el corte de agua vía comunicado oficial.',
+      unknown_facts: 'Hora exacta de restablecimiento del servicio.',
+      evidence: [{ label: 'CMAS comunicado', url: 'https://cmas.example.mx/comunicado', kind: 'primary', supports: true, reliable: true }],
+      risk_flags: [],
+      source_count: 1,
+    }]);
+
+    try {
+      const happyRows = await withMockedFetch(
+        [{ match: 'api.perplexity.ai', response: chatCompletionResponse(validPayload) }],
+        async (calls) => {
+          const rows = await detectAndSaveTopics(happyTitle, directorId, 'manual');
+          ok(calls.length === 1, 'H_AI_HAPPY_PATH: una sola llamada de red (Perplexity), Firecrawl deshabilitado');
+          return rows;
+        }
+      );
+      ok(happyRows.length === 1, `H_AI_HAPPY_PATH: detectAndSaveTopics inserta 1 topic (fueron ${happyRows.length})`);
+      ok(happyRows[0]._action === 'inserted', 'H_AI_HAPPY_PATH: acción = inserted');
+      ok(happyRows[0].verification_status === 'verified', 'H_AI_HAPPY_PATH: pipeline completo produce verified con fuente primaria');
+      ok(Number(happyRows[0].confidence) === 90, 'H_AI_HAPPY_PATH: confidence viaja intacta desde el modelo hasta la fila');
+
+      // JSON malformado del modelo → parseJson() revienta, nada se inserta.
+      let malformedThrew = false;
+      try {
+        await withMockedFetch(
+          [{ match: 'api.perplexity.ai', response: chatCompletionResponse('esto no es JSON en absoluto') }],
+          () => detectAndSaveTopics('check IA json malformado', directorId, 'manual')
+        );
+      } catch (_) { malformedThrew = true; }
+      ok(malformedThrew, 'H_AI_HAPPY_PATH: contenido no-JSON del modelo revienta en parseJson(), no inserta silenciosamente');
+
+      // Error HTTP del proveedor → detectAndSaveTopics propaga el fallo.
+      let httpErrorThrew = false;
+      try {
+        await withMockedFetch(
+          [{ match: 'api.perplexity.ai', response: chatCompletionResponse('', { status: 503, errorBody: { error: 'rate limited' } }) }],
+          () => detectAndSaveTopics('check IA error http', directorId, 'manual')
+        );
+      } catch (_) { httpErrorThrew = true; }
+      ok(httpErrorThrew, 'H_AI_HAPPY_PATH: error HTTP del proveedor propaga el fallo, no queda fila a medias');
+    } finally {
+      config.firecrawlApiKey = realFirecrawlKey;
+      await pool.query('DELETE FROM topics WHERE title = $1', [happyTitle]);
+    }
+
     // --- H_VERIFY_SCHEMA: columnas de verificación (034) expuestas en GET /topics ---
     const topicsRes = await fetch(`${BASE}/api/listening/topics`, {
       headers: { Authorization: 'Bearer ' + director },
@@ -371,7 +439,7 @@ async function main() {
     ok(afterBulk.length === 0, 'bulk delete vacía topics');
     runSeed();
 
-    console.log(`\n✔ check-listening pasó (${n} asserts). Brecha conocida: happy-path de detección/generación con IA real no cubierto (requiere mock de fetch).`);
+    console.log(`\n✔ check-listening pasó (${n} asserts). Happy-path de detección cubierto con fetch mockeado (H_AI_HAPPY_PATH). Brecha restante: generación (content-engine/generate-proposal) con IA real no cubierta aquí.`);
   } finally {
     // La nota 'published' del fixture de canibalización no debe quedar viva:
     // infla el conteo de check-public-api.js (asume 30 publicados fijos del seed).

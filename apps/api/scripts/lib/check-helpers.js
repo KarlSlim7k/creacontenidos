@@ -114,6 +114,69 @@ function deleteJson(base, pathname, token) {
   });
 }
 
+// --- Mock de fetch para pruebas de IA sin red real (R2-02) ---
+// `withMockedFetch(routes, fn)` reemplaza global.fetch durante `fn`, sin
+// tocar nada más (server real, DB real). `routes` es un array de
+// { match: string|RegExp, response }, evaluado en orden contra la URL de
+// cada llamada. `response` puede ser un objeto fijo, una función (call) =>
+// objeto, o un array usado como cola (se consume en orden; se repite la
+// última entrada si se agota). Combinar con `chatCompletionResponse` /
+// `errorResponse` de aquí abajo. Cualquier fase que agregue IA nueva
+// (03-motor-editorial, 07-explorer-grok) debe reutilizar este mismo helper
+// en vez de inventar un stub de fetch propio.
+async function withMockedFetch(routes, fn) {
+  const realFetch = global.fetch;
+  const calls = [];
+  const cursors = new Map();
+  global.fetch = async (url, options) => {
+    const raw = String(url);
+    let body = null;
+    try { body = options && options.body ? JSON.parse(options.body) : null; } catch (_) { /* body no-JSON: se ignora */ }
+    calls.push({ url: raw, options, body });
+    const idx = routes.findIndex((r) => (typeof r.match === 'string' ? raw.includes(r.match) : r.match.test(raw)));
+    if (idx === -1) throw new Error(`[check-helpers] withMockedFetch: sin ruta mockeada para ${raw}`);
+    const route = routes[idx];
+    if (Array.isArray(route.response)) {
+      const cursor = cursors.get(idx) || 0;
+      cursors.set(idx, Math.min(cursor + 1, route.response.length - 1));
+      return route.response[cursor];
+    }
+    return typeof route.response === 'function' ? route.response(calls[calls.length - 1]) : route.response;
+  };
+  try {
+    return await fn(calls);
+  } finally {
+    global.fetch = realFetch;
+  }
+}
+
+// Respuesta con forma chat-completion — Nous, OpenRouter y Perplexity Sonar
+// comparten `{ choices: [{ message: { content } }], usage }` (ver
+// requestNousCompletion / requestOpenRouterTextCompletion / perplexitySearch
+// en lib/ai-client.js). Pon en `content` un JSON válido para el camino feliz,
+// o texto no-JSON para ejercitar parseJson(). `status` >= 300 simula un error
+// HTTP del proveedor (usa `errorBody` para el cuerpo de error).
+function chatCompletionResponse(content, { status = 200, usage = { total_tokens: 10 }, model = 'stub/model', errorBody } = {}) {
+  const ok = status >= 200 && status < 300;
+  return {
+    ok,
+    status,
+    json: async () => (ok ? { model, choices: [{ message: { content } }], usage } : (errorBody || {})),
+    text: async () => (ok ? content : JSON.stringify(errorBody || {})),
+  };
+}
+
+// Error HTTP simple, sin forma de chat-completion — para rutas que no
+// devuelven un cuerpo de proveedor de IA.
+function errorResponse(status, body) {
+  return {
+    ok: false,
+    status,
+    json: async () => body || {},
+    text: async () => JSON.stringify(body || {}),
+  };
+}
+
 module.exports = {
   DEV_PASSWORD,
   DEFAULT_CHECK_HOST,
@@ -131,4 +194,7 @@ module.exports = {
   postJson,
   patchJson,
   deleteJson,
+  withMockedFetch,
+  chatCompletionResponse,
+  errorResponse,
 };
