@@ -8,6 +8,7 @@ const { scrapeCompetitorPosts } = require('../../lib/competitor-scraper-client')
 const { detectAndSaveTopics, insertTopicIfNew } = require('../../lib/topic-detection');
 const { isValidReasonCode } = require('../../lib/editorial-reasons');
 const { generateApiKey, hashApiKey } = require('../../lib/signal-auth');
+const { createEditorialAnalysis, isValidLevel, EDITORIAL_ANALYSIS_FIELDS } = require('../../lib/editorial-engine');
 
 const router = express.Router();
 
@@ -276,6 +277,65 @@ router.delete('/topics/:id', requireAuth, requireRole('director', 'produccion'),
       topic_id: rows[0].id, reason_code, verification_status: rows[0].verification_status || null,
     });
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Motor Editorial CREA (editorial_analyses, migración 047, R2-19/R2-20) ---
+// Los 3 niveles son siempre un clic humano explícito — nunca cron, nunca
+// automático por score. Decisión y campos por nivel: docs/ia/motor-editorial-crea.md.
+// createEditorialAnalysis() (editorial-engine.js) hace la llamada a IA + el
+// INSERT + logActivity — esta ruta es una envoltura delgada, mismo patrón que
+// POST /topics/detect con detectAndSaveTopics().
+
+// POST /api/listening/topics/:id/analyze { level, directive? } — dispara un
+// análisis nuevo. Rate-limited igual que la detección manual (radarAiLimiter):
+// es una llamada de IA de pago, mismo criterio.
+router.post('/topics/:id/analyze', requireAuth, radarAiLimiter, requireRole('director', 'produccion'), async (req, res, next) => {
+  try {
+    const level = Number(req.body && req.body.level);
+    if (!isValidLevel(level)) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { level: 'Requerido, uno de: 1, 2, 3' } });
+    }
+    const { rows: topics } = await pool.query('SELECT * FROM topics WHERE id = $1', [req.params.id]);
+    if (!topics[0]) return res.status(404).json({ error: 'Topic no encontrado' });
+    const topic = topics[0];
+
+    // Directriz por-nota o default global — mismo patrón que generate-proposal.
+    let directive = req.body && req.body.directive != null ? String(req.body.directive).trim() : '';
+    if (!directive) {
+      const { rows: settingsRows } = await pool.query('SELECT default_directive FROM editorial_settings WHERE id = 1');
+      directive = (settingsRows[0] && settingsRows[0].default_directive) || '';
+    }
+
+    let row;
+    try {
+      row = await createEditorialAnalysis(pool, topic, level, req.user.id, directive);
+    } catch (err) {
+      if (err.code === 'incomplete_analysis') {
+        await logActivity(pool, 'editorial_analysis', `Análisis nivel ${level} incompleto: ${topic.title}`, req.user.id, 'fallo', {
+          topic_id: topic.id, analysis_level: level, reason: 'incomplete_analysis',
+        });
+        return res.status(502).json({ error: err.message, code: err.code });
+      }
+      throw err;
+    }
+    res.status(201).json(row);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/listening/topics/:id/analysis — historial de análisis (más reciente
+// primero). El más reciente es el vigente; el panel decide qué mostrar.
+router.get('/topics/:id/analysis', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ${EDITORIAL_ANALYSIS_FIELDS} FROM editorial_analyses WHERE topic_id = $1 ORDER BY created_at DESC`,
+      [req.params.id]
+    );
+    res.json(rows);
   } catch (err) {
     next(err);
   }
