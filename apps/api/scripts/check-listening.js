@@ -353,6 +353,7 @@ async function main() {
     ok(stats.detection && typeof stats.detection.runs === 'number', 'radar-stats detection');
     ok(Array.isArray(stats.hints) && stats.hints.length > 0, 'radar-stats hints');
     ok(stats.knobs && stats.knobs.confidence_verified_min === 75, 'radar-stats knobs');
+    ok(stats.reasons && typeof stats.reasons.total === 'number' && typeof stats.reasons.by_code === 'object', 'radar-stats: agregado de motivos (R2-09)');
     ok((await fetch(`${BASE}/api/listening/radar-stats`)).status === 401, 'radar-stats sin token → 401');
 
     // --- H_RISK_GATE: topic risk → 409 sin force (no gasta IA) ---
@@ -426,6 +427,54 @@ async function main() {
     const afterCalls = (after.body.byAction.generate_proposal || { calls: 0 }).calls;
     ok(after.body.totalTokens - before.body.totalTokens === 12345, `H_USAGE: delta de tokens = 12345 (fue ${after.body.totalTokens - before.body.totalTokens})`);
     ok(afterCalls - beforeCalls === 1, `H_USAGE_NULL: la fila con usage:null no cuenta como call (delta calls=${afterCalls - beforeCalls}, esperado 1)`);
+
+    // --- H_DISCARD_REASON: reason_code obligatorio al descartar (R2-07) ---
+    const DISCARD_TITLE = `[check] Descarte con motivo ${Date.now()}`;
+    const { rows: discardRows } = await pool.query(
+      `INSERT INTO topics (title, source, verification_status) VALUES ($1, 'Web Search', 'signal') RETURNING id`,
+      [DISCARD_TITLE]
+    );
+    const discardId = discardRows[0].id;
+    ok(
+      (await fetch(`${BASE}/api/listening/topics/${discardId}`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + director } })).status === 400,
+      'DELETE /topics/:id sin reason_code → 400'
+    );
+    ok(
+      (await fetch(`${BASE}/api/listening/topics/${discardId}`, {
+        method: 'DELETE', headers: { Authorization: 'Bearer ' + director, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason_code: 'no_existe' }),
+      })).status === 400,
+      'DELETE /topics/:id con reason_code fuera de taxonomía → 400'
+    );
+    const discardRes = await fetch(`${BASE}/api/listening/topics/${discardId}`, {
+      method: 'DELETE', headers: { Authorization: 'Bearer ' + director, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason_code: 'poca_relevancia' }),
+    });
+    ok(discardRes.status === 204, `DELETE /topics/:id con reason_code válido → 204 (llegó ${discardRes.status})`);
+    const discardLog = await pool.query(
+      `SELECT metadata FROM activity_log WHERE action = 'radar_delete' AND metadata->>'topic_id' = $1 ORDER BY created_at DESC LIMIT 1`,
+      [String(discardId)]
+    );
+    ok(discardLog.rows[0] && discardLog.rows[0].metadata.reason_code === 'poca_relevancia', 'radar_delete deja bitácora con reason_code (R2-06/R2-07)');
+
+    const BATCH_TITLES = [`[check] batch A ${Date.now()}`, `[check] batch B ${Date.now()}`];
+    const { rows: batchRows } = await pool.query(
+      `INSERT INTO topics (title, source) VALUES ($1, 'Web Search'), ($2, 'Web Search') RETURNING id`,
+      BATCH_TITLES
+    );
+    const batchIds = batchRows.map((r) => r.id);
+    ok(
+      (await post('/api/listening/topics/batch-delete', director, { ids: batchIds })).status === 400,
+      'batch-delete sin reason_code → 400'
+    );
+    const batchRes = await post('/api/listening/topics/batch-delete', director, { ids: batchIds, reason_code: 'tema_viejo' });
+    ok(batchRes.status === 200, `batch-delete con reason_code válido → 200 (llegó ${batchRes.status})`);
+    const batchBody = await batchRes.json();
+    ok(batchBody.deleted === 2, `batch-delete elimina 2 (fue ${batchBody.deleted})`);
+    const batchLog = await pool.query(
+      `SELECT metadata FROM activity_log WHERE action = 'radar_batch_delete' ORDER BY created_at DESC LIMIT 1`
+    );
+    ok(batchLog.rows[0] && batchLog.rows[0].metadata.reason_code === 'tema_viejo', 'radar_batch_delete deja bitácora con reason_code');
 
     // --- H_TOPICS_BULK_DELETE: DELETE /topics vacía el RADAR (re-seed al final
     //     para no dejar la BD sin topics para los checks siguientes) ---

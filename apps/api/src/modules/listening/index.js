@@ -6,6 +6,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const { detectCompetitorPosts, enrichFacebookTopics, logActivity } = require('../../lib/ai-client');
 const { scrapeCompetitorPosts } = require('../../lib/competitor-scraper-client');
 const { detectAndSaveTopics, insertTopicIfNew } = require('../../lib/topic-detection');
+const { isValidReasonCode } = require('../../lib/editorial-reasons');
 
 const router = express.Router();
 
@@ -220,16 +221,25 @@ router.post('/topics/batch-approve', requireAuth, requireRole('director', 'produ
 });
 
 // POST /api/listening/topics/batch-delete — eliminar múltiples temas en lote.
+// reason_code (taxonomía R2-05) obligatorio: es la decisión más frecuente del
+// día de RADAR y hasta R2-07 no dejaba rastro — ver punto 16 del backlog.
 router.post('/topics/batch-delete', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
     if (!ids.length) return res.status(400).json({ error: 'ids array requerido' });
-    const { rowCount } = await pool.query(
-      `DELETE FROM topics WHERE id = ANY($1::int[])`,
+    const { reason_code } = req.body || {};
+    if (!isValidReasonCode(reason_code)) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { reason_code: 'Requerido, valor de la taxonomía de motivos' } });
+    }
+    const { rows } = await pool.query(
+      `DELETE FROM topics WHERE id = ANY($1::int[]) RETURNING id, verification_status`,
       [ids]
     );
-    await logActivity(pool, 'radar_batch_delete', `${rowCount} topics eliminados en lote`, req.user.id, 'exito', { ids, count: rowCount });
-    res.json({ deleted: rowCount });
+    await logActivity(pool, 'radar_batch_delete', `${rows.length} topics eliminados en lote`, req.user.id, 'exito', {
+      ids, count: rows.length, reason_code,
+      verification_statuses: rows.map((r) => r.verification_status || null),
+    });
+    res.json({ deleted: rows.length });
   } catch (err) {
     next(err);
   }
@@ -251,11 +261,18 @@ router.patch('/topics/:id/approve', requireAuth, requireRole('director', 'produc
 });
 
 // DELETE /api/listening/topics/:id — descarta un topic detectado por RADAR.
+// reason_code (taxonomía R2-05) obligatorio — ver nota en /topics/batch-delete.
 router.delete('/topics/:id', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
-    const { rows } = await pool.query('DELETE FROM topics WHERE id = $1 RETURNING id, title', [req.params.id]);
+    const { reason_code } = req.body || {};
+    if (!isValidReasonCode(reason_code)) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { reason_code: 'Requerido, valor de la taxonomía de motivos' } });
+    }
+    const { rows } = await pool.query('DELETE FROM topics WHERE id = $1 RETURNING id, title, verification_status', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Topic no encontrado' });
-    await logActivity(pool, 'radar_delete', `Topic eliminado: ${rows[0].title}`, req.user.id, 'exito', { topic_id: rows[0].id });
+    await logActivity(pool, 'radar_delete', `Topic eliminado: ${rows[0].title}`, req.user.id, 'exito', {
+      topic_id: rows[0].id, reason_code, verification_status: rows[0].verification_status || null,
+    });
     res.status(204).end();
   } catch (err) {
     next(err);
@@ -564,6 +581,24 @@ router.get('/radar-stats', requireAuth, async (req, res, next) => {
       sourcesActive += r.n;
     }
 
+    // Agregado de motivos (punto 16, R2-09): rechazo/devolución de propuesta y
+    // descarte de topics (individual + lote), todos con reason_code desde R2-06/R2-07.
+    const { rows: reasonRows } = await pool.query(
+      `SELECT metadata->>'reason_code' AS reason_code, count(*)::int AS n
+       FROM activity_log
+       WHERE action IN ('proposal_reject', 'proposal_return', 'radar_delete', 'radar_batch_delete')
+         AND status = 'exito'
+         AND metadata->>'reason_code' IS NOT NULL
+         AND created_at >= now() - ($1 || ' days')::interval
+       GROUP BY 1
+       ORDER BY 2 DESC`,
+      [days]
+    );
+    const reasonsByCode = {};
+    let reasonsTotal = 0;
+    for (const r of reasonRows) { reasonsByCode[r.reason_code] = r.n; reasonsTotal += r.n; }
+    const topReason = reasonRows[0] || null;
+
     // Hints de calibración (reglas simples, no ML)
     const hints = [];
     const riskPct = (byStatus.risk && byStatus.risk.pct) || 0;
@@ -582,6 +617,14 @@ router.get('/radar-stats', requireAuth, async (req, res, next) => {
     }
     if (detection.skipped_similar > detection.inserted && detection.runs > 0) {
       hints.push('Más skips por similitud que inserts: dedupe activo; si faltan temas legítimos, bajar TITLE_SIMILARITY_THRESHOLD.');
+    }
+    if (topReason && reasonsTotal >= 5 && topReason.n / reasonsTotal >= 0.3) {
+      const msg = topReason.reason_code === 'duplicado'
+        ? ' Revisar el umbral de similitud (title_similarity, hoy 0.45).'
+        : (topReason.reason_code === 'tema_viejo'
+          ? ' Puede ser señal de que la detección tarda en llegar o de que faltan fuentes recientes.'
+          : '');
+      hints.push(`'${topReason.reason_code}' es el motivo más frecuente de rechazo/devolución/descarte esta ventana (${topReason.n}/${reasonsTotal}).${msg}`);
     }
     if (!hints.length) {
       hints.push('Sin alertas automáticas en la ventana. Revisá docs/ia/radar-calibracion.md para umbrales.');
@@ -603,6 +646,7 @@ router.get('/radar-stats', requireAuth, async (req, res, next) => {
         skipped_similar: detection.skipped_similar,
       },
       sources: { active: sourcesActive, by_trust: sourcesByTrust },
+      reasons: { total: reasonsTotal, by_code: reasonsByCode },
       hints,
       knobs: {
         confidence_verified_min: 75,
