@@ -84,7 +84,16 @@ router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director'
       directive = (settingsRows[0] && settingsRows[0].default_directive) || '';
     }
 
-    const { proposal, usage, requestedModel, model, provider, latencyMs, usedFallback, fallbackReason, attempts } = await generateProposal(topic, format || 'nota', angle, competitorContext, directive);
+    // R2-22: si el tema tiene un análisis del Motor Editorial (el más
+    // reciente es el vigente), generateProposal() se alimenta de él. Sin
+    // análisis, comportamiento idéntico a hoy — analysis queda null.
+    const { rows: analysisRows } = await pool.query(
+      'SELECT * FROM editorial_analyses WHERE topic_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [topic_id]
+    );
+    const analysis = analysisRows[0] || null;
+
+    const { proposal, usage, requestedModel, model, provider, latencyMs, usedFallback, fallbackReason, attempts } = await generateProposal(topic, format || 'nota', angle, competitorContext, directive, analysis);
     const { rows } = await pool.query(
       `INSERT INTO content_proposals (topic_id, format, title, body, dek, section, angulo, sensibilidad, origin, status, editorial_directive)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Generado con IA', 'propuesta', $9) RETURNING *`,
@@ -115,6 +124,8 @@ router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director'
       competitor_matches: competitorContext.length,
       verification_status: vStatus,
       forced: Boolean(force),
+      analysis_id: analysis ? analysis.id : null,
+      analysis_level: analysis ? analysis.analysis_level : null,
     });
     const body = rows[0];
     if (warnings.length) body.warnings = warnings;
