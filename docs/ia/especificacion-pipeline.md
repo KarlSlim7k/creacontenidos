@@ -1,5 +1,17 @@
 # Especificación del pipeline — listening → content-engine → editorial → distribution
 
+> **Corregido (2026-09-11, `R2-04`):** este documento se escribió como spec previa a la
+> implementación de `listening`/`content-engine` (entonces "esqueletos"). Ambos módulos ya
+> están implementados, y en el camino se alejaron de esta spec en dos puntos concretos: la
+> sección `content-engine` de abajo describe generación batch por cron con las "5 propuestas"
+> de un tema a la vez — en el código real, `content-engine` genera **una propuesta por
+> llamada**, bajo demanda (`POST /api/content/generate-proposal` con `format` explícito, sin
+> cron propio); y el newsletter "Buenos días, Perote", que la sección de "Ideas fuera de
+> alcance" describe como sin tabla ni módulo, **ya tiene ambos** (`newsletter_editions`,
+> `apps/api/src/modules/newsletter/`). Se marcan ambos casos en su lugar, sin reescribir el
+> documento completo — sigue siendo útil como historia de la decisión de diseño original.
+> Estado real y plan de RADAR 2.0: [`../auditorias/RADAR-2.0-AUDITORIA.md`](../auditorias/RADAR-2.0-AUDITORIA.md).
+>
 > Traduce `crea_web/PLAN_HERMES.md` §6 (specs de skills) y `docs/architecture/operating-architecture.md`
 > (v1) a lo que cada módulo Express de v2 debe hacer. v1 lo implementaba como skills markdown de
 > Hermes Agent sobre tablas en español (`ideas`, `piezas_contenido`, `publicaciones`); v2 lo
@@ -42,6 +54,16 @@ panel admin    → distribution: publica en canales externos y guarda cada inten
 
 ## `content-engine` (capa 2)
 
+> **Corregido (2026-09-11, `R2-04`):** lo que sigue es la spec original, no el comportamiento
+> real. En el código, `content-engine` no tiene cron propio ni genera las 5 propuestas en una
+> sola llamada: cada formato se pide explícitamente vía `POST /api/content/generate-proposal
+> { topic_id, format, angle }` (un `director`/`produccion` decide qué formato generar y
+> cuándo), y `topics.status` no se actualiza automáticamente al generar una propuesta. Además,
+> antes de gastar en IA el endpoint real corre dos gates que esta spec no contemplaba: bloqueo
+> por `verification_status='risk'` (con override `force:true`) y detección de canibalización
+> contra `content_proposals` ya publicadas. Detalle real: [`politica-ia-y-gate-editorial.md`](./politica-ia-y-gate-editorial.md) §1
+> y `apps/api/src/modules/content-engine/index.js`.
+
 **Propósito**: por cada `topic` con `status='new'`, generar una propuesta por formato en `content_proposals`.
 
 **Disparo**: cron encadenado ~30 min después de `listening` (mismo patrón que v1: radar → espera → generación), o disparo manual desde el panel si un `director` quiere regenerar antes.
@@ -77,7 +99,12 @@ Todas existían en v1 como fases posteriores (5+) y siguen siendo válidas como 
 trabajo pendiente inmediato:
 
 - **Generación de imagen/audio real** (memes, infografías, cápsulas narradas): v1 usaba una cola (`assets_multimedia`) con `FOR UPDATE SKIP LOCKED` porque tenía workers separados. v2 no tiene esa tabla ni la necesita todavía — si se implementa, evaluar primero si una llamada síncrona dentro de `content-engine` alcanza antes de construir una cola.
-- **Newsletter diario "Buenos días, Perote"**: sin tabla ni módulo en v2. Spec completa en `crea_web/docs/updates/CREA_Newsletter_Podcast.md` si se retoma.
+- **Newsletter diario "Buenos días, Perote"**: **ya implementado** (corregido 2026-09-11,
+  `R2-04`) — ya no está fuera de alcance. Tabla `newsletter_editions`, módulo
+  `apps/api/src/modules/newsletter/`, tres renders (boletín, texto plano, guion de podcast)
+  desde un único objeto vía `lib/newsletter-template.js`, y cron de envío. Spec original en
+  `crea_web/docs/updates/CREA_Newsletter_Podcast.md` (histórica); estado real y brechas
+  pendientes en [`../auditorias/RADAR-2.0-AUDITORIA.md`](../auditorias/RADAR-2.0-AUDITORIA.md) §12.
 - **`crea-competitor-watch`** (✅ integrado julio 2026): v2 ya tiene la tabla `competitor_posts` (migración 008) y dos fuentes que la alimentan vía `POST /api/listening/competitors/detect` con campo `source` en el body:
   - `source: 'perplexity'` (default) — Perplexity Sonar busca publicaciones recientes de los medios configurados en `DEFAULT_COMPETITORS` o por body.
   - `source: 'facebook'` — delega al microservicio self-hosted `apps/competitor-scraper/` (Playwright + cookies de sesión). Requiere `COMPETITOR_SCRAPER_URL` apuntando al servicio; sin él responde `503 competitor_scraper_not_configured`. Body trae `accounts` (handles/URLs de Facebook).

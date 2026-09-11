@@ -8,14 +8,20 @@
 
 ### 1.1 Qué usa v2 hoy
 
-Por `apps/api/src/modules/{listening,content-engine}/README.md` y la skill `fullstack`:
+> **Corregido (2026-09-11, `R2-04`):** esta sección describía una decisión previa a la
+> implementación. `content-engine` **no** usa Claude/`ANTHROPIC_API_KEY` — llama a
+> `chatComplete()` (`lib/ai-client.js`), que pega a **Nous Portal** como proveedor primario con
+> **OpenRouter** como respaldo cross-provider. `ANTHROPIC_API_KEY` no se usa en ningún punto de
+> `listening` ni `content-engine` hoy. Detalle real y vigente: [`stack-ia-servicios-costos.md`](./stack-ia-servicios-costos.md).
 
-- **`listening`**: Perplexity Sonar API (`sonar-pro`) para detección de temas, `ANTHROPIC_API_KEY` no aplica aquí.
-- **`content-engine`**: Claude API (`ANTHROPIC_API_KEY`) para redacción de las 5 propuestas por tema.
+Por el código real (`apps/api/src/lib/ai-client.js`, `apps/api/src/modules/{listening,content-engine}`):
+
+- **`listening`**: Firecrawl (scrape) + `chatComplete()` (Nous Portal) cuando hay `FIRECRAWL_API_KEY` y URLs configuradas; si no, o si falla, Perplexity Sonar API (`sonar-pro`) vía `detectTopics()`. `ANTHROPIC_API_KEY` no aplica aquí.
+- **`content-engine`**: `chatComplete()` (Nous Portal, modelo `AI_MODEL_DEFAULT`/`AI_MODEL_COMPLEX` según tarea) para redacción de propuesta y borrador, con fallback automático a OpenRouter — ver "Fallback implementado" abajo. No genera "5 propuestas por tema" en una sola llamada: cada formato se genera bajo demanda (`POST /api/content/generate-proposal` con `format` explícito).
 
 ### 1.2 Decisión de negocio vigente
 
-[`../CREA_Stack_IA_Actualizado_v1.md`](../CREA_Stack_IA_Actualizado_v1.md) (Julio 2026, vigente) define que para el mes de pruebas el punto de entrada de IA es **Hermes Agent + Nous Portal + MiniMax como modelo primario**, con un modelo de razonamiento superior reservado para piezas sensibles/branded content de alto valor. Esa decisión **no cambia el schema ni los límites de los módulos** — solo determina qué proveedor y qué variables de entorno llama el código de `listening`/`content-engine` cuando se implementen. Antes de escribir el cliente HTTP de esas capas, confirmar contra ese documento si se llama a Anthropic/Perplexity directo o vía Nous Portal — es una decisión de una línea de configuración, no de arquitectura.
+[`../CREA_Stack_IA_Actualizado_v1.md`](../CREA_Stack_IA_Actualizado_v1.md) es la decisión de negocio **original** (Julio 2026, mes de pruebas) y está marcada **SUPERSEDIDO** en su propio encabezado — no describe el stack real. La referencia técnica vigente es [`stack-ia-servicios-costos.md`](./stack-ia-servicios-costos.md): Nous Portal como proveedor primario de texto, OpenRouter como respaldo, Perplexity para búsqueda en vivo, sin Hermes Agent ni MiniMax como punto de entrada único.
 
 **Fallback implementado**: `apps/api/src/lib/ai-client.js` usa la cadena modelo solicitado en
 Nous → `AI_MODEL_FALLBACK` en Nous → `AI_OPENROUTER_FALLBACK_MODEL` en OpenRouter. Solo avanza
@@ -23,22 +29,33 @@ por timeout/red, 402, 404, 408, 429 o 5xx; 400, 401 y 403 se detienen para corre
 El resultado registra proveedor, modelo, latencia, tokens y motivo sin guardar prompts ni cuerpos.
 Ninguna salida se publica automáticamente: conserva el gate editorial humano.
 
-### 1.3 Reglas de ruteo por tipo de tarea (heredadas de v1, siguen aplicando)
+### 1.3 Reglas de ruteo por tipo de tarea
 
-| Tarea | Modelo recomendado |
+> **Corregido (2026-09-11, `R2-04`):** la fila de "redacción editorial final" heredaba la
+> decisión original de negocio (Claude Sonnet vía Anthropic). El código real rutea texto por
+> `MODELS` en `lib/ai-client.js` (`AI_MODEL_DEFAULT`/`AI_MODEL_COMPLEX`/`AI_MODEL_QA`, todos vía
+> Nous Portal, con `AI_MODEL_FALLBACK` en Nous y `AI_OPENROUTER_FALLBACK_MODEL` en OpenRouter
+> como respaldo) — no hay una llamada directa a la API de Anthropic en ningún módulo.
+
+| Tarea | Modelo real (config vigente) |
 |---|---|
-| Clasificación de sentimiento, deduplicación, sugerencia de formato | Modelo económico (Gemini Flash / MiniMax) — 10x más barato, calidad suficiente para tareas estructuradas |
-| Redacción editorial final (nota, post, guiones) | Modelo premium (Claude Sonnet) — mantiene la voz CREA de [`identidad-editorial.md`](./identidad-editorial.md) |
-| Revisión de piezas sensibles o branded content de alto valor | Modelo de razonamiento superior, uso puntual |
+| Clasificación de sentimiento, deduplicación, detección de temas | `AI_MODEL_DEFAULT` (Nous) o Perplexity `sonar-pro` (búsqueda en vivo) |
+| Redacción editorial final (nota, post, guiones), borrador, QA | `AI_MODEL_DEFAULT`/`AI_MODEL_COMPLEX`/`AI_MODEL_QA` según la llamada (Nous), fallback automático a `AI_MODEL_FALLBACK` (Nous) y luego `AI_OPENROUTER_FALLBACK_MODEL` (OpenRouter) — mantiene la voz CREA de [`identidad-editorial.md`](./identidad-editorial.md) vía system prompt, no vía elección de proveedor |
+| Revisión de piezas sensibles o branded content de alto valor | Sin modelo dedicado distinto hoy; pasa por el mismo ruteo — el gate humano (§2) es lo que da la revisión extra, no un modelo de razonamiento superior aparte |
 
-### 1.4 Reglas de costo (pendientes de implementar)
+### 1.4 Reglas de costo
 
-Ninguna de estas existe en el código todavía — quedan como requisito para cuando `content-engine`/`listening` dejen de ser esqueletos:
-
-1. Definir presupuesto diario y por módulo.
-2. Emitir alerta al 80% del presupuesto.
-3. Bloquear tareas no críticas al 100% y usar fallback a modelo económico.
-4. Registrar qué modelo generó cada propuesta — **gap de schema**: `content_proposals` no tiene columna equivalente a `modelo_ia_usado`/`tokens_ia` de v1. Si se decide trazar esto, es una migración `ALTER TABLE content_proposals ADD COLUMN model_used TEXT, ADD COLUMN tokens_used INTEGER` — no crear tabla nueva para esto (YAGNI).
+1. Definir presupuesto diario y por módulo. **Pendiente** — no existe en el código.
+2. Emitir alerta al 80% del presupuesto. **Pendiente** — no existe en el código.
+3. Bloquear tareas no críticas al 100% y usar fallback a modelo económico. **Pendiente** como
+   política de presupuesto — lo que sí existe hoy es un rate-limit por usuario (no por gasto):
+   `aiLimiter` en `content-engine` (30 llamadas/15 min) y `EDIT_NOTE_DAILY_LIMIT` (10/día) para
+   el asistente de edición.
+4. Registrar qué modelo generó cada propuesta — **ya implementado, corregido (2026-09-11):**
+   no vía columna en `content_proposals` (no existe `model_used`/`tokens_used` ahí y no hace
+   falta agregarla), sino vía `activity_log.metadata` en cada llamada (`logActivity()`,
+   `lib/ai-client.js`): proveedor, modelo solicitado, modelo devuelto, tokens, latencia,
+   si usó fallback y por qué. Expuesto en `GET /api/content/ai-usage`.
 
 ### 1.5 Reglas de seguridad
 
