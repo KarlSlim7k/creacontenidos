@@ -376,6 +376,18 @@ export interface NewsletterContent {
   patrocinador: { nombre: string; copy: string; link: string } | null;
   guionPodcast: string | null;
   topicsUsed: number;
+  // R2-34: aditivo — null si no hubo selección editorial, o si ninguno de los
+  // temas elegidos traía un análisis nivel 3 asociado a propósito.
+  paraEntender: { titulo: string; cuerpo: string } | null;
+}
+
+/** Selección editorial de un tema candidato para el boletín (R2-31/R2-33).
+ * analysisId se resuelve solo (nivel 3 más reciente del tema, si existe) al
+ * marcar el checkbox — el editor lo ve (hasLevel3), no lo escribe a mano. */
+export interface NewsletterSelectionItem {
+  section: string;
+  analysisId: number | null;
+  hasLevel3: boolean;
 }
 
 export interface AdminData {
@@ -572,6 +584,12 @@ export interface State {
   newsletterSubscriberCount: number | null;
   newsletterAudioBusy: boolean;
   newsletterAudioUrl: string | null;
+  // Selección editorial para el boletín (R2-33). candidates = propuestas de
+  // RADAR por CREA Score (undefined = no pedidas todavía); selection = solo
+  // los temas marcados, por topic_id.
+  newsletterCandidates: Topic[] | undefined;
+  newsletterCandidatesLoading: boolean;
+  newsletterSelection: Record<number, NewsletterSelectionItem>;
   demoNote: string | null;
   /** Confirmación destructiva por frase escrita (borrados masivos). null = cerrada. */
   dangerConfirm: { action: string; title: string; body: string; phrase: string } | null;
@@ -656,6 +674,7 @@ export function initialState(): State {
   newsletterContent: null, newsletterBusy: false, newsletterSending: false, newsletterSaving: false,
   newsletterPreview: null, newsletterPreviewDevice: 'desktop', newsletterSubscriberCount: null,
   newsletterAudioBusy: false, newsletterAudioUrl: null,
+  newsletterCandidates: undefined, newsletterCandidatesLoading: false, newsletterSelection: {},
   demoNote: null, dangerConfirm: null, dangerConfirmError: null,
   // isSoundMuted() y no false: es preferencia por dispositivo (localStorage), así que
   // sobrevive a cerrar sesión — es de quien usa la máquina, no de la sesión.
@@ -875,6 +894,19 @@ export function loadRadarAnalysis(topicId: number, force?: boolean) {
       setState({ radarAnalysisByTopic: Object.assign({}, state.radarAnalysisByTopic, { [topicId]: rows }) });
     })
     .catch(() => { /* la ficha sigue mostrando "sin análisis" */ });
+}
+
+// Candidatos del boletín (R2-33): RADAR propone por CREA Score. Se pide a
+// demanda (botón), no en cada render — es la misma lista que RADAR, no hace
+// falta duplicar el fetch automáticamente.
+export function loadNewsletterCandidates() {
+  setState({ newsletterCandidatesLoading: true });
+  adminApi<Topic[]>('/api/listening/topics?order=score&limit=20')
+    .then((rows) => {
+      const candidates = rows.filter((t) => t.verification_status !== 'risk').slice(0, 15);
+      setState({ newsletterCandidates: candidates, newsletterCandidatesLoading: false });
+    })
+    .catch((err: ApiError) => { setState({ newsletterCandidatesLoading: false, errorMsg: err.message }); });
 }
 
 // Guard contra respuestas fuera de orden al alternar 7d/30d rápido.

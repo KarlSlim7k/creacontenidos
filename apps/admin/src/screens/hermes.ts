@@ -1,7 +1,8 @@
 // CREA Panel Admin — pantallas Hermes (actividad) y Pipeline "Buenos días, Perote".
-import { state, type ActivityEntry, type PipelineStep } from '../store';
+import { state, type ActivityEntry, type PipelineStep, type Topic } from '../store';
 import { esc, loadingCard, errorCard, relativeTime, badge, safeHttpUrl } from '../util';
 import { icon } from '../icons';
+import { newsletterSectionOptions } from '../newsletter-sections';
 
 export function renderHermes(): string {
   const activity = state.data.activity;
@@ -66,6 +67,49 @@ export function renderPipeline(): string {
   </div>`;
 }
 
+// R2-33: RADAR propone por CREA Score; el editor marca los que entran y les
+// asigna sección. Sin marcar ninguno, generar/regenerar sigue el criterio
+// automático de siempre — esto es puramente opcional, nunca obligatorio.
+function renderNewsletterSelection(): string {
+  const candidates = state.newsletterCandidates;
+  const selection = state.newsletterSelection;
+  const selectedCount = Object.keys(selection).length;
+
+  const header = `<div class="padmin-pipeline-block-header">
+    <div>
+      <p class="padmin-pipeline-block-title">Selección editorial (opcional)</p>
+      <p class="padmin-t-hint">RADAR propone por CREA Score. Sin marcar ningún tema, "Generar"/"Regenerar" siguen usando el criterio automático de siempre (confianza + interés).</p>
+    </div>
+    ${candidates === undefined
+      ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="load-newsletter-candidates" ${state.newsletterCandidatesLoading ? 'disabled' : ''}>${state.newsletterCandidatesLoading ? 'Cargando…' : `${icon('sparkles', { size: 12, style: 'vertical-align:-1px;margin-right:4px;' })} Ver propuestas de RADAR`}</button>`
+      : `<span style="font-size:11px;color:var(--text-mute);">${selectedCount} tema${selectedCount === 1 ? '' : 's'} marcado${selectedCount === 1 ? '' : 's'}</span>`}
+  </div>`;
+
+  if (candidates === undefined) {
+    return `<div class="padmin-card padmin-pipeline-block" style="margin-bottom:16px;">${header}</div>`;
+  }
+
+  const rows = candidates.map((t: Topic) => {
+    const sel = selection[t.id];
+    const checked = Boolean(sel);
+    const scoreLabel = t.crea_score != null ? String(t.crea_score) : '—';
+    return `<div class="padmin-row" style="align-items:flex-start;gap:10px;flex-wrap:wrap;">
+      <input type="checkbox" data-action="toggle-newsletter-topic" data-id="${t.id}" aria-label="Marcar ${esc(t.title)} para el boletín" ${checked ? 'checked' : ''} style="margin-top:3px;">
+      <div style="flex:1;min-width:160px;">
+        <p class="padmin-row-title" style="font-size:13px;">${esc(t.title)}</p>
+        <p class="padmin-row-meta">CREA Score ${esc(scoreLabel)} · ${esc(t.verification_status || 'sin evaluar')}</p>
+      </div>
+      ${checked ? `<select data-action="set-newsletter-section" data-id="${t.id}" aria-label="Sección de ${esc(t.title)}" style="font-size:12px;border:0.5px solid var(--line-soft);border-radius:6px;padding:4px 6px;background:#fff;">${newsletterSectionOptions(sel!.section)}</select>` : ''}
+      ${checked && sel!.hasLevel3 ? `<span class="padmin-t-small" style="color:var(--brand);white-space:nowrap;">${icon('check', { size: 11, style: 'vertical-align:-1px;margin-right:2px;' })} Para entender</span>` : ''}
+    </div>`;
+  }).join('');
+
+  return `<div class="padmin-card padmin-pipeline-block" style="margin-bottom:16px;">
+    ${header}
+    ${rows || '<p class="padmin-row-meta">RADAR no tiene temas propuestos (sin riesgo) ahora mismo.</p>'}
+  </div>`;
+}
+
 function renderPipelineEdicion(steps: PipelineStep[], c: any, count: number | null, totalWords: number, readMins: number): string {
   return `<div>
     <!-- Barra de métricas y estado -->
@@ -106,6 +150,7 @@ function renderPipelineEdicion(steps: PipelineStep[], c: any, count: number | nu
       }).join('')}</div>
     </div>
 
+    ${renderNewsletterSelection()}
     ${renderNewsletterCard()}
   </div>`;
 }
@@ -187,6 +232,8 @@ function inputVal(id: string): string {
 export function readNewsletterForm() {
   const enBreveRaw = inputVal('nl-en-breve');
   const fallbackDate = new Date().toISOString().slice(0, 10);
+  const paraEntenderTitulo = inputVal('nl-para-entender-titulo');
+  const paraEntenderCuerpo = inputVal('nl-para-entender-cuerpo');
   return {
     weekday: state.newsletterContent ? state.newsletterContent.weekday : 'Hoy',
     date: state.newsletterContent ? state.newsletterContent.date : fallbackDate,
@@ -196,6 +243,9 @@ export function readNewsletterForm() {
       cuerpo: inputVal('nl-nota-cuerpo'),
     },
     enBreve: enBreveRaw.split('\n').map((s) => s.trim()).filter(Boolean),
+    // R2-34: aditivo. Si el editor borra el texto, la sección desaparece del
+    // correo (buildContent() en el API lo trata como null si falta título o cuerpo).
+    paraEntender: (paraEntenderTitulo && paraEntenderCuerpo) ? { titulo: paraEntenderTitulo, cuerpo: paraEntenderCuerpo } : null,
     datoDelDia: inputVal('nl-dato'),
     agenda: inputVal('nl-agenda') || null,
     guionPodcast: inputVal('nl-guion') || null,
@@ -281,6 +331,12 @@ function renderNewsletterCard(): string {
           </div>
           <textarea id="nl-en-breve" style="width:100%;min-height:80px;box-sizing:border-box;">${esc(enBreveText)}</textarea>
         </div>
+
+        ${c.paraEntender ? `<div class="padmin-field" style="background:var(--brand-soft);border-radius:6px;padding:10px;margin:0 0 14px;">
+          <label style="display:flex;align-items:center;gap:4px;">${icon('check', { size: 11, style: 'vertical-align:-1px;' })} Para entender <span style="font-weight:400;color:var(--text-mute);">(desde un análisis nivel 3 — bórralo y desaparece del correo)</span></label>
+          <input id="nl-para-entender-titulo" type="text" value="${esc(c.paraEntender.titulo)}" placeholder="Título" style="margin-bottom:6px;">
+          <textarea id="nl-para-entender-cuerpo" style="width:100%;min-height:70px;box-sizing:border-box;">${esc(c.paraEntender.cuerpo)}</textarea>
+        </div>` : ''}
 
         <div class="padmin-field"><label>Dato curioso / Dato del día</label><input id="nl-dato" type="text" value="${esc(c.datoDelDia || '')}" placeholder="Dato relevante local o histórico"></div>
         <div class="padmin-field"><label>Agenda comunitaria / Eventos</label><textarea id="nl-agenda" style="width:100%;min-height:55px;box-sizing:border-box;" placeholder="Eventos locales o avisos del municipio">${esc(c.agenda || '')}</textarea></div>

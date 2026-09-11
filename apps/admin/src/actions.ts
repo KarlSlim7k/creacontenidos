@@ -1,7 +1,7 @@
 // CREA Panel Admin — acciones (submit/handle) y delegación de eventos por data-action.
 import {
   state, setState, setData, adminApi, adminApiBlob, loadScreenData, mergeKey, setProposalsKey, isSoundMuted,
-  loadRadarTopics, loadRadarSummary, loadRadarStats, loadRadarAnalysis, refreshCurrentScreen,
+  loadRadarTopics, loadRadarSummary, loadRadarStats, loadRadarAnalysis, loadNewsletterCandidates, refreshCurrentScreen,
   type Screen, type ApiError, type EditorDraft, type Proposal, type Idea, type Client, type Lead, type Service,
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult, type TrustedDevice,
@@ -60,9 +60,25 @@ export function handleClick(e: MouseEvent) {
   if (closeNotifs) setState({ showNotifications: false });
 }
 
+// R2-31/R2-33: si hay temas marcados, se manda la selección explícita
+// (topic_id/section/analysis_id); sin ninguno marcado, el body va sin
+// `selection` — mismo comportamiento de siempre (RADAR ordena por
+// confidence+mentions, como ya hacía antes de esta fase).
+function buildNewsletterSelectionPayload(): { selection: { topic_id: number; section: string; analysis_id: number | null }[] } | Record<string, never> {
+  const entries = Object.entries(state.newsletterSelection);
+  if (!entries.length) return {};
+  return {
+    selection: entries.map(([topicId, item]) => ({
+      topic_id: Number(topicId),
+      section: item.section,
+      analysis_id: item.analysisId,
+    })),
+  };
+}
+
 function generateNewsletter() {
   setState({ newsletterBusy: true, errorMsg: null });
-  adminApi<NewsletterContent>('/api/newsletter/generate', { method: 'POST' })
+  adminApi<NewsletterContent>('/api/newsletter/generate', { method: 'POST', body: buildNewsletterSelectionPayload() })
     .then((content) => { setState({ newsletterBusy: false, newsletterContent: content, newsletterPreview: null, newsletterAudioUrl: null }); })
     .catch((err: ApiError) => { setState({ newsletterBusy: false, errorMsg: err.message }); });
 }
@@ -560,6 +576,30 @@ const clickHandlers: Record<string, (el: Element) => void> = {
   'close-nota-preview': () => setState({ notaPreviewHtml: null }),
   'generate-newsletter': () => generateNewsletter(),
   'regenerate-newsletter': () => generateNewsletter(),
+  'load-newsletter-candidates': () => loadNewsletterCandidates(),
+  // R2-33: marcar/desmarcar un tema candidato. Al marcar, resuelve solo el
+  // análisis nivel 3 más reciente del tema (si existe) — el editor lo ve
+  // (hasLevel3), no escribe ningún id a mano.
+  'toggle-newsletter-topic': (el) => {
+    const id = Number(attr(el, 'data-id'));
+    if (!id) return;
+    const current = state.newsletterSelection[id];
+    if (current) {
+      const next = { ...state.newsletterSelection };
+      delete next[id];
+      setState({ newsletterSelection: next });
+      return;
+    }
+    setState({ newsletterSelection: { ...state.newsletterSelection, [id]: { section: 'PEROTE', analysisId: null, hasLevel3: false } } });
+    adminApi<EditorialAnalysis[]>(`/api/listening/topics/${id}/analysis`)
+      .then((rows) => {
+        const level3 = rows.find((a) => a.analysis_level === 3);
+        const stillChecked = state.newsletterSelection[id];
+        if (!level3 || !stillChecked) return; // se desmarcó mientras cargaba, o no hay nivel 3
+        setState({ newsletterSelection: { ...state.newsletterSelection, [id]: { ...stillChecked, analysisId: level3.id, hasLevel3: true } } });
+      })
+      .catch(() => { /* sin análisis disponible: la selección sigue funcionando sin PARA ENTENDER */ });
+  },
   'revert-newsletter': () => {
     if (!confirm('¿Descartar los cambios no guardados y restaurar la última versión guardada?')) return;
     setState({ newsletterBusy: true, errorMsg: null });
@@ -1366,6 +1406,11 @@ export function handleChange(e: Event) {
   } else if (target.id === 'editor-sponsored') {
     const field = document.getElementById('editor-sponsor-name-field');
     if (field) field.style.display = (target as HTMLInputElement).checked ? '' : 'none';
+  } else if (target.getAttribute && target.getAttribute('data-action') === 'set-newsletter-section') {
+    const id = Number(target.getAttribute('data-id'));
+    const current = state.newsletterSelection[id];
+    if (!current) return;
+    setState({ newsletterSelection: { ...state.newsletterSelection, [id]: { ...current, section: (target as HTMLSelectElement).value } } });
   } else if (target.getAttribute && target.getAttribute('data-action') === 'move-idea') {
     const id = Number(target.getAttribute('data-id'));
     adminApi<Idea>('/api/editorial/ideas/' + id, { method: 'PATCH', body: { column_status: (target as HTMLSelectElement).value } })
