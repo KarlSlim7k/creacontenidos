@@ -230,6 +230,10 @@ export interface Topic {
   provider: string | null;
   external_id: string | null;
   media_available: boolean | null;
+  // CREA Score (RADAR 2.0, punto 12, R2-26/R2-28). null = sin calcular
+  // todavía (nunca 0 por defecto) — etiqueta visual, nunca un filtro.
+  crea_score: number | null;
+  crea_score_breakdown: Record<string, { score: number | null; weight: number; present: boolean }> | null;
 }
 
 /** Motor Editorial CREA (RADAR 2.0, punto 11, R2-19…R2-21). Objeto DISTINTO de
@@ -295,7 +299,16 @@ export interface RadarSource {
 export interface TopicSummary {
   total: number;
   by_verification: Record<string, number>;
+  by_score_band: { alta: number; media: number; baja: number; sin_calcular: number };
   sources: string[];
+  /** Síntesis operativa del día (R2-29) — números reales, no simulados. */
+  today: {
+    since_last_cutoff: number;
+    discarded: number;
+    signals: number;
+    to_contextualize: number;
+    crea_analyses: number;
+  };
 }
 
 /** GET /api/listening/radar-stats — calibración Fase 6. */

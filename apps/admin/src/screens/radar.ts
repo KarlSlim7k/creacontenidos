@@ -27,6 +27,25 @@ function confidenceBadge(c: number | null): string {
   return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:24px;border-radius:12px;font-size:12px;font-weight:700;background:${st.bg};color:${st.color};">${esc(b.text)}</span>`;
 }
 
+// CREA Score (R2-28) — mismo lenguaje visual que confidenceBand/Badge, pero
+// bandas propias (80/60, no 75/40: docs/ia/crea-score.md). Es una etiqueta,
+// nunca un filtro — ningún tema se oculta por score bajo, solo se reordena
+// con ?order=score (R2-27).
+function scoreBand(s: number | null): { className: string; text: string } {
+  if (s == null || Number.isNaN(s)) return { className: '', text: '—' };
+  const n = Math.round(Number(s));
+  if (n >= 80) return { className: 'high', text: String(n) };
+  if (n >= 60) return { className: 'mid', text: String(n) };
+  return { className: 'low', text: String(n) };
+}
+
+function scoreBadge(s: number | null): string {
+  const b = scoreBand(s);
+  if (b.text === '—') return `<span class="padmin-t-mute" title="Sin CREA Score calculado todavía">—</span>`;
+  const st = statusStyle(b.className === 'high' ? 'high' : b.className === 'mid' ? 'medium' : 'low');
+  return `<span title="CREA Score" style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:24px;border-radius:12px;font-size:12px;font-weight:700;background:${st.bg};color:${st.color};">${esc(b.text)}</span>`;
+}
+
 function evidenceList(topic: Topic): NonNullable<Topic['evidence']> {
   const e = topic.evidence;
   return Array.isArray(e) ? e : [];
@@ -66,6 +85,43 @@ function riskFlagText(flag: string | { code?: string; message?: string }): strin
 // clampea por tabla, así que cambiar de tab nunca deja una página inválida.
 const radarPager = (page: number, totalPages: number, total: number, hasMore?: boolean) =>
   renderPager(page, totalPages, total, 'set-radar-page', hasMore);
+
+const SCORE_FACTOR_LABEL: Record<string, string> = {
+  relevancia_local: 'Relevancia local',
+  impacto_potencial: 'Impacto potencial',
+  actualidad: 'Actualidad',
+  fuentes: 'Número y calidad de fuentes',
+  interes_ciudadano: 'Interés ciudadano',
+  implicaciones_practicas: 'Implicaciones prácticas',
+  conversacion: 'Conversación detectada',
+  originalidad: 'Originalidad del tratamiento',
+};
+const SCORE_BAND_LABEL: Record<string, string> = { high: 'alta', mid: 'media', low: 'baja', '': 'sin calcular' };
+
+// Desglose completo del CREA Score (R2-28) — auditable por un editor sin leer
+// código: cada uno de los 8 factores, su peso, y si está presente o ausente
+// (nunca inventado). Ordena, nunca decide: esta ficha nunca hace desaparecer
+// nada, solo explica el número.
+function scoreDetailBlock(topic: Topic): string {
+  const breakdown = topic.crea_score_breakdown;
+  const band = scoreBand(topic.crea_score);
+  const rows = breakdown
+    ? Object.entries(breakdown).map(([key, f]) => {
+      const label = SCORE_FACTOR_LABEL[key] || key;
+      const value = f.present ? `${f.score} / 100` : 'Sin dato (ausente)';
+      return `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:0.5px solid var(--line-soft);font-size:12px;">
+        <span style="color:${f.present ? 'var(--text-2)' : 'var(--text-mute)'};">${esc(label)} <span style="color:var(--text-mute);">(peso ${f.weight})</span></span>
+        <b style="color:${f.present ? 'var(--text)' : 'var(--text-mute)'};">${esc(value)}</b>
+      </div>`;
+    }).join('')
+    : '<p class="padmin-drawer-section-body">Sin CREA Score calculado todavía.</p>';
+
+  return `<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid var(--line-soft);">
+    <p class="padmin-drawer-eyebrow">CREA SCORE</p>
+    ${topic.crea_score != null ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">${scoreBadge(topic.crea_score)}<span style="font-size:12px;color:var(--text-mute);">Banda ${esc(SCORE_BAND_LABEL[band.className])} — ordena, nunca oculta.</span></div>` : ''}
+    ${rows}
+  </div>`;
+}
 
 const ANALYSIS_LEVEL_LABEL: Record<1 | 2 | 3, string> = { 1: 'Nivel 1 · Señal', 2: 'Nivel 2 · Contexto', 3: 'Nivel 3 · Análisis CREA' };
 const ANALYSIS_LEVEL_COST: Record<1 | 2 | 3, string> = { 1: 'Costo bajo', 2: 'Costo bajo-medio', 3: 'Costo alto' };
@@ -191,6 +247,7 @@ function renderRadarDetail(): string {
       <p class="padmin-drawer-section-title">ACTORES INVOLUCRADOS</p><p class="padmin-drawer-section-body">${esc(topic.actores || 'Sin datos.')}</p>
       <p class="padmin-drawer-section-title">ÁNGULOS DE COBERTURA SUGERIDOS</p><p class="padmin-drawer-section-body">${esc(topic.angulos || 'Sin datos.')}</p>
       <p class="padmin-drawer-section-title">POTENCIAL DE AUDIENCIA</p><p class="padmin-drawer-section-body" style="margin-bottom:0;">${esc(topic.audiencia || 'Sin datos.')}</p>
+      ${scoreDetailBlock(topic)}
       ${canManageRadar() ? analysisSection(topic) : ''}
       ${canManageRadar() ?
         `<div style="margin-top:20px;padding-top:16px;border-top:0.5px solid var(--line-soft);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -547,6 +604,23 @@ function renderRadarCompetencia(): string {
   </div>`;
 }
 
+// Síntesis operativa del día (R2-29) — una línea con números reales, no
+// simulados. Explícitamente no reemplaza las tarjetas de renderSummary(): es
+// un resumen editorial del corte del día, ellas son el estado actual de la
+// agenda completa.
+function renderTodaySynthesis(): string {
+  const t = state.data.topicSummary && state.data.topicSummary.today;
+  if (!t) return '';
+  const parts = [
+    `${t.since_last_cutoff} señal(es) desde el último corte`,
+    `${t.discarded} descartada(s) hoy`,
+    `${t.signals} señal(es)`,
+    `${t.to_contextualize} por contextualizar`,
+    `${t.crea_analyses} análisis CREA hoy`,
+  ];
+  return `<p style="font-size:12px;color:var(--text-mute);margin:0 0 12px;">${esc(parts.join(' · '))}</p>`;
+}
+
 function renderSummary(): string {
   const summary = state.data.topicSummary;
   const n = (key: string): number | string => (summary ? (summary.by_verification[key] || 0) : '—');
@@ -693,7 +767,8 @@ function renderRadarTemas(): string {
   const { pageItems, page, totalPages } = paginateRows(filteredTopics, state.radarPage);
   const allPageSelected = pageItems.length > 0 && pageItems.every((t) => selectedIds.includes(t.id));
 
-  return `${renderSummary()}
+  return `${renderTodaySynthesis()}
+    ${renderSummary()}
     ${renderCalibration(state.data.radarStats)}
 
     <!-- Barra de búsqueda y acciones principales -->
@@ -747,12 +822,13 @@ function renderRadarTemas(): string {
     ` : ''}
 
     <div class="padmin-card">
-      <div class="padmin-table-head padmin-cols-radar" style="grid-template-columns: 36px minmax(160px, 1.6fr) 100px 70px 92px 132px 120px;">
+      <div class="padmin-table-head padmin-cols-radar" style="grid-template-columns: 36px minmax(160px, 1.6fr) 100px 70px 92px 80px 132px 120px;">
         <span><input type="checkbox" aria-label="Seleccionar todos en esta página" data-action="toggle-radar-select-all"${allPageSelected ? ' checked' : ''}></span>
         <span>TEMA</span>
         <span>FUENTE</span>
         <span>INTERÉS</span>
         <span>CONFIANZA</span>
+        <span title="CREA Score — ordena, nunca oculta. Distinto del filtro 'SCORE' de confianza de la barra de arriba.">CREA SCORE</span>
         <span>VERIFICACIÓN</span>
         <span style="text-align:right;">ACCIONES</span>
       </div>
@@ -762,7 +838,7 @@ function renderRadarTemas(): string {
           ? esc(r.known_facts.slice(0, 90)) + (r.known_facts.length > 90 ? '…' : '')
           : (r.source_count != null ? `${r.source_count} fuente(s)` : '');
 
-        return `<div class="padmin-table-row clickable padmin-radar-row padmin-cols-radar" style="grid-template-columns: 36px minmax(160px, 1.6fr) 100px 70px 92px 132px 120px;align-items:center;background:${isSelected ? 'var(--brand-soft,#f0fdf4)' : 'transparent'};">
+        return `<div class="padmin-table-row clickable padmin-radar-row padmin-cols-radar" style="grid-template-columns: 36px minmax(160px, 1.6fr) 100px 70px 92px 80px 132px 120px;align-items:center;background:${isSelected ? 'var(--brand-soft,#f0fdf4)' : 'transparent'};">
           <div style="display:flex;align-items:center;">
             <input type="checkbox" data-action="toggle-radar-topic-select" data-id="${r.id}" aria-label="Seleccionar tema ${esc(r.title)}"${isSelected ? ' checked' : ''}>
           </div>
@@ -770,6 +846,7 @@ function renderRadarTemas(): string {
           <span class="padmin-t-mute">${esc(r.source || '—')}</span>
           <span style="font-size:12px;color:var(--text);font-weight:600;">${r.mentions}</span>
           <span>${confidenceBadge(r.confidence)}</span>
+          <span>${scoreBadge(r.crea_score)}</span>
           ${verificationBadge(r.verification_status)}
           <span style="display:flex;gap:4px;justify-content:flex-end;">
             <button type="button" title="Ver ficha" aria-label="Ver ficha de verificación" data-action="open-radar" data-id="${r.id}" class="padmin-icon-btn">${icon('eye', { size: 12 })}</button>
