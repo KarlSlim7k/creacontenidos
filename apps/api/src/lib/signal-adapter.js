@@ -120,7 +120,7 @@ function adaptSignal(envelope, providerTrust) {
     });
   }
   if (Array.isArray(s.corroboratingSources)) {
-    for (const c of s.corroboratingSources.slice(0, 11)) {
+    for (const c of s.corroboratingSources.slice(0, 12)) {
       if (!c || typeof c !== 'object' || !c.label) continue;
       evidence.push({
         label: String(c.label),

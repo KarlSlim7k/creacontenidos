@@ -1064,7 +1064,10 @@ export function submitDiscardTopics() {
         discardTopicIds: null,
         successMsg: ids.length === 1 ? 'Tema descartado.' : `${ids.length} tema(s) descartados.`,
         selectedRadarId: (state.selectedRadarId != null && ids.includes(state.selectedRadarId)) ? null : state.selectedRadarId,
-        radarSelectedTopicIds: ids.length > 1 ? [] : state.radarSelectedTopicIds,
+        // Filtra los ids ya descartados en vez de vaciar solo cuando ids.length > 1:
+        // un descarte en lote de exactamente 1 tema seleccionado dejaba el banner
+        // "1 seleccionado" pegado (bug real, hallado en revisión de código).
+        radarSelectedTopicIds: state.radarSelectedTopicIds.filter((id) => !ids.includes(id)),
       });
       loadRadarSummary();
     })
