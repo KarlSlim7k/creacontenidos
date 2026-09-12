@@ -96,10 +96,15 @@ router.post('/', authProvider, async (req, res, next) => {
     }
 
     const trustSources = await loadActiveRadarSources();
-    const results = [];
-    for (const envelope of envelopes) {
-      results.push(await processOne(envelope, req.signalProvider, trustSources));
-    }
+    // Cada envelope es independiente — en paralelo. El duplicado EXACTO
+    // (mismo provider+external_id) ya lo cubre el catch de 23505 en
+    // processOne(); el merge por título similar entre dos entradas del MISMO
+    // lote pasa a ser best-effort bajo concurrencia (como ya lo es entre
+    // requests distintos hoy — insertTopicIfNew() nunca asumió exclusión
+    // mutua entre llamadas concurrentes).
+    const results = await Promise.all(
+      envelopes.map((envelope) => processOne(envelope, req.signalProvider, trustSources))
+    );
 
     const byAction = {};
     for (const r of results) byAction[r.action] = (byAction[r.action] || 0) + 1;

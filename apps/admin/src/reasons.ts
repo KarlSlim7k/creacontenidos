@@ -5,7 +5,8 @@
 // bundle de Vite/TS separado del API (Node/Express), sin workspace
 // compartido — mismo patrón que ya usa content_proposals.section (SECTIONS
 // en lib/sections.js del API, hardcodeado aquí en editor.ts/ideas.ts). Si
-// cambias la taxonomía, cambia también esa fuente.
+// cambias la taxonomía, cambia también esa fuente — apps/api/scripts/
+// check-reason-codes-sync.js compara ambas copias en cada corrida de la suite.
 export const REASON_CODES: { code: string; label: string }[] = [
   { code: 'dato_incorrecto', label: 'Dato incorrecto' },
   { code: 'fuente_insuficiente', label: 'Fuente insuficiente' },

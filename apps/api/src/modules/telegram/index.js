@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const express = require('express');
 const pool = require('../../db/pool');
 const config = require('../../config');
@@ -6,14 +5,9 @@ const { logActivity } = require('../../lib/ai-client');
 const { publishProposal, returnProposal } = require('../../lib/editorial-review');
 const { sendMessage, editMessageText, answerCallbackQuery } = require('../../lib/telegram-client');
 const { reviewKeyboard } = require('../../lib/telegram-review-cron');
+const { safeEqual } = require('../../lib/timing-safe-equal');
 
 const router = express.Router();
-
-function safeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const left = Buffer.from(a); const right = Buffer.from(b);
-  return left.length === right.length && crypto.timingSafeEqual(left, right);
-}
 
 function isAuthorized(chatId, userId) {
   const chat = Number(chatId); const user = Number(userId);

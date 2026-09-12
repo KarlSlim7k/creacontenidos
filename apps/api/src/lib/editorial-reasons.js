@@ -6,6 +6,8 @@
 // bundle separado sin acceso a este archivo) mantiene una copia literal en
 // src/reasons.ts — mismo patrón que SECTIONS (lib/sections.js) hoy con
 // content_proposals.section: si cambias esta lista, cambia también esa copia.
+// scripts/check-reason-codes-sync.js compara ambas en cada corrida de la
+// suite para que un olvido falle ahí, no en producción.
 const REASON_CODES = [
   { code: 'dato_incorrecto', label: 'Dato incorrecto' },
   { code: 'fuente_insuficiente', label: 'Fuente insuficiente' },

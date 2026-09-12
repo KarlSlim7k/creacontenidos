@@ -430,64 +430,75 @@ const WEEKLY_GOAL = 10;
 
 router.get('/metrics', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
-    const { rows: [{ count }] } = await pool.query(
-      `SELECT count(*)::int AS count FROM content_proposals
-       WHERE status = 'published' AND published_at >= date_trunc('week', now())`
-    );
-    const { rows: weeklyPieces } = await pool.query(
-      `SELECT to_char(date_trunc('week', published_at), 'YYYY-MM-DD') AS week, count(*)::int AS count
-       FROM content_proposals
-       WHERE status = 'published' AND published_at >= now() - interval '6 weeks'
-       GROUP BY 1 ORDER BY 1`
-    );
-    const { rows: [{ total }] } = await pool.query(
-      `SELECT count(*)::int AS total FROM content_proposals WHERE status = 'published'`
-    );
-    const { rows: [{ rejected }] } = await pool.query(
-      `SELECT count(*)::int AS rejected FROM content_proposals WHERE status = 'rechazada'`
-    );
-    const { rows: [{ avg_days }] } = await pool.query(
-      `SELECT avg(extract(epoch FROM (published_at - created_at)) / 86400) AS avg_days
-       FROM content_proposals WHERE status = 'published' AND published_at >= created_at`
-    );
-    const { rows: topSections } = await pool.query(
-      `SELECT section, count(*)::int AS count FROM content_proposals
-       WHERE status = 'published' AND section IS NOT NULL
-       GROUP BY section ORDER BY count DESC LIMIT 5`
-    );
-    const { rows: authors } = await pool.query(
-      `SELECT u.name, count(*)::int AS published FROM content_proposals cp
-       JOIN users u ON u.id = cp.author_id
-       WHERE cp.status = 'published'
-       GROUP BY u.name ORDER BY published DESC`
-    );
+    // Las 9 consultas son independientes entre sí (ningún filtro depende del
+    // resultado de otra) — en paralelo, mismo patrón que /pipeline arriba.
+    const [
+      countResult, weeklyPiecesResult, totalResult, rejectedResult, avgDaysResult,
+      topSectionsResult, authorsResult, aiVsFinalResult, reopenReasonsResult,
+    ] = await Promise.all([
+      pool.query(
+        `SELECT count(*)::int AS count FROM content_proposals
+         WHERE status = 'published' AND published_at >= date_trunc('week', now())`
+      ),
+      pool.query(
+        `SELECT to_char(date_trunc('week', published_at), 'YYYY-MM-DD') AS week, count(*)::int AS count
+         FROM content_proposals
+         WHERE status = 'published' AND published_at >= now() - interval '6 weeks'
+         GROUP BY 1 ORDER BY 1`
+      ),
+      pool.query(`SELECT count(*)::int AS total FROM content_proposals WHERE status = 'published'`),
+      pool.query(`SELECT count(*)::int AS rejected FROM content_proposals WHERE status = 'rechazada'`),
+      pool.query(
+        `SELECT avg(extract(epoch FROM (published_at - created_at)) / 86400) AS avg_days
+         FROM content_proposals WHERE status = 'published' AND published_at >= created_at`
+      ),
+      pool.query(
+        `SELECT section, count(*)::int AS count FROM content_proposals
+         WHERE status = 'published' AND section IS NOT NULL
+         GROUP BY section ORDER BY count DESC LIMIT 5`
+      ),
+      pool.query(
+        `SELECT u.name, count(*)::int AS published FROM content_proposals cp
+         JOIN users u ON u.id = cp.author_id
+         WHERE cp.status = 'published'
+         GROUP BY u.name ORDER BY published DESC`
+      ),
+      // R2-50: "corrección humana" — % de palabras que cambiaron entre el último
+      // borrador de IA y el cuerpo publicado. Solo sobre piezas que sí tienen un
+      // snapshot de IA (generate-proposal/generate-draft) — sin eso no hay línea
+      // base y no cuenta como "0% de corrección".
+      pool.query(
+        `SELECT cp.body AS final_body, v.body AS ai_body
+         FROM content_proposals cp
+         JOIN LATERAL (
+           SELECT body FROM content_proposal_versions
+           WHERE proposal_id = cp.id AND source = 'ai_generated'
+           ORDER BY created_at DESC LIMIT 1
+         ) v ON true
+         WHERE cp.status = 'published'`
+      ),
+      // R2-51: motivos de reapertura de una nota ya publicada — distingue
+      // "corregimos un error" (dato_incorrecto) de una actualización rutinaria.
+      pool.query(
+        `SELECT metadata->>'reason_code' AS reason_code, count(*)::int AS count
+         FROM activity_log WHERE action = 'proposal_reopen' AND metadata->>'reason_code' IS NOT NULL
+         GROUP BY 1 ORDER BY count DESC`
+      ),
+    ]);
+    const { count } = countResult.rows[0];
+    const weeklyPieces = weeklyPiecesResult.rows;
+    const { total } = totalResult.rows[0];
+    const { rejected } = rejectedResult.rows[0];
+    const { avg_days } = avgDaysResult.rows[0];
+    const topSections = topSectionsResult.rows;
+    const authors = authorsResult.rows;
 
-    // R2-50: "corrección humana" — % de palabras que cambiaron entre el último
-    // borrador de IA y el cuerpo publicado. Solo sobre piezas que sí tienen un
-    // snapshot de IA (generate-proposal/generate-draft) — sin eso no hay línea
-    // base y no cuenta como "0% de corrección".
-    const { rows: aiVsFinal } = await pool.query(
-      `SELECT cp.body AS final_body, v.body AS ai_body
-       FROM content_proposals cp
-       JOIN LATERAL (
-         SELECT body FROM content_proposal_versions
-         WHERE proposal_id = cp.id AND source = 'ai_generated'
-         ORDER BY created_at DESC LIMIT 1
-       ) v ON true
-       WHERE cp.status = 'published'`
-    );
-    const rates = aiVsFinal
+    const rates = aiVsFinalResult.rows
       .map((r) => correctionRate(r.ai_body, r.final_body))
       .filter((r) => r != null);
     const avgCorrectionRate = rates.length ? Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 10) / 10 : null;
 
-    // R2-51: motivos de reapertura de una nota ya publicada — distingue
-    // "corregimos un error" (dato_incorrecto) de una actualización rutinaria.
-    const { rows: reopenReasons } = await pool.query(
-      `SELECT metadata->>'reason_code' AS reason_code, count(*)::int AS count
-       FROM activity_log WHERE action = 'proposal_reopen' AND metadata->>'reason_code' IS NOT NULL
-       GROUP BY 1 ORDER BY count DESC`
-    );
+    const reopenReasons = reopenReasonsResult.rows;
 
     res.json({
       piecesPublished: count,

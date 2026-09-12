@@ -5,10 +5,11 @@
 // La API key cruda existe una sola vez, al crearse/rotarse: se devuelve al
 // caller y nunca se persiste — solo su hash SHA-256 (mismo patrón que
 // lib/trusted-devices.js). La comparación es en tiempo constante
-// (crypto.timingSafeEqual), como ya hace modules/telegram/index.js:14-18,
-// contra cada proveedor activo — la tabla es chica (un puñado de
-// proveedores), no miles de filas, así que no hace falta más que esto.
+// (safeEqual(), compartida con modules/telegram/index.js) contra cada
+// proveedor activo — la tabla es chica (un puñado de proveedores), no miles
+// de filas, así que no hace falta más que esto.
 const crypto = require('crypto');
+const { safeEqual } = require('./timing-safe-equal');
 
 const KEY_PREFIX = 'csig_';
 
@@ -19,13 +20,6 @@ function hashApiKey(rawKey) {
 /** Genera una key cruda nueva. Solo existe en este momento — el caller la muestra una vez y la descarta. */
 function generateApiKey() {
   return KEY_PREFIX + crypto.randomBytes(32).toString('base64url');
-}
-
-function safeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
 /**
