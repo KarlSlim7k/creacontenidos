@@ -1,9 +1,11 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const pool = require('../../db/pool');
+const config = require('../../config');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { generateProposal, generateDraft, editNoteChat, qaCheck, generateImage, logActivity } = require('../../lib/ai-client');
 const { sendPushToRoles } = require('../../lib/push');
+const { CHANNELS, isValidChannel, generateRender, listRenders } = require('../../lib/render-service');
 
 const router = express.Router();
 
@@ -284,6 +286,44 @@ router.post('/edit-note', requireAuth, aiLimiter, async (req, res, next) => {
       proposal_id, model, provider, used_fallback: usedFallback, changes: (result.changes || []).length,
     });
     res.json({ changes: result.changes || [], note: result.note || '', model, provider, uses_left: EDIT_NOTE_DAILY_LIMIT - used.count - 1 });
+  } catch (err) {
+    next(err);
+  }
+});
+
+function noteUrlFor(slug) {
+  return slug ? config.publicSiteUrl.replace(/\/+$/, '') + '/notas/' + encodeURIComponent(slug) : null;
+}
+
+// GET /api/content/renders?proposal_id= — estado del render vigente de cada
+// canal (web/whatsapp/audio/social) para una propuesta, con `stale` cuando el
+// tema ya tiene un análisis más nuevo que el que se usó (R2-37, R2-38).
+router.get('/renders', requireAuth, async (req, res, next) => {
+  try {
+    const proposalId = Number(req.query.proposal_id);
+    if (!Number.isInteger(proposalId)) return res.status(400).json({ error: 'proposal_id es requerido' });
+    const renders = await listRenders(proposalId);
+    if (renders === null) return res.status(404).json({ error: 'Propuesta no encontrada' });
+    res.json(renders);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/content/renders { proposal_id, channel } — (re)genera el render de
+// un canal (R2-36, R2-37). Siempre un clic humano explícito, nunca automático
+// ni efecto secundario de otra acción (R2-38) — no lleva aiLimiter: no llama a
+// ningún modelo de IA, es una función pura de lib/renders/ sobre datos ya en DB.
+router.post('/renders', requireAuth, async (req, res, next) => {
+  try {
+    const { proposal_id, channel } = req.body || {};
+    if (!proposal_id || !isValidChannel(channel)) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { proposal_id: 'Requerido', channel: `uno de: ${CHANNELS.join(', ')}` } });
+    }
+    const { rows } = await pool.query('SELECT slug FROM content_proposals WHERE id = $1', [proposal_id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Propuesta no encontrada' });
+    const render = await generateRender(Number(proposal_id), channel, req.user.id, noteUrlFor(rows[0].slug));
+    res.status(201).json(render);
   } catch (err) {
     next(err);
   }

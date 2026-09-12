@@ -90,6 +90,77 @@ async function main() {
     ok(imgCount[0].c === 1, 'H7: tras regenerar solo queda 1 imagen (no se acumulan huérfanas)');
     await pool.query('DELETE FROM generated_images WHERE proposal_id = $1', [borradorId]); // limpiar
 
+    // --- R2-37/R2-38 (fase 6): POST/GET /api/content/renders. No llama IA (es
+    // lib/renders/ puro sobre datos ya en DB) — cabe en este check sin costo. ---
+    let renderTopicId, renderProposalId, oldAnalysisId;
+    try {
+      const { rows: [topic] } = await pool.query(
+        `INSERT INTO topics (title) VALUES ('[check] tema para renders') RETURNING id`
+      );
+      renderTopicId = topic.id;
+      const { rows: [proposal] } = await pool.query(
+        `INSERT INTO content_proposals (topic_id, format, title, dek, status) VALUES ($1, 'nota', '[check] nota para renders', 'dek de prueba', 'borrador') RETURNING id`,
+        [renderTopicId]
+      );
+      renderProposalId = proposal.id;
+
+      // Guards: auth, campos, canal inválido, propuesta inexistente.
+      ok((await post('/api/content/renders', null, { proposal_id: renderProposalId, channel: 'web' })).status === 401, 'renders sin token → 401');
+      ok((await post('/api/content/renders', director, { channel: 'web' })).status === 400, 'renders sin proposal_id → 400');
+      ok((await post('/api/content/renders', director, { proposal_id: renderProposalId, channel: 'fax' })).status === 400, 'renders canal inválido → 400');
+      ok((await post('/api/content/renders', director, { proposal_id: 999999, channel: 'web' })).status === 404, 'renders propuesta inexistente → 404');
+      const noAuthGet = await fetch(`${BASE}/api/content/renders?proposal_id=${renderProposalId}`);
+      ok(noAuthGet.status === 401, 'GET renders sin token → 401');
+
+      // Sin análisis todavía: el render cae al fallback (proposal.title/dek).
+      const webRes = await post('/api/content/renders', director, { proposal_id: renderProposalId, channel: 'web' });
+      ok(webRes.status === 201, `POST renders web → 201 (recibido ${webRes.status})`);
+      const webRender = await webRes.json();
+      ok(webRender.content.title === '[check] tema para renders', 'render web usa el título del topic');
+      ok(webRender.analysis_id === null, 'sin análisis previo, el render queda sin analysis_id');
+
+      const listNoAnalysis = await (await fetch(`${BASE}/api/content/renders?proposal_id=${renderProposalId}`, { headers: { Authorization: 'Bearer ' + director } })).json();
+      ok(listNoAnalysis.length === 1 && listNoAnalysis[0].channel === 'web', 'GET renders lista el único canal generado hasta ahora');
+      ok(listNoAnalysis[0].stale === false, 'sin análisis en el tema, el render no puede estar desactualizado');
+
+      // Con un análisis (vigente al momento del render): analysis_id queda fijado.
+      const { rows: [oldAnalysis] } = await pool.query(
+        `INSERT INTO editorial_analyses (topic_id, analysis_level, que_paso, por_que_importa, created_at)
+         VALUES ($1, 2, '{"resumen":"Resumen del análisis","hechos":[]}'::jsonb, 'Por qué importa', now() - interval '1 hour')
+         RETURNING id`,
+        [renderTopicId]
+      );
+      oldAnalysisId = oldAnalysis.id;
+      const waRes = await post('/api/content/renders', director, { proposal_id: renderProposalId, channel: 'whatsapp' });
+      ok(waRes.status === 201, 'POST renders whatsapp → 201');
+      const waRender = await waRes.json();
+      ok(waRender.analysis_id === oldAnalysisId, 'render whatsapp queda con el analysis_id vigente');
+      ok(typeof waRender.content === 'string' && waRender.content.includes('Resumen del análisis'), 'render whatsapp usa el resumen del análisis');
+
+      // R2-37: un análisis MÁS NUEVO deja el render anterior "desactualizado" — se
+      // calcula al leer (GET), no hay columna aparte que lo marque.
+      await pool.query(
+        `INSERT INTO editorial_analyses (topic_id, analysis_level, que_paso, por_que_importa, created_at)
+         VALUES ($1, 2, '{"resumen":"Resumen nuevo","hechos":[]}'::jsonb, 'Por qué importa (v2)', now())`,
+        [renderTopicId]
+      );
+      const listStale = await (await fetch(`${BASE}/api/content/renders?proposal_id=${renderProposalId}`, { headers: { Authorization: 'Bearer ' + director } })).json();
+      const waListed = listStale.find((r) => r.channel === 'whatsapp');
+      ok(waListed && waListed.stale === true, 'R2-37: render generado antes del análisis nuevo queda stale=true');
+
+      // Regenerar (R2-38, clic humano explícito) toma el análisis vigente y deja de estar stale.
+      const waRegen = await (await post('/api/content/renders', director, { proposal_id: renderProposalId, channel: 'whatsapp' })).json();
+      ok(waRegen.analysis_id !== oldAnalysisId, 'al regenerar, el render toma el análisis más nuevo');
+      const listFresh = await (await fetch(`${BASE}/api/content/renders?proposal_id=${renderProposalId}`, { headers: { Authorization: 'Bearer ' + director } })).json();
+      const waFresh = listFresh.find((r) => r.channel === 'whatsapp');
+      ok(waFresh && waFresh.stale === false, 'tras regenerar, el render deja de estar desactualizado');
+    } finally {
+      if (renderProposalId) await pool.query('DELETE FROM content_renders WHERE proposal_id = $1', [renderProposalId]);
+      if (renderProposalId) await pool.query('DELETE FROM content_proposals WHERE id = $1', [renderProposalId]);
+      if (renderTopicId) await pool.query('DELETE FROM editorial_analyses WHERE topic_id = $1', [renderTopicId]);
+      if (renderTopicId) await pool.query('DELETE FROM topics WHERE id = $1', [renderTopicId]);
+    }
+
     console.log(`\n✔ check-content-engine pasó (${n} asserts). Brecha conocida: happy-path de IA no cubierto (requiere mock de fetch).`);
   } finally {
     await stopApi(server);

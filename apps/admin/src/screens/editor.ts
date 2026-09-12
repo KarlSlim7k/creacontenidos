@@ -12,6 +12,7 @@ interface NotaPreviewInput {
   dek?: string | null;
 }
 import { esc, badge, loadingCard, errorCard, initialsOf, safeHttpUrl } from '../util';
+import type { ContentRender, RenderChannel } from '../store';
 
 function pickerRow(p: Proposal, editable: boolean): string {
   const fecha = p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '';
@@ -148,6 +149,46 @@ export function renderEditor(): string {
     </div>
     ${renderQaResult()}
     ${renderNotaPreview()}
+    ${renderChannelRenders()}
+  </div>`;
+}
+
+// R2-38 (fase 6): estado del render vigente por canal (web/whatsapp/facebook/audio) +
+// regenerar uno a la vez. Regenerar es siempre un clic humano explícito — nunca un
+// efecto secundario de guardar/publicar (docs/implementaciones/radar2/06-multiformato.md).
+const RENDER_CHANNELS: { key: RenderChannel; label: string }[] = [
+  { key: 'web', label: 'Web — lectura del análisis' },
+  { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'social', label: 'Facebook' },
+  { key: 'audio', label: 'Audio' },
+];
+
+function renderChannelRenders(): string {
+  const renders = state.editorRenders;
+  return `<div class="padmin-editor-card" style="margin-top:10px;">
+    <p class="padmin-editor-meta-title">Renders por canal</p>
+    <p style="font-size:11px;color:var(--text-mute);margin:0 0 4px;">Empaque del análisis del Motor Editorial para cada canal (si el tema tiene uno; si no, usa título/dek de la nota). "Desactualizado" = el tema ya tiene un análisis más nuevo que el usado aquí.</p>
+    ${renders === null
+      ? '<p class="padmin-t-small">Cargando…</p>'
+      : RENDER_CHANNELS.map((c) => renderChannelRow(c.key, c.label, renders.find((r) => r.channel === c.key) || null)).join('')}
+  </div>`;
+}
+
+function renderChannelRow(channel: RenderChannel, label: string, render: ContentRender | null): string {
+  const busy = state.regeneratingRenderChannel === channel;
+  const statusBadge = !render
+    ? badge('sin_evaluar', 'Sin generar')
+    : (render.stale ? badge('stale', 'Desactualizado') : badge('ok', 'Vigente'));
+  const preview = render ? (typeof render.content === 'string' ? render.content : render.content.body) : '';
+  return `<div style="border-top:1px solid var(--line);padding:10px 0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span class="padmin-t-body">${esc(label)}</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        ${statusBadge}
+        <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="regenerate-render" data-channel="${channel}" ${busy ? 'disabled' : ''}>${busy ? '…' : (render ? 'Regenerar' : 'Generar')}</button>
+      </div>
+    </div>
+    ${preview ? `<p class="padmin-t-small" style="margin:6px 0 0;white-space:pre-line;">${esc(preview.slice(0, 220))}${preview.length > 220 ? '…' : ''}</p>` : ''}
   </div>`;
 }
 

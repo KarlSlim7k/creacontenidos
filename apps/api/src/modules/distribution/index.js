@@ -7,6 +7,8 @@ const pool = require('../../db/pool');
 const config = require('../../config');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logActivity } = require('../../lib/ai-client');
+const { renderWhatsapp, renderSocial } = require('../../lib/renders');
+const { buildMasterForProposal } = require('../../lib/render-service');
 
 const router = express.Router();
 
@@ -25,7 +27,7 @@ function noteUrl(slug) {
 // Solo notas con status='published' se distribuyen — nunca saltarse la puerta editorial.
 async function loadPublishedProposal(id) {
   const { rows } = await pool.query(
-    'SELECT id, title, dek, body, slug, status FROM content_proposals WHERE id = $1',
+    'SELECT id, title, dek, body, slug, status, topic_id FROM content_proposals WHERE id = $1',
     [id]
   );
   return rows[0] || null;
@@ -72,7 +74,10 @@ router.post('/facebook', requireAuth, requireRole('director'),
   distributeHandler('facebook',
     () => Boolean(config.facebookPageId && config.facebookPageToken),
     async (proposal) => {
-      const message = proposal.title + (proposal.dek ? '\n\n' + proposal.dek : '');
+      // R2-39 (fase 6): empaque propio del análisis para el canal, no el
+      // título+dek recortado — con fallback a proposal.title/dek si el tema
+      // no tiene análisis (o no viene de RADAR, ver buildMasterObject()).
+      const message = renderSocial(await buildMasterForProposal(proposal));
       const resp = await fetch(`https://graph.facebook.com/v19.0/${config.facebookPageId}/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,7 +97,8 @@ router.post('/whatsapp', requireAuth, requireRole('director'),
     () => true,
     async (proposal) => {
       const url = noteUrl(proposal.slug);
-      const text = proposal.title + (proposal.dek ? '\n\n' + proposal.dek : '') + '\n\n' + url;
+      // R2-39 (fase 6): mismo empaque propio que Facebook, con el link al final.
+      const text = renderWhatsapp(await buildMasterForProposal(proposal), url);
       return { channel: 'whatsapp', url, share_url: 'https://wa.me/?text=' + encodeURIComponent(text) };
     })
 );

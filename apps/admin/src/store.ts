@@ -260,6 +260,22 @@ export interface EditorialAnalysis {
   created_at: string;
 }
 
+/** GET /api/content/renders?proposal_id= — render vigente por canal (R2-37/R2-38, fase 6).
+ * `content` es {title, dek, body} para 'web' y un string ya armado para los otros tres canales. */
+export type RenderChannel = 'web' | 'whatsapp' | 'audio' | 'social';
+export interface ContentRender {
+  id: number;
+  proposal_id: number;
+  channel: RenderChannel;
+  content: { title: string; dek: string | null; body: string } | string;
+  analysis_id: number | null;
+  analysis_created_at: string | null;
+  created_by: number | null;
+  created_at: string;
+  /** true si el tema ya tiene un análisis más nuevo que el usado en este render. */
+  stale: boolean;
+}
+
 export interface CompetitorPost {
   id: number;
   source_platform: string;
@@ -557,6 +573,10 @@ export interface State {
   editorImagePrompt: string | null;
   generatingImage: boolean;
   suggestingSlug: boolean;
+  /** Renders por canal de la propuesta abierta en el editor (R2-38, fase 6). null = aún sin cargar. */
+  editorRenders: ContentRender[] | null;
+  /** Canal que se está (re)generando ahora mismo, o null si ninguno. */
+  regeneratingRenderChannel: RenderChannel | null;
   transparency: Record<string, unknown>;
   comentarioPieceId: number | null;
   comentarioText: string;
@@ -673,6 +693,7 @@ export function initialState(): State {
   editChatModel: null, editChatProvider: null, editChatUsesLeft: null, editChatError: null,
   notaPreviewHtml: null,
   editorImagePrompt: null, generatingImage: false, suggestingSlug: false,
+  editorRenders: null, regeneratingRenderChannel: null,
   transparency: {}, comentarioPieceId: null, comentarioText: '', discardTopicIds: null,
   deletePublishedId: null, deletePublishedError: null,
   pickerPreview: null,
@@ -988,6 +1009,7 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
           editorProposalId: id, notaPreviewHtml: null, editorImagePrompt: null,
           editChatMessages: [], editChatPending: [], editChatModel: null, editChatProvider: null,
           editChatUsesLeft: null, editChatError: null,
+          editorRenders: null, regeneratingRenderChannel: null,
           editorDraft: {
             title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || '',
             cover_image_url: p.cover_image_url || '', author_name: p.author_name || state.user!.name,
@@ -997,6 +1019,11 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
           },
         });
       }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
+      // R2-38: estado de renders por canal — independiente del draft, best-effort
+      // (una propuesta recién creada aún no tiene ninguno, eso no es un error).
+      adminApi<ContentRender[]>(`/api/content/renders?proposal_id=${id}`)
+        .then((renders) => { setState({ editorRenders: renders }); })
+        .catch(() => { setState({ editorRenders: [] }); });
     }
   } else if (screen === 'aprobacion') {
     loadProposals('en_revision', 'status=en_revision');

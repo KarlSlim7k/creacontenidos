@@ -330,6 +330,8 @@ router.delete('/proposals/:id', requireAuth, requireRole('director'), async (req
     // published_content (bitácora de distribución) referencia esta fila SIN ON DELETE:
     // borrar una publicada con push previo a un canal fallaría por violación de FK.
     await pool.query('DELETE FROM published_content WHERE proposal_id = $1', [req.params.id]);
+    // content_renders (R2-37, fase 6) referencia esta fila SIN ON DELETE — mismo motivo.
+    await pool.query('DELETE FROM content_renders WHERE proposal_id = $1', [req.params.id]);
     await pool.query('DELETE FROM content_proposals WHERE id = $1', [req.params.id]);
     // Único borrado editorial que puede quitar una nota viva del sitio — se audita, a diferencia
     // de otros deletes del módulo, para poder responder "quién y cuándo" ante un borrado accidental.

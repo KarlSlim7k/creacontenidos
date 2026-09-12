@@ -6,6 +6,7 @@ import {
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult, type TrustedDevice,
   type EditChatHunk, type MyProfile, type EditorialSettings, type TwoFaSetup, type EditorialAnalysis,
+  type ContentRender, type RenderChannel,
 } from './store';
 import { TABLE_PAGE_SIZE, safeHttpUrl } from './util';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
@@ -500,6 +501,19 @@ const clickHandlers: Record<string, (el: Element) => void> = {
         setState({ generatingImage: false, successMsg: 'Imagen de portada generada.' });
       })
       .catch((err: ApiError) => { setState({ generatingImage: false, errorMsg: err.message }); });
+  },
+  // R2-38: regenerar el render de un canal es siempre un clic humano explícito
+  // (nunca automático sobre contenido ya publicado, ver docs/implementaciones/radar2/06-multiformato.md).
+  'regenerate-render': (el) => {
+    if (!state.editorProposalId) return;
+    const channel = attr(el, 'data-channel') as RenderChannel;
+    setState({ regeneratingRenderChannel: channel });
+    adminApi<ContentRender>('/api/content/renders', { method: 'POST', body: { proposal_id: state.editorProposalId, channel } })
+      .then((render) => {
+        const others = (state.editorRenders || []).filter((r) => r.channel !== channel);
+        setState({ editorRenders: [...others, render], regeneratingRenderChannel: null, successMsg: 'Render regenerado.' });
+      })
+      .catch((err: ApiError) => { setState({ regeneratingRenderChannel: null, errorMsg: err.message }); });
   },
   'suggest-slug': () => {
     if (!state.editorProposalId) return;
