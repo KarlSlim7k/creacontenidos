@@ -6,7 +6,8 @@ import {
   type AdminUser, type SocialPost, type FbAccount, type CompetitorPost, type Topic, type DistLogEntry, type RadarSource,
   type NewsletterEvent, type NewsletterSettings, type NewsletterContent, type SiteMetrics, type QaResult, type TrustedDevice,
   type EditChatHunk, type MyProfile, type EditorialSettings, type TwoFaSetup, type EditorialAnalysis,
-  type ContentRender, type RenderChannel,
+  type ContentRender, type RenderChannel, type ProposalVersion,
+  writeEditorAutosave, clearEditorAutosave,
 } from './store';
 import { TABLE_PAGE_SIZE, safeHttpUrl } from './util';
 import { readEditorForm, buildNotaPreviewDoc } from './screens/editor';
@@ -515,6 +516,25 @@ const clickHandlers: Record<string, (el: Element) => void> = {
       })
       .catch((err: ApiError) => { setState({ regeneratingRenderChannel: null, errorMsg: err.message }); });
   },
+  // R2-59: restaurar el autosave local aplica sus campos al formulario, pero NO
+  // guarda solo — el editor decide con "Guardar borrador", igual que restaurar
+  // una versión del historial.
+  'restore-autosave': () => {
+    const pending = state.editorAutosavePending;
+    if (!pending || !state.editorDraft) return;
+    setState({ editorDraft: { ...state.editorDraft, ...pending.form }, editorAutosavePending: null });
+  },
+  'discard-autosave': () => {
+    if (state.editorProposalId) clearEditorAutosave(state.editorProposalId);
+    setState({ editorAutosavePending: null });
+  },
+  'restore-version': (el) => {
+    const id = Number(attr(el, 'data-version-id'));
+    const version = (state.editorVersions || []).find((v) => v.id === id);
+    if (!version || !state.editorDraft) return;
+    if (!confirm('¿Restaurar esta versión? Reemplaza el título y el cuerpo actuales del formulario (sin guardar todavía).')) return;
+    setState({ editorDraft: { ...state.editorDraft, title: version.title || '', body: version.body || '' } });
+  },
   'suggest-slug': () => {
     if (!state.editorProposalId) return;
     const form = readEditorForm();
@@ -792,13 +812,18 @@ export function submitDraft(id: number, thenSubmitReview: boolean) {
   const body = readEditorForm();
   adminApi<Proposal>('/api/editorial/proposals/' + id + '/draft', { method: 'PATCH', body })
     .then((updated) => {
+      // R2-59: guardado explícito en el servidor — el autosave local ya no aporta nada.
+      clearEditorAutosave(id);
       if (!thenSubmitReview) {
         setState({ editorDraft: {
           title: updated.title || '', body: updated.body || '', section: updated.section || '', dek: updated.dek || '', slug: updated.slug || '',
           cover_image_url: updated.cover_image_url || '', author_name: updated.author_name || '',
           is_sponsored: Boolean(updated.is_sponsored), sponsor_name: updated.sponsor_name || '', image_prompt: updated.image_prompt || '',
           sensibilidad: updated.sensibilidad || null, editorial_directive: updated.editorial_directive || '',
-        }, successMsg: 'Borrador guardado.' });
+        }, editorAutosavePending: null, successMsg: 'Borrador guardado.' });
+        adminApi<ProposalVersion[]>(`/api/editorial/proposals/${id}/versions`)
+          .then((versions) => { setState({ editorVersions: versions }); })
+          .catch(() => { /* el historial es una conveniencia, no crítico */ });
         return;
       }
       return adminApi('/api/editorial/proposals/' + id + '/submit-review', { method: 'PATCH' }).then(() => {
@@ -1400,6 +1425,23 @@ export function handleInput(e: Event) {
   if (!state.editorDraft || !t.id || t.id.indexOf('editor-') !== 0) return;
   if (t.id === 'editor-image-prompt') { state.editorImagePrompt = (t as HTMLTextAreaElement).value; return; }
   state.editorDraft = Object.assign({}, state.editorDraft, readEditorForm()) as EditorDraft;
+  scheduleAutosave();
+}
+
+// R2-59: autosave debounced contra recarga accidental (solo localStorage, nunca
+// toca el servidor). 800ms tras la última tecla — ni escribe en cada pulsación
+// (I/O innecesario) ni deja pasar segundos de trabajo sin respaldar.
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleAutosave() {
+  const proposalId = state.editorProposalId;
+  if (!proposalId) return;
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    if (state.editorDraft && state.editorProposalId === proposalId) {
+      const { image_prompt, sensibilidad, ...form } = state.editorDraft;
+      writeEditorAutosave(proposalId, form);
+    }
+  }, 800);
 }
 
 export function handleChange(e: Event) {

@@ -499,6 +499,13 @@ async function main() {
       riskForced.status !== 409 || riskForcedBody.code !== 'verification_risk',
       `H_RISK_FORCE: force no devuelve verification_risk (status ${riskForced.status})`
     );
+    // Si force sí generó una propuesta real, no debe quedar viva: además de ensuciar
+    // 'propuesta' para otros checks, arrastra el snapshot 'ai_generated' (R2-50) que
+    // infla el avgCorrectionRate de GET /editorial/metrics en checks posteriores.
+    if (riskForced.status === 201 && riskForcedBody.id) {
+      await pool.query('DELETE FROM content_proposal_versions WHERE proposal_id = $1', [riskForcedBody.id]);
+      await pool.query('DELETE FROM content_proposals WHERE id = $1', [riskForcedBody.id]);
+    }
     await pool.query('DELETE FROM topics WHERE id = $1', [riskId]);
 
     // --- H_CANIBAL: topic muy similar a una nota ya publicada → 409 ANTES de gastar en IA ---

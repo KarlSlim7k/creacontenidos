@@ -11,8 +11,8 @@ interface NotaPreviewInput {
   title?: string | null;
   dek?: string | null;
 }
-import { esc, badge, loadingCard, errorCard, initialsOf, safeHttpUrl } from '../util';
-import type { ContentRender, RenderChannel } from '../store';
+import { esc, badge, loadingCard, errorCard, initialsOf, safeHttpUrl, relativeTime } from '../util';
+import type { ContentRender, RenderChannel, ProposalVersion } from '../store';
 
 function pickerRow(p: Proposal, editable: boolean): string {
   const fecha = p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '';
@@ -100,6 +100,7 @@ export function renderEditor(): string {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;">
       <h1 class="padmin-h1" style="margin:0;">Editor de nota</h1> ${badge('borrador')}
     </div>
+    ${renderAutosaveBanner()}
     <div class="padmin-editor-cols">
     <div class="padmin-editor-card padmin-editor-main">
       ${sensBadge}
@@ -150,6 +151,41 @@ export function renderEditor(): string {
     ${renderQaResult()}
     ${renderNotaPreview()}
     ${renderChannelRenders()}
+    ${renderVersionHistory()}
+  </div>`;
+}
+
+// R2-59: aviso de un cambio sin guardar detectado en localStorage (recarga o cierre
+// accidental) — nunca se aplica solo, el editor decide restaurar o descartar.
+function renderAutosaveBanner(): string {
+  const pending = state.editorAutosavePending;
+  if (!pending) return '';
+  return `<div class="padmin-field" style="background:#F6ECC9;border-radius:6px;padding:10px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+    <p style="margin:0;font-size:12px;color:#8A6B0F;">Se encontró un cambio sin guardar de ${esc(relativeTime(pending.savedAt))} (recarga o cierre accidental de esta pestaña).</p>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      <button type="button" class="padmin-btn-sm padmin-btn-brand" data-action="restore-autosave">Restaurar</button>
+      <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="discard-autosave">Descartar</button>
+    </div>
+  </div>`;
+}
+
+// R2-59: historial mínimo de versiones — snapshots de IA (generate-proposal/-draft)
+// y de cada "Guardar borrador" explícito. Restaurar solo llena el formulario, no
+// guarda por sí solo (misma regla que el resto del panel: guardar es un clic humano).
+function renderVersionHistory(): string {
+  const versions = state.editorVersions;
+  if (!versions || !versions.length) return '';
+  return `<div class="padmin-editor-card" style="margin-top:10px;">
+    <p class="padmin-editor-meta-title">Historial de versiones</p>
+    ${versions.map((v) => renderVersionRow(v)).join('')}
+  </div>`;
+}
+
+function renderVersionRow(v: ProposalVersion): string {
+  const label = v.source === 'ai_generated' ? 'Generado por IA' : 'Guardado';
+  return `<div style="border-top:1px solid var(--line);padding:8px 0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span class="padmin-t-small">${badge(v.source === 'ai_generated' ? 'signal' : 'activo', label)} ${esc(relativeTime(v.created_at))} — <em>${esc((v.title || '').slice(0, 60))}</em></span>
+    <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="restore-version" data-version-id="${v.id}">Restaurar</button>
   </div>`;
 }
 

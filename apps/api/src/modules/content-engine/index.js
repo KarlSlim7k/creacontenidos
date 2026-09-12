@@ -9,6 +9,21 @@ const { CHANNELS, isValidChannel, generateRender, listRenders } = require('../..
 
 const router = express.Router();
 
+// R2-50 (backlog nuevo): snapshot del cuerpo tal cual lo escribió la IA, ANTES
+// de que el equipo lo edite — es la línea base para medir "corrección
+// humana" (ver GET /api/editorial/metrics). Best-effort: si falla, no debe
+// tumbar la generación real.
+async function snapshotAiVersion(proposalId, title, body, userId) {
+  try {
+    await pool.query(
+      'INSERT INTO content_proposal_versions (proposal_id, source, title, body, created_by) VALUES ($1, $2, $3, $4, $5)',
+      [proposalId, 'ai_generated', title || null, body || null, userId]
+    );
+  } catch {
+    // No es crítico: perder un snapshot de métrica no debe romper la generación.
+  }
+}
+
 // Todo este router consume IA o modifica contenido editorial. El menú oculto
 // del frontend no impedía que comercial/colaborador llamaran estas URLs.
 router.use(requireAuth, requireRole('director', 'produccion'));
@@ -101,6 +116,7 @@ router.post('/generate-proposal', requireAuth, aiLimiter, requireRole('director'
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Generado con IA', 'propuesta', $9) RETURNING *`,
       [topic_id, format || 'nota', proposal.title, proposal.body, proposal.dek, proposal.section, proposal.angulo, proposal.sensibilidad, directive || null]
     );
+    await snapshotAiVersion(rows[0].id, proposal.title, proposal.body, req.user.id);
     const warnings = [];
     if (vStatus === 'checking' || vStatus === 'signal') {
       warnings.push(
@@ -189,6 +205,10 @@ router.post('/generate-draft', requireAuth, aiLimiter, async (req, res, next) =>
     const directive = editorial_directive !== undefined ? String(editorial_directive || '').trim() : (rows[0].editorial_directive || '');
     const body = await generateDraft(rows[0], instructions, directive);
     await pool.query('UPDATE content_proposals SET body = $1, editorial_directive = $2, updated_at = now() WHERE id = $3', [body, directive || null, proposal_id]);
+    // R2-50: generate-draft es una reescritura completa por IA — reinicia la
+    // línea base de "antes de la edición humana" (la anterior, si la hubo,
+    // queda en el historial igual, solo deja de ser la más reciente).
+    await snapshotAiVersion(proposal_id, rows[0].title, body, req.user.id);
     await logActivity(pool, 'generate_draft', `Borrador generado para propuesta ${proposal_id}`, req.user.id, 'exito', { proposal_id });
     res.json({ body });
   } catch (err) {

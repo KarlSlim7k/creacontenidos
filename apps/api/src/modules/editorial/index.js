@@ -7,6 +7,7 @@ const { publishProposal, returnProposal } = require('../../lib/editorial-review'
 const { slugify } = require('../../lib/slug');
 const { sendPushToRoles } = require('../../lib/push');
 const { isValidReasonCode } = require('../../lib/editorial-reasons');
+const { correctionRate } = require('../../lib/draft-correction');
 
 // Motivo (taxonomía R2-05) + verification_status del topic origen, para la
 // bitácora de /reject y /return (R2-06) — insumo de aprendizaje editorial
@@ -244,7 +245,33 @@ router.patch('/proposals/:id/draft', requireAuth, async (req, res, next) => {
        RETURNING ${PROPOSAL_FIELDS}`,
       params
     );
+    // R2-59: cada "Guardar borrador" explícito deja una versión en el historial
+    // del panel — best-effort, nunca tumba el guardado real. El autosave del
+    // navegador (recarga accidental) es solo local y no pasa por aquí.
+    if (req.body.body !== undefined) {
+      pool.query(
+        'INSERT INTO content_proposal_versions (proposal_id, source, title, body, created_by) VALUES ($1, $2, $3, $4, $5)',
+        [req.params.id, 'human_save', rows[0].title, rows[0].body, req.user.id]
+      ).catch(() => {});
+    }
     res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/editorial/proposals/:id/versions — historial (R2-59): últimos borradores
+// de IA y guardados humanos, más recientes primero. Usado por el panel para
+// mostrar/restaurar una versión anterior sin tocar la base de datos hasta que
+// el editor decida guardar.
+router.get('/proposals/:id/versions', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, source, title, body, created_by, created_at FROM content_proposal_versions
+       WHERE proposal_id = $1 ORDER BY created_at DESC LIMIT 20`,
+      [req.params.id]
+    );
+    res.json(rows);
   } catch (err) {
     next(err);
   }
@@ -304,14 +331,24 @@ router.patch('/proposals/:id/return', requireAuth, requireRole('director'), asyn
 // rechaza el trabajo de producción, exige motivo) esto no es un rechazo — director
 // o producción detectan un error y la reabren; vuelve a pasar por borrador →
 // en_revision → publish (gate completo, sin atajos) antes de verse otra vez en el sitio.
+// R2-51 (backlog nuevo): reason_code obligatorio — mismo motivo que ya obliga
+// /reject y /return. Antes de esto no había forma de distinguir "corregimos
+// un error" (dato_incorrecto) de "actualizamos información" al reabrir una
+// nota ya publicada; ahora queda en activity_log, agregable por motivo (ver
+// GET /api/editorial/metrics → postPublishCorrections).
 router.patch('/proposals/:id/reopen', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
     if (!(await requireStatus(req.params.id, 'published', res))) return;
+    const { reason_code } = req.body || {};
+    if (!isValidReasonCode(reason_code)) {
+      return res.status(400).json({ error: 'Datos inválidos', fields: { reason_code: 'Requerido, valor de la taxonomía de motivos' } });
+    }
     const { rows } = await pool.query(
       `UPDATE content_proposals SET status = 'borrador', updated_at = now() WHERE id = $1
        RETURNING ${PROPOSAL_FIELDS}`,
       [req.params.id]
     );
+    await logActivity(pool, 'proposal_reopen', `Nota reabierta: ${rows[0].title}`, req.user.id, 'exito', await reasonLogMetadata(req.params.id, reason_code));
     res.json(rows[0]);
   } catch (err) {
     next(err);
@@ -332,6 +369,8 @@ router.delete('/proposals/:id', requireAuth, requireRole('director'), async (req
     await pool.query('DELETE FROM published_content WHERE proposal_id = $1', [req.params.id]);
     // content_renders (R2-37, fase 6) referencia esta fila SIN ON DELETE — mismo motivo.
     await pool.query('DELETE FROM content_renders WHERE proposal_id = $1', [req.params.id]);
+    // content_proposal_versions (R2-50/R2-59) — mismo motivo.
+    await pool.query('DELETE FROM content_proposal_versions WHERE proposal_id = $1', [req.params.id]);
     await pool.query('DELETE FROM content_proposals WHERE id = $1', [req.params.id]);
     // Único borrado editorial que puede quitar una nota viva del sitio — se audita, a diferencia
     // de otros deletes del módulo, para poder responder "quién y cuándo" ante un borrado accidental.
@@ -422,6 +461,34 @@ router.get('/metrics', requireAuth, requireRole('director', 'produccion'), async
        WHERE cp.status = 'published'
        GROUP BY u.name ORDER BY published DESC`
     );
+
+    // R2-50: "corrección humana" — % de palabras que cambiaron entre el último
+    // borrador de IA y el cuerpo publicado. Solo sobre piezas que sí tienen un
+    // snapshot de IA (generate-proposal/generate-draft) — sin eso no hay línea
+    // base y no cuenta como "0% de corrección".
+    const { rows: aiVsFinal } = await pool.query(
+      `SELECT cp.body AS final_body, v.body AS ai_body
+       FROM content_proposals cp
+       JOIN LATERAL (
+         SELECT body FROM content_proposal_versions
+         WHERE proposal_id = cp.id AND source = 'ai_generated'
+         ORDER BY created_at DESC LIMIT 1
+       ) v ON true
+       WHERE cp.status = 'published'`
+    );
+    const rates = aiVsFinal
+      .map((r) => correctionRate(r.ai_body, r.final_body))
+      .filter((r) => r != null);
+    const avgCorrectionRate = rates.length ? Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 10) / 10 : null;
+
+    // R2-51: motivos de reapertura de una nota ya publicada — distingue
+    // "corregimos un error" (dato_incorrecto) de una actualización rutinaria.
+    const { rows: reopenReasons } = await pool.query(
+      `SELECT metadata->>'reason_code' AS reason_code, count(*)::int AS count
+       FROM activity_log WHERE action = 'proposal_reopen' AND metadata->>'reason_code' IS NOT NULL
+       GROUP BY 1 ORDER BY count DESC`
+    );
+
     res.json({
       piecesPublished: count,
       weeklyGoal: WEEKLY_GOAL,
@@ -433,6 +500,11 @@ router.get('/metrics', requireAuth, requireRole('director', 'produccion'), async
       avgDraftDays: avg_days != null ? Math.round(Number(avg_days) * 10) / 10 : null,
       topSections,
       authors,
+      avgCorrectionRate,
+      postPublishCorrections: {
+        total: reopenReasons.reduce((a, r) => a + r.count, 0),
+        reasonCounts: Object.fromEntries(reopenReasons.map((r) => [r.reason_code, r.count])),
+      },
     });
   } catch (err) {
     next(err);

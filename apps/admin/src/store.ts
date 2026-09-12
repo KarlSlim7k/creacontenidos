@@ -276,6 +276,18 @@ export interface ContentRender {
   stale: boolean;
 }
 
+/** GET /api/editorial/proposals/:id/versions — historial de una propuesta (R2-50/R2-59).
+ * 'ai_generated' = snapshot justo cuando lo escribió la IA; 'human_save' = un "Guardar
+ * borrador" explícito del editor. El autosave del navegador nunca llega aquí (es solo local). */
+export interface ProposalVersion {
+  id: number;
+  source: 'ai_generated' | 'human_save';
+  title: string | null;
+  body: string | null;
+  created_by: number | null;
+  created_at: string;
+}
+
 export interface CompetitorPost {
   id: number;
   source_platform: string;
@@ -577,6 +589,11 @@ export interface State {
   editorRenders: ContentRender[] | null;
   /** Canal que se está (re)generando ahora mismo, o null si ninguno. */
   regeneratingRenderChannel: RenderChannel | null;
+  /** Historial de versiones de la propuesta abierta (R2-59). null = aún sin cargar. */
+  editorVersions: ProposalVersion[] | null;
+  /** Borrador sin guardar detectado en localStorage al abrir el editor (R2-59, recarga
+   * accidental) — banner "restaurar / descartar". null = nada pendiente u ya resuelto. */
+  editorAutosavePending: { savedAt: string; form: Record<string, unknown> } | null;
   transparency: Record<string, unknown>;
   comentarioPieceId: number | null;
   comentarioText: string;
@@ -694,6 +711,7 @@ export function initialState(): State {
   notaPreviewHtml: null,
   editorImagePrompt: null, generatingImage: false, suggestingSlug: false,
   editorRenders: null, regeneratingRenderChannel: null,
+  editorVersions: null, editorAutosavePending: null,
   transparency: {}, comentarioPieceId: null, comentarioText: '', discardTopicIds: null,
   deletePublishedId: null, deletePublishedError: null,
   pickerPreview: null,
@@ -983,6 +1001,46 @@ function fetchInto<K extends keyof AdminData>(path: string, key: K) {
     .catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
 }
 
+// R2-59: autosave contra recarga accidental — es solo del navegador (localStorage),
+// nunca toca el servidor ni el historial de content_proposal_versions (eso es
+// 'human_save', un guardado explícito). Cada acceso va envuelto en try/catch: modo
+// privado, cuota llena o bloqueo del sitio no deben romper la edición, solo dejan
+// de ofrecer el autosave.
+export type EditorAutosaveForm = Omit<EditorDraft, 'image_prompt' | 'sensibilidad'>;
+export interface EditorAutosaveEntry {
+  savedAt: string;
+  form: EditorAutosaveForm;
+}
+
+function autosaveKey(proposalId: number): string {
+  return `crea-editor-autosave-${proposalId}`;
+}
+
+export function readEditorAutosave(proposalId: number): EditorAutosaveEntry | null {
+  try {
+    const raw = localStorage.getItem(autosaveKey(proposalId));
+    return raw ? (JSON.parse(raw) as EditorAutosaveEntry) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeEditorAutosave(proposalId: number, form: EditorAutosaveForm) {
+  try {
+    localStorage.setItem(autosaveKey(proposalId), JSON.stringify({ savedAt: new Date().toISOString(), form }));
+  } catch {
+    // localStorage no disponible (privado/cuota) — el autosave es conveniencia, no crítico.
+  }
+}
+
+export function clearEditorAutosave(proposalId: number) {
+  try {
+    localStorage.removeItem(autosaveKey(proposalId));
+  } catch {
+    // ver writeEditorAutosave
+  }
+}
+
 export function loadScreenData(screen: Screen, extra?: number | null) {
   state.dataError = null;
   if (screen === 'dashboard') {
@@ -1005,25 +1063,36 @@ export function loadScreenData(screen: Screen, extra?: number | null) {
     loadProposals('en_revision', 'status=en_revision');
     if (id) {
       adminApi<Proposal>(`/api/editorial/proposals/${id}`).then((p) => {
+        const serverDraft: EditorDraft = {
+          title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || '',
+          cover_image_url: p.cover_image_url || '', author_name: p.author_name || state.user!.name,
+          is_sponsored: Boolean(p.is_sponsored), sponsor_name: p.sponsor_name || '',
+          image_prompt: p.image_prompt || '', sensibilidad: p.sensibilidad || null,
+          editorial_directive: p.editorial_directive || '',
+        };
+        // R2-59: si hay un autosave local más nuevo y distinto de lo que ya está
+        // guardado en el servidor, se ofrece restaurarlo — no se aplica solo.
+        const autosave = readEditorAutosave(id);
+        const autosaveDiffers = autosave && (autosave.form.title !== serverDraft.title || autosave.form.body !== serverDraft.body);
         setState({
           editorProposalId: id, notaPreviewHtml: null, editorImagePrompt: null,
           editChatMessages: [], editChatPending: [], editChatModel: null, editChatProvider: null,
           editChatUsesLeft: null, editChatError: null,
-          editorRenders: null, regeneratingRenderChannel: null,
-          editorDraft: {
-            title: p.title || '', body: p.body || '', section: p.section || '', dek: p.dek || '', slug: p.slug || '',
-            cover_image_url: p.cover_image_url || '', author_name: p.author_name || state.user!.name,
-            is_sponsored: Boolean(p.is_sponsored), sponsor_name: p.sponsor_name || '',
-            image_prompt: p.image_prompt || '', sensibilidad: p.sensibilidad || null,
-            editorial_directive: p.editorial_directive || '',
-          },
+          editorRenders: null, regeneratingRenderChannel: null, editorVersions: null,
+          editorAutosavePending: autosaveDiffers ? { savedAt: autosave!.savedAt, form: autosave!.form } : null,
+          editorDraft: serverDraft,
         });
+        if (autosave && !autosaveDiffers) clearEditorAutosave(id); // idéntico al servidor: nada que ofrecer
       }).catch((err: ApiError) => { setState({ errorMsg: err.message, dataError: err.message }); });
       // R2-38: estado de renders por canal — independiente del draft, best-effort
       // (una propuesta recién creada aún no tiene ninguno, eso no es un error).
       adminApi<ContentRender[]>(`/api/content/renders?proposal_id=${id}`)
         .then((renders) => { setState({ editorRenders: renders }); })
         .catch(() => { setState({ editorRenders: [] }); });
+      // R2-59: historial de versiones — mismo criterio best-effort.
+      adminApi<ProposalVersion[]>(`/api/editorial/proposals/${id}/versions`)
+        .then((versions) => { setState({ editorVersions: versions }); })
+        .catch(() => { setState({ editorVersions: [] }); });
     }
   } else if (screen === 'aprobacion') {
     loadProposals('en_revision', 'status=en_revision');

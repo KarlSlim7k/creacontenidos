@@ -132,6 +132,13 @@ async function main() {
     })).json();
     assert.strictEqual(p.slug, 'check-e2e-admin-slug');
 
+    // R2-59: cada PATCH /draft con `body` deja una versión 'human_save' en el historial.
+    const versionsAfterDraft = await (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/versions`, { headers: auth(directorToken) })).json();
+    assert.ok(
+      versionsAfterDraft.some((v) => v.source === 'human_save' && v.body === '[check] cuerpo de prueba'),
+      'R2-59: guardar borrador deja una versión human_save en el historial'
+    );
+
     p = await (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/submit-review`, { method: 'PATCH', headers: auth(produccionToken) })).json();
     assert.strictEqual(p.status, 'en_revision');
 
@@ -168,15 +175,31 @@ async function main() {
       (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, { method: 'PATCH', headers: auth(comercialToken) })).status,
       403, 'comercial no debería poder reabrir una publicada'
     );
-    p = await (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, { method: 'PATCH', headers: auth(produccionToken) })).json();
-    assert.strictEqual(p.status, 'borrador', 'producción debe poder reabrir una publicada');
+    // R2-51: reason_code obligatorio (misma taxonomía que /reject y /return).
+    assert.strictEqual(
+      (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, { method: 'PATCH', headers: auth(produccionToken) })).status,
+      400, 'reopen sin reason_code → 400'
+    );
+    p = await (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, {
+      method: 'PATCH', headers: { ...auth(produccionToken), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason_code: 'dato_incorrecto' }),
+    })).json();
+    assert.strictEqual(p.status, 'borrador', 'producción debe poder reabrir una publicada con motivo');
     assert.strictEqual(
       (await fetch(`${BASE}/api/public/articles/check-e2e-admin-slug`)).status, 404,
       'una nota reabierta debe desaparecer del sitio público de inmediato'
     );
     assert.strictEqual(
-      (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, { method: 'PATCH', headers: auth(directorToken) })).status,
+      (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/reopen`, {
+        method: 'PATCH', headers: { ...auth(directorToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason_code: 'dato_incorrecto' }),
+      })).status,
       409, 'reopen solo aplica cuando el estado es published'
+    );
+    const reopenLogged = await (await fetch(`${BASE}/api/admin/activity?limit=50`, { headers: auth(directorToken) })).json();
+    assert.ok(
+      reopenLogged.some((a) => a.action === 'proposal_reopen' && a.metadata && a.metadata.reason_code === 'dato_incorrecto'),
+      'R2-51: el motivo de reapertura queda en activity_log'
     );
     p = await (await fetch(`${BASE}/api/editorial/proposals/${proposalId}/submit-review`, { method: 'PATCH', headers: auth(produccionToken) })).json();
     assert.strictEqual(p.status, 'en_revision');
@@ -477,10 +500,39 @@ async function main() {
       body: JSON.stringify({ email: 'tomas.ibarra@crearcontenidos.com', password: winner }),
     })).status, 200, 'la contraseña ganadora del reset no funciona');
 
+    // R2-50: avgCorrectionRate en GET /metrics — % de palabras que cambiaron entre el
+    // último snapshot 'ai_generated' y el cuerpo publicado. El seed no trae ningún
+    // content_proposal_versions, así que esta fila aislada es la única que aporta al
+    // promedio: se puede afirmar el valor exacto, no solo que el campo existe.
+    let correctionTopicId, correctionProposalId;
+    try {
+      const { rows: [t] } = await pool.query(`INSERT INTO topics (title) VALUES ('[check] tema para corrección') RETURNING id`);
+      correctionTopicId = t.id;
+      const { rows: [cp] } = await pool.query(
+        `INSERT INTO content_proposals (topic_id, format, title, body, status, published_at)
+         VALUES ($1, 'nota', '[check] nota corregida', 'Uno dos cuatro', 'published', now()) RETURNING id`,
+        [correctionTopicId]
+      );
+      correctionProposalId = cp.id;
+      await pool.query(
+        `INSERT INTO content_proposal_versions (proposal_id, source, title, body) VALUES ($1, 'ai_generated', '[check] nota corregida', 'Uno dos tres')`,
+        [correctionProposalId]
+      );
+      const metrics = await (await fetch(`${BASE}/api/editorial/metrics`, { headers: auth(directorToken) })).json();
+      assert.strictEqual(metrics.avgCorrectionRate, 33.3, 'R2-50: avgCorrectionRate calcula % de palabras cambiadas respecto al snapshot de IA');
+      assert.ok(metrics.postPublishCorrections.total >= 1, 'R2-51: postPublishCorrections cuenta al menos el reopen de este check');
+      assert.ok((metrics.postPublishCorrections.reasonCounts.dato_incorrecto || 0) >= 1, 'R2-51: el motivo dato_incorrecto queda agregado por reason_code');
+    } finally {
+      if (correctionProposalId) await pool.query('DELETE FROM content_proposal_versions WHERE proposal_id = $1', [correctionProposalId]);
+      if (correctionProposalId) await pool.query('DELETE FROM content_proposals WHERE id = $1', [correctionProposalId]);
+      if (correctionTopicId) await pool.query('DELETE FROM topics WHERE id = $1', [correctionTopicId]);
+    }
+
     console.log('OK: panel admin verificado (roles, sesiones, CSRF, 2FA, recuperación de contraseña y módulos).');
   } finally {
     await stopApi(server);
     if (proposalId) {
+      await pool.query('DELETE FROM content_proposal_versions WHERE proposal_id = $1', [proposalId]);
       // Deja el check re-ejecutable: revierte la fila usada de vuelta a 'propuesta'.
       await pool.query(
         `UPDATE content_proposals SET status = 'propuesta', slug = NULL, section = NULL, body = NULL,
