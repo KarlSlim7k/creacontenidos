@@ -282,6 +282,10 @@ export interface FbAccount {
   handle_or_url: string;
   active: boolean;
   created_at: string;
+  /** Salud del último escaneo (R2-53/R2-54, fase 09). null = nunca escaneada. */
+  last_scan_at: string | null;
+  access_status: 'ok' | 'stale' | 'error' | null;
+  last_error: string | null;
 }
 
 /** Fuente de la lista editorial RADAR (radar_sources). */
@@ -293,6 +297,11 @@ export interface RadarSource {
   active: boolean;
   notes: string | null;
   created_at: string;
+  /** Salud del último intento de crawl (R2-52/R2-54, fase 09). */
+  last_crawl_at: string | null;
+  last_error: string | null;
+  engine: string | null;
+  status: 'ok' | 'stale' | 'error';
 }
 
 /** GET /api/listening/topics/summary — totales RADAR (independiente del filtro/página activa). */

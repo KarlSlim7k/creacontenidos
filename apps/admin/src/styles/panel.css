@@ -295,8 +295,10 @@
 .padmin-cols-services { grid-template-columns: 2fr 1fr 90px 130px; min-width: 540px; }
 .padmin-cols-leads { grid-template-columns: 80px 1fr 110px 2fr 100px 170px; min-width: 760px; }
 .padmin-cols-competencia { grid-template-columns: 140px 2fr 90px 110px 90px 140px; min-width: 760px; }
-/* Dominio | Etiqueta | Confianza | Activa | Notas | Acciones */
-.padmin-cols-fuentes { grid-template-columns: 1.2fr 1.4fr 90px 90px 1fr 100px; min-width: 640px; }
+/* Dominio | Etiqueta | Confianza | Activa | Salud | Notas | Acciones */
+.padmin-cols-fuentes { grid-template-columns: 1.1fr 1.3fr 80px 80px 120px 1fr 100px; min-width: 720px; }
+/* Medio | Cuenta | Activa | Salud | Acciones (Cuentas FB, Configuración) */
+.padmin-cols-fb-accounts { grid-template-columns: 1.6fr 1.6fr 90px 130px 150px; min-width: 700px; }
 
 /* En teléfono las plantillas de arriba obligaban a scroll horizontal (min-width de
    540-760px contra una pantalla de ~360px): se leía una columna a la vez y las

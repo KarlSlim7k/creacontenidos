@@ -476,9 +476,12 @@ router.post('/competitors/detect', requireAuth, requireRole('director', 'producc
         }
       }
 
+      await recordFbAccountsHealth(accounts, { ok: true });
+
       return res.json({ detected: inserted.length, source: 'facebook', posts: inserted, topics: insertedTopics });
     } catch (err) {
       await logActivity(pool, 'competitors_scrape_fb', err.message, req.user.id, 'fallo', { accounts_count: accounts.length });
+      await recordFbAccountsHealth(accounts, { ok: false, errorMessage: err.message });
       return res.status(500).json({ error: 'No se pudo escanear Facebook: ' + err.message });
     }
   }
@@ -553,10 +556,30 @@ router.delete('/competitors/:id', requireAuth, requireRole('director', 'producci
 // CRUD puro de configuración (Configuración → Cuentas FB). Sin FKs de otras tablas
 // apuntándole, a diferencia de `users` — acá el DELETE sí borra la fila de verdad.
 
+// R2-54 (fase 09): refleja en competitor_facebook_accounts el resultado del último
+// intento de escaneo. La señal es a nivel de lote (el microservicio de scraping no
+// distingue éxito/fallo por cuenta en su respuesta HTTP hoy) — mejor que nada, y
+// sin tumbar el escaneo si esta actualización falla.
+async function recordFbAccountsHealth(handles, { ok, errorMessage }) {
+  if (!Array.isArray(handles) || !handles.length) return;
+  try {
+    await pool.query(
+      `UPDATE competitor_facebook_accounts SET last_scan_at = now(), access_status = $1, last_error = $2
+       WHERE handle_or_url = ANY($3)`,
+      [ok ? 'ok' : 'error', ok ? null : String(errorMessage || '').slice(0, 500), handles]
+    );
+  } catch {
+    // Best-effort: no debe tumbar la respuesta del escaneo.
+  }
+}
+
 // GET /api/listening/competitors/accounts
 router.get('/competitors/accounts', requireAuth, requireRole('director', 'produccion'), async (req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT id, label, handle_or_url, active, created_at FROM competitor_facebook_accounts ORDER BY label');
+    const { rows } = await pool.query(
+      `SELECT id, label, handle_or_url, active, created_at, last_scan_at, access_status, last_error
+       FROM competitor_facebook_accounts ORDER BY label`
+    );
     res.json(rows);
   } catch (err) {
     next(err);
@@ -803,7 +826,7 @@ function normalizeDomain(raw) {
 router.get('/radar-sources', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, domain, label, trust, active, notes, created_at
+      `SELECT id, domain, label, trust, active, notes, created_at, last_crawl_at, last_error, engine, status
        FROM radar_sources ORDER BY trust ASC, label ASC`
     );
     res.json(rows);

@@ -189,7 +189,7 @@ async function main() {
     // --- módulos nuevos cargan sin explotar (require no dispara side effects: el
     //     cron solo arranca si se llama startListeningCron()) ---
     const { startListeningCron } = require('../src/lib/listening-cron');
-    const { detectAndSaveTopics, insertTopicIfNew } = require('../src/lib/topic-detection');
+    const { detectAndSaveTopics, insertTopicIfNew, detectViaFirecrawl } = require('../src/lib/topic-detection');
     ok(typeof startListeningCron === 'function', 'listening-cron exporta startListeningCron');
     ok(typeof detectAndSaveTopics === 'function', 'topic-detection exporta detectAndSaveTopics');
     ok(typeof insertTopicIfNew === 'function', 'topic-detection exporta insertTopicIfNew');
@@ -306,6 +306,73 @@ async function main() {
     } finally {
       config.firecrawlApiKey = realFirecrawlKey;
       await pool.query('DELETE FROM topics WHERE title = $1', [happyTitle]);
+    }
+
+    // --- H_RADAR_SOURCE_HEALTH: detectViaFirecrawl() refleja salud en
+    //     radar_sources (R2-54, fase 09) — con fetch mockeado, sin red real. ---
+    {
+      const realBaseUrl = config.firecrawlBaseUrl;
+      const realSourceUrls = config.firecrawlSourceUrls;
+      config.firecrawlApiKey = 'check-key';
+      config.firecrawlBaseUrl = 'https://firecrawl.check.test/v1';
+      const untrackedDomain = 'no-catalogado-check.example.com';
+      const okFirecrawlResponse = (call) => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { markdown: '# Contenido de prueba\nAlgo pasó en Perote.', metadata: { sourceURL: call.body.url } } }),
+        text: async () => '',
+      });
+
+      try {
+        // Caso éxito: perote.gob.mx (en radar_sources, seed 035) queda 'ok';
+        // el dominio no catalogado no inserta fila nueva (radar_sources es
+        // lista curada, no cache de lo que Firecrawl tocó).
+        config.firecrawlSourceUrls = `https://perote.gob.mx/,https://${untrackedDomain}/`;
+        await withMockedFetch(
+          [
+            { match: 'firecrawl.check.test', response: okFirecrawlResponse },
+            { match: 'openrouter.ai', response: chatCompletionResponse('[]') },
+          ],
+          () => detectViaFirecrawl('[check] salud de fuentes')
+        );
+        const { rows: [okHealth] } = await pool.query(
+          `SELECT status, last_crawl_at, engine, last_error FROM radar_sources WHERE domain = 'perote.gob.mx'`
+        );
+        ok(okHealth.status === 'ok', `H_RADAR_SOURCE_HEALTH: perote.gob.mx queda 'ok' tras scrape exitoso (fue ${okHealth.status})`);
+        ok(okHealth.last_crawl_at !== null, 'H_RADAR_SOURCE_HEALTH: last_crawl_at se setea tras scrape exitoso');
+        ok(okHealth.engine === 'firecrawl', `H_RADAR_SOURCE_HEALTH: engine = 'firecrawl' (fue ${okHealth.engine})`);
+        ok(okHealth.last_error === null, 'H_RADAR_SOURCE_HEALTH: last_error se limpia tras scrape exitoso');
+
+        const { rows: untrackedRows } = await pool.query(
+          'SELECT count(*)::int AS n FROM radar_sources WHERE domain = $1', [untrackedDomain]
+        );
+        ok(untrackedRows[0].n === 0, 'H_RADAR_SOURCE_HEALTH: dominio no catalogado no crea fila nueva en radar_sources');
+
+        // Caso fallo: la única fuente configurada revienta → detectViaFirecrawl
+        // propaga el error, pero la salud del dominio ya quedó registrada.
+        config.firecrawlSourceUrls = 'https://perote.gob.mx/';
+        let threw = false;
+        try {
+          await withMockedFetch(
+            [{ match: 'firecrawl.check.test', response: { ok: false, status: 500, json: async () => ({}), text: async () => 'boom' } }],
+            () => detectViaFirecrawl('[check] salud de fuentes con fallo')
+          );
+        } catch (_) { threw = true; }
+        ok(threw, 'H_RADAR_SOURCE_HEALTH: sin fuentes con markdown, detectViaFirecrawl propaga el error');
+
+        const { rows: [errHealth] } = await pool.query(
+          `SELECT status, last_error FROM radar_sources WHERE domain = 'perote.gob.mx'`
+        );
+        ok(errHealth.status === 'error', `H_RADAR_SOURCE_HEALTH: perote.gob.mx queda 'error' tras scrape fallido (fue ${errHealth.status})`);
+        ok(!!errHealth.last_error, 'H_RADAR_SOURCE_HEALTH: last_error queda poblado tras scrape fallido');
+      } finally {
+        config.firecrawlApiKey = realFirecrawlKey;
+        config.firecrawlBaseUrl = realBaseUrl;
+        config.firecrawlSourceUrls = realSourceUrls;
+        await pool.query(
+          `UPDATE radar_sources SET status = 'ok', last_crawl_at = NULL, engine = NULL, last_error = NULL WHERE domain = 'perote.gob.mx'`
+        );
+      }
     }
 
     // --- H_VERIFY_SCHEMA: columnas de verificación (034) expuestas en GET /topics ---

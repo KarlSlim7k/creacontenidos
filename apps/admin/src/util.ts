@@ -59,6 +59,8 @@ const STATUS_STYLE_MAP: Record<string, { bg: string; color: string }> = {
   verified: STYLE_BRAND, checking: STYLE_ACCENT, signal: { bg: 'var(--surface)', color: 'var(--text-mute)' },
   risk: STYLE_DANGER, sin_evaluar: STYLE_NEUTRAL,
   high: STYLE_BRAND, medium: STYLE_ACCENT, low: STYLE_DANGER,
+  // Salud de fuentes (radar_sources.status / competitor_facebook_accounts.access_status, fase 09).
+  ok: STYLE_BRAND, stale: STYLE_ACCENT, error: STYLE_DANGER,
 };
 
 export function statusStyle(label: string): { bg: string; color: string } {
@@ -73,6 +75,7 @@ export const STATUS_LABEL: Record<string, string> = {
   activo: 'Activo', inactivo: 'Inactivo', publicado: 'Publicado', no_publicado: 'Borrador', analizado: 'Analizado',
   verified: 'Verificado', checking: 'En verificación', signal: 'Señal', risk: 'Riesgo alto', sin_evaluar: 'Sin evaluar',
   high: 'Alta', medium: 'Media', low: 'Baja',
+  ok: 'OK', stale: 'Desactualizada', error: 'Con error',
 };
 
 export function badge(statusKey: string, label?: string): string {

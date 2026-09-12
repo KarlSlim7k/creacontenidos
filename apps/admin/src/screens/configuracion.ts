@@ -212,13 +212,14 @@ export function renderConfigCuentasFb(): string {
   ) : '<button type="button" class="padmin-btn padmin-btn-sm" style="margin-bottom:16px;" data-action="open-new-fb-account">+ Nueva cuenta</button>';
 
   return '<p class="padmin-lede">Cuentas de Facebook que usa "Escanear Facebook" en RADAR → Competencia cuando no se especifican otras. Solo las activas se scrapean.</p>' +
-    formHtml + `<div class="padmin-card" style="max-width:760px;">
-    <div class="padmin-table-head padmin-cols-services"><span>MEDIO</span><span>CUENTA</span><span>ESTADO</span><span></span></div>
+    formHtml + `<div class="padmin-card" style="max-width:900px;">
+    <div class="padmin-table-head padmin-cols-fb-accounts"><span>MEDIO</span><span>CUENTA</span><span>ESTADO</span><span>SALUD</span><span></span></div>
     ${accounts.length ? accounts.map((a: FbAccount) => {
-      return `<div class="padmin-table-row padmin-cols-services">
+      return `<div class="padmin-table-row padmin-cols-fb-accounts">
         <span class="padmin-t-body">${esc(a.label)}</span>
         <span class="padmin-t-mute">${esc(a.handle_or_url)}</span>
         ${badge(a.active ? 'activo' : 'inactivo', a.active ? 'Activa' : 'Inactiva')}
+        <span>${fbAccountHealthCell(a)}</span>
         <span style="display:flex;gap:6px;flex-wrap:wrap;">
           <button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="edit-fb-account" data-id="${a.id}">Editar</button>
           <button type="button" class="padmin-btn-sm padmin-btn-danger" data-action="delete-fb-account" data-id="${a.id}">Borrar</button>
@@ -226,6 +227,17 @@ export function renderConfigCuentasFb(): string {
       </div>`;
     }).join('') : '<p class="padmin-lede" style="padding:16px;">Sin cuentas cargadas. "Escanear Facebook" fallará hasta que agregues al menos una.</p>'}
   </div>`;
+}
+
+// Salud del último escaneo (R2-53/R2-54/R2-55, fase 09) — mismo lenguaje visual
+// que radar.ts (sourceHealthCell): badge de estado + hace cuánto + error si lo hay.
+function fbAccountHealthCell(a: FbAccount): string {
+  if (!a.access_status && !a.last_scan_at) return '<span class="padmin-t-small">Sin escanear</span>';
+  return `<span style="display:flex;flex-direction:column;gap:2px;">
+    ${badge(a.access_status || 'sin_evaluar')}
+    <span class="padmin-t-small">${a.last_scan_at ? esc(relativeTime(a.last_scan_at)) : 'nunca'}</span>
+    ${a.last_error ? `<span class="padmin-t-small" style="color:var(--danger);" title="${esc(a.last_error)}">${esc(a.last_error.slice(0, 40))}${a.last_error.length > 40 ? '…' : ''}</span>` : ''}
+  </span>`;
 }
 
 export function renderConfigMetricas(): string {

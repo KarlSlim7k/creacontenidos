@@ -498,6 +498,19 @@ function trustBadge(trust: string): string {
   return badge(trust);
 }
 
+// Salud de una fuente (radar_sources.status / competitor_facebook_accounts.access_status,
+// fase 09, R2-54/R2-55). Un vistazo: badge de estado + hace cuánto fue el último corte +
+// el error, si lo hay, como texto de ayuda (sin inventar un vocabulario nuevo — ver
+// docs/implementaciones/radar2/09-catalogo-fuentes-salud.md "Qué NO hacer").
+function sourceHealthCell(status: string | null, lastAt: string | null, lastError: string | null): string {
+  if (!status && !lastAt) return '<span class="padmin-t-small">Sin escanear</span>';
+  return `<span style="display:flex;flex-direction:column;gap:2px;">
+    ${badge(status || 'sin_evaluar')}
+    <span class="padmin-t-small">${lastAt ? esc(relativeTime(lastAt)) : 'nunca'}</span>
+    ${lastError ? `<span class="padmin-t-small" style="color:var(--danger);" title="${esc(lastError)}">${esc(lastError.slice(0, 40))}${lastError.length > 40 ? '…' : ''}</span>` : ''}
+  </span>`;
+}
+
 function renderRadarFuentes(): string {
   const sources = state.data.radarSources;
   if (!sources) return state.dataError ? errorCard({ message: state.dataError }) : loadingCard();
@@ -528,7 +541,7 @@ function renderRadarFuentes(): string {
 
     <div class="padmin-card">
       <div class="padmin-table-head padmin-cols-fuentes">
-        <span>DOMINIO</span><span>ETIQUETA</span><span>TRUST</span><span>ESTADO</span><span>NOTAS</span><span>ACCIONES</span>
+        <span>DOMINIO</span><span>ETIQUETA</span><span>TRUST</span><span>ESTADO</span><span>SALUD</span><span>NOTAS</span><span>ACCIONES</span>
       </div>
       ${sources.length ? pageItems.map((s: RadarSource) => `
         <div class="padmin-table-row padmin-radar-row padmin-cols-fuentes">
@@ -536,6 +549,7 @@ function renderRadarFuentes(): string {
           <span style="font-size:12px;color:var(--text);">${esc(s.label)}</span>
           <span>${trustBadge(s.trust)}</span>
           ${badge(s.active ? 'activo' : 'inactivo', s.active ? 'Activa' : 'Off')}
+          <span>${sourceHealthCell(s.status, s.last_crawl_at, s.last_error)}</span>
           <span class="padmin-t-small">${esc(s.notes || '—')}</span>
           <span>${canManage
             ? `<button type="button" class="padmin-btn-sm padmin-btn-outline" data-action="toggle-radar-source" data-id="${s.id}" data-active="${s.active ? 'true' : 'false'}">${s.active ? 'Desactivar' : 'Activar'}</button>`

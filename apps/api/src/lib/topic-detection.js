@@ -24,6 +24,36 @@ const MARKDOWN_PER_URL = 8000;
 // acá un poco más estricto para no fusionar temas distintos de la misma región.
 const TITLE_SIMILARITY_THRESHOLD = 0.45;
 
+/** Hostname normalizado de una URL (sin "www."), o '' si no es una URL válida. */
+function hostnameOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * R2-54 (fase 09): refleja en radar_sources el resultado del último intento de
+ * scrape de esta URL, si su dominio está en la lista editorial curada. No crea
+ * filas nuevas (radar_sources es una lista curada por el editor, no un cache
+ * de lo que Firecrawl tocó) y nunca tumba la detección de temas por esto —
+ * best-effort puro, igual que loadMaxSimilarityToPublished() en este archivo.
+ */
+async function recordRadarSourceHealth(url, { ok, errorMessage }) {
+  const domain = hostnameOf(url);
+  if (!domain) return;
+  try {
+    await pool.query(
+      `UPDATE radar_sources SET last_crawl_at = now(), engine = 'firecrawl', status = $1, last_error = $2
+       WHERE lower(domain) = $3`,
+      [ok ? 'ok' : 'error', ok ? null : String(errorMessage || '').slice(0, 500), domain]
+    );
+  } catch {
+    // Tabla aún no migrada, o cualquier otro fallo de escritura: no es crítico.
+  }
+}
+
 async function detectViaFirecrawl(query) {
   const urls = getSourceUrls();
   if (!getApiKey() || !urls.length) return null;
@@ -38,9 +68,13 @@ async function detectViaFirecrawl(query) {
           url: page.url || url,
           markdown: page.markdown.slice(0, MARKDOWN_PER_URL),
         });
+        await recordRadarSourceHealth(url, { ok: true });
+      } else {
+        await recordRadarSourceHealth(url, { ok: false, errorMessage: 'Firecrawl devolvió markdown vacío' });
       }
     } catch (err) {
       scrapeErrors.push({ url, message: String(err && err.message || err).slice(0, 200) });
+      await recordRadarSourceHealth(url, { ok: false, errorMessage: err && err.message });
     }
   }
   if (!sources.length) {

@@ -143,6 +143,14 @@ async function main() {
   );
   await pool.query('UPDATE competitor_facebook_accounts SET active = false WHERE active = true');
 
+  // R2-54 (fase 09): cuenta catalogada con el mismo handle que usan los pasos de
+  // abajo, para poder verificar que un escaneo (éxito o fallo) le actualiza la salud.
+  await pool.query(`DELETE FROM competitor_facebook_accounts WHERE handle_or_url = 'https://www.facebook.com/check-fb-1'`);
+  const { rows: [healthAccount] } = await pool.query(
+    `INSERT INTO competitor_facebook_accounts (label, handle_or_url, active) VALUES ($1, $2, false) RETURNING id`,
+    ['[check] cuenta de salud', 'https://www.facebook.com/check-fb-1']
+  );
+
   const stub = await startStubServer();
   const stubItems = stub.getItems();
 
@@ -241,7 +249,42 @@ async function main() {
       ok(body.detected === 1, `produccion insertó 1 fila nueva (recibido ${body.detected})`);
     }
 
-    console.log(`OK: branch de Facebook en competitors/detect verificado (${n} checks, auth/rol, source param, 503 fallback, dedupe, stub idempotencia, ambos roles válidos).`);
+    // --- 8. R2-54: escaneo exitoso refleja salud 'ok' en competitor_facebook_accounts ---
+    {
+      await pool.query(
+        `UPDATE competitor_facebook_accounts SET access_status = NULL, last_scan_at = NULL, last_error = 'previo' WHERE id = $1`,
+        [healthAccount.id]
+      );
+      const r = await post('/api/listening/competitors/detect', director, {
+        source: 'facebook',
+        accounts: ['https://www.facebook.com/check-fb-1'],
+      });
+      ok(r.status === 200, `escaneo exitoso responde 200 (recibido ${r.status})`);
+      const { rows: [acc] } = await pool.query(
+        'SELECT access_status, last_scan_at, last_error FROM competitor_facebook_accounts WHERE id = $1', [healthAccount.id]
+      );
+      ok(acc.access_status === 'ok', `salud queda 'ok' tras escaneo exitoso (recibido ${acc.access_status})`);
+      ok(acc.last_scan_at !== null, 'last_scan_at queda seteado tras escaneo exitoso');
+      ok(acc.last_error === null, `last_error se limpia tras escaneo exitoso (recibido ${acc.last_error})`);
+    }
+
+    // --- 9. R2-54: escaneo fallido refleja salud 'error' + last_error ---
+    {
+      api = await restartApi(api, { COMPETITOR_SCRAPER_URL: 'http://127.0.0.1:1' }); // puerto sin listener → connection refused
+      const r = await post('/api/listening/competitors/detect', director, {
+        source: 'facebook',
+        accounts: ['https://www.facebook.com/check-fb-1'],
+      });
+      ok(r.status === 500, `escaneo con scraper inalcanzable → 500 (recibido ${r.status})`);
+      const { rows: [acc] } = await pool.query(
+        'SELECT access_status, last_scan_at, last_error FROM competitor_facebook_accounts WHERE id = $1', [healthAccount.id]
+      );
+      ok(acc.access_status === 'error', `salud queda 'error' tras escaneo fallido (recibido ${acc.access_status})`);
+      ok(!!acc.last_error, 'last_error queda poblado tras escaneo fallido');
+      api = await restartApi(api, { COMPETITOR_SCRAPER_URL: STUB_URL });
+    }
+
+    console.log(`OK: branch de Facebook en competitors/detect verificado (${n} checks, auth/rol, source param, 503 fallback, dedupe, stub idempotencia, ambos roles válidos, salud R2-54).`);
   } finally {
     await stopApi(api);
     await new Promise((r) => stub.server.close(r));
@@ -252,6 +295,7 @@ async function main() {
       ).catch(() => {});
     }
     await pool.query(`DELETE FROM competitor_posts WHERE post_url LIKE 'https://www.facebook.com/check-fb-%'`);
+    await pool.query('DELETE FROM competitor_facebook_accounts WHERE id = $1', [healthAccount.id]);
     // Limpiar activity_log antes de borrar los users (FK constraint).
     await pool.query(`DELETE FROM activity_log WHERE user_id IN (SELECT id FROM users WHERE email LIKE 'check-%@crearcontenidos.com')`);
     await pool.query(`DELETE FROM users WHERE email IN ('check-director@crearcontenidos.com','check-produccion@crearcontenidos.com','check-colaborador@crearcontenidos.com')`);
