@@ -331,6 +331,13 @@ async function main() {
         await withMockedFetch(
           [
             { match: 'firecrawl.check.test', response: okFirecrawlResponse },
+            // chatComplete() intenta Nous primero siempre (ai-client.js:120-131) —
+            // sin esta ruta, el mock revienta con "sin ruta mockeada" en ese primer
+            // intento; localmente pasaba de panetas porque el fallback a OpenRouter
+            // (si hay OPENROUTER_API_KEY local) sí estaba mockeado, pero en CI no hay
+            // esa key configurada (ver .github/workflows/ci.yml) y no hay 2do intento
+            // que lo tape — hay que cubrir Nous explícitamente, no solo OpenRouter.
+            { match: 'nousresearch.com', response: chatCompletionResponse('[]') },
             { match: 'openrouter.ai', response: chatCompletionResponse('[]') },
           ],
           () => detectViaFirecrawl('[check] salud de fuentes')
