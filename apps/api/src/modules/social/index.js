@@ -187,6 +187,9 @@ async function insertSocialPost(externalUrl, { position = 0, published = true, c
   const network = detectNetwork(externalUrl);
   if (!network) return { error: 'unrecognized_network' };
 
+  const existing = await pool.query('SELECT id FROM social_posts WHERE external_url = $1 LIMIT 1', [externalUrl]);
+  if (existing.rows.length) return { duplicate: true };
+
   let oembed = { title, author_name: authorName, thumbnail_url: thumbnailUrl };
   let oembedFailed = false;
   try {
@@ -207,19 +210,15 @@ async function insertSocialPost(externalUrl, { position = 0, published = true, c
   const safeTitle = (oembed.title || '').slice(0, 300) || null;
   const safeAuthor = (oembed.author_name || '').slice(0, 200) || null;
 
-  try {
-    const { rows } = await pool.query(
-      `INSERT INTO social_posts (network, external_url, title, author_name, thumbnail_url,
-                                  is_published, position, created_by, fetched_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $3::text IS NULL AND $4::text IS NULL THEN NULL ELSE now() END)
-       RETURNING ${POST_FIELDS}`,
-      [network, externalUrl, safeTitle, safeAuthor, oembed.thumbnail_url, published, position, createdBy]
-    );
-    return { row: rows[0], oembedFailed };
-  } catch (err) {
-    if (err.code === '23505') return { duplicate: true };
-    throw err;
-  }
+  const { rows } = await pool.query(
+    `INSERT INTO social_posts (network, external_url, title, author_name, thumbnail_url,
+                                is_published, position, created_by, fetched_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $3::text IS NULL AND $4::text IS NULL THEN NULL ELSE now() END)
+     ON CONFLICT (external_url) DO NOTHING
+     RETURNING ${POST_FIELDS}`,
+    [network, externalUrl, safeTitle, safeAuthor, oembed.thumbnail_url, published, position, createdBy]
+  );
+  return rows.length ? { row: rows[0], oembedFailed } : { duplicate: true };
 }
 
 // --- público ---
