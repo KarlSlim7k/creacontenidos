@@ -1,4 +1,4 @@
-import { PlaywrightCrawler, log as crawleeLog } from 'crawlee';
+import { Configuration, PlaywrightCrawler, log as crawleeLog } from 'crawlee';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { extractPostsFromPage, extractReelsFromPage } from './facebook.js';
@@ -17,6 +17,11 @@ import { isBeforeSinceDate, toStartUrl } from './utils.js';
 // cuenta, una navegación extra (~15s) por cuenta. RADAR (competidores, muchas cuentas)
 // no lo necesita y no debe pagar ese costo; lo usa el cron de ingesta de la página
 // propia (apps/api/src/lib/social-facebook-cron.js), que solo escanea 1 cuenta.
+// Una Configuration nueva por crawler = su propio MemoryStorage (Crawlee cachea el cliente
+// por instancia de Configuration), así el RequestQueue 'default' no se comparte entre
+// llamadas HTTP (ni se purga globalmente, que pisaría corridas concurrentes). Sin disco.
+const isolatedConfig = () => new Configuration({ persistStorage: false });
+
 export async function runScrape({ accounts, maxPostsPerAccount = 10, sinceDate = null, cookies = [], includeReels = false, logger = crawleeLog }) {
     if (!Array.isArray(accounts) || accounts.length === 0) {
         throw new Error('runScrape: accounts must be a non-empty array');
@@ -97,7 +102,7 @@ export async function runScrape({ accounts, maxPostsPerAccount = 10, sinceDate =
                 url: request.url,
             });
         },
-    });
+    }, isolatedConfig());
 
     await crawler.run(requests);
 
@@ -124,7 +129,7 @@ export async function runScrape({ accounts, maxPostsPerAccount = 10, sinceDate =
                     crawlerLog.info('Session check OK. You appear to be logged in.', { finalUrl });
                 }
             },
-        });
+        }, isolatedConfig());
         await verificationCrawler.run([{ url: 'https://www.facebook.com/me/' }]);
     }
 
